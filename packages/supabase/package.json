@@ -1,0 +1,6 @@
+{
+  "name": "@kablam/supabase",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./client.ts"
+}
