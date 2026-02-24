@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@kablam/supabase";
-import OrdersBoard from "./OrdersBoard";
+import OrdersBoardDelivered from "./OrdersBoardDelivered";
 import OrderSidePanel from "./OrderSidePanel";
 
-export default function SalesTab({ session }: any) {
+export default function DeliveredTab({ session }: any) {
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
@@ -39,7 +39,7 @@ return (
   <div className="flex h-full overflow-hidden">
     {/* BOARD — ÚNICO QUE SCROLLEA */}
     <div className="flex-1 overflow-y-auto">
-      <OrdersBoard
+      <OrdersBoardDelivered
         orders={orders}
         onSelect={setSelectedOrder}
         reloadOrders={loadOrders}
