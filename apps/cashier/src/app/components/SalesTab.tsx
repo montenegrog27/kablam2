@@ -26,14 +26,15 @@ export default function SalesTab({ session }: any) {
     };
   }, []);
 
-  const loadOrders = async () => {
-    const { data } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
+const loadOrders = async () => {
+  const { data } = await supabase
+    .from("orders")
+    .select("*")
+    .not("status", "in", "(delivered,cancelled)")
+    .order("created_at", { ascending: false });
 
-    setOrders(data || []);
-  };
+  setOrders(data || []);
+};
 
 return (
   <div className="flex h-full overflow-hidden">

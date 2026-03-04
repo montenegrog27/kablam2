@@ -1,85 +1,3 @@
-// "use client";
-
-// function formatCurrency(value: number) {
-//   return new Intl.NumberFormat("es-AR").format(value || 0);
-// }
-
-// export default function OrderCard({
-//   order,
-//   onSelect,
-//   onNextStatus,
-//   onMarkAsPaid,
-// }: any) {
-//   const paid = order.paid_amount || 0;
-//   const remaining = order.total - paid;
-//   const isFullyPaid = remaining <= 0;
-
-//   return (
-//     <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 space-y-3">
-
-//       {/* HEADER */}
-//       <div className="flex justify-between">
-//         <div>
-//           <div className="font-bold text-sm">
-//             #{order.id.slice(0, 4)} {order.customer_name || "Sin nombre"}
-//           </div>
-
-//           <div className="text-xs text-gray-400">
-//             {isFullyPaid
-//               ? "Pagado ✓"
-//               : `Debe $${formatCurrency(remaining)}`}{" "}
-//             • {order.type}
-//           </div>
-//         </div>
-
-//         <div className="text-sm font-semibold">
-//           ${formatCurrency(order.total)}
-//         </div>
-//       </div>
-
-//       {/* BOTONES */}
-//       <div className="grid grid-cols-3 gap-2 text-xs">
-
-//         <button
-//           onClick={() => onSelect(order)}
-//           className="bg-white text-black px-2 py-1 rounded"
-//         >
-//           Pedido
-//         </button>
-
-//         {!isFullyPaid && (
-//           <button
-//             onClick={() => onMarkAsPaid(order)}
-//             className="bg-yellow-500 text-black px-2 py-1 rounded"
-//           >
-//             Marcar Pagado
-//           </button>
-//         )}
-
-//         {order.status !== "delivered" &&
-//          order.status !== "cancelled" && (
-//           <button
-//             onClick={onNextStatus}
-//             disabled={
-//               order.status === "sent" && !isFullyPaid
-//             }
-//             className={`px-2 py-1 rounded ${
-//               order.status === "sent" && !isFullyPaid
-//                 ? "bg-gray-600 cursor-not-allowed"
-//                 : "bg-green-600"
-//             }`}
-//           >
-//             Siguiente →
-//           </button>
-//         )}
-//       </div>
-//     </div>
-//   );
-// }
-
-
-
-
 "use client";
 
 function formatCurrency(value: number) {
@@ -92,42 +10,74 @@ export default function OrderCard({
   onNextStatus,
   onMarkAsPaid,
 }: any) {
+
   const paid = order.paid_amount || 0;
   const remaining = order.total - paid;
   const isFullyPaid = remaining <= 0;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 grid grid-cols-12 gap-4 items-center">
+    <div className="
+      bg-white
+      border border-gray-200
+      rounded-xl
+      p-4
+      hover:shadow-sm
+      transition
+      space-y-3
+    ">
 
-      <div className="col-span-2 font-bold text-blue-400">
-        #{order.id.slice(0, 4)}
-      </div>
+      {/* TOP ROW */}
+      <div className="flex justify-start gap-12 items-center">
 
-      <div className="col-span-3">
-        <div className="text-gray-200 font-medium">
-          {order.customer_name}
+        <div className="space-y-1 flex flex-row items-center gap-4">
+          <div className="flex items-center gap-2">
+
+            <span className="text-lg font-semibold text-gray-500 tracking-wide">
+              #{order.id.slice(0, 4)}
+            </span>
+
+            <span className="
+              text-sm px-2 py-0.5 rounded-full
+              bg-gray-100 text-gray-600
+            ">
+              {order.type}
+            </span>
+
+          </div>
+
+          <div className="text-md font-semibold text-gray-900">
+            {order.customer_name || "Cliente sin nombre"}
+          </div>
+
+          <div className="text-md text-gray-500">
+            {isFullyPaid
+              ? "Pago completo"
+              : `Debe $${formatCurrency(remaining)}`}
+          </div>
         </div>
-        <div className="text-xs text-gray-400">
-          {isFullyPaid
-            ? "Pagado"
-            : `Debe $${formatCurrency(remaining)}`}
+
+        <div className="text-right">
+          <div className="text-lg font-semibold text-gray-900">
+            ${formatCurrency(order.total)}
+          </div>
         </div>
+
       </div>
 
-      <div className="col-span-2 text-gray-400 text-sm">
-        {order.type}
-      </div>
+      {/* ACTIONS */}
+      <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
 
-      <div className="col-span-2 text-right text-gray-100 font-semibold">
-        ${formatCurrency(order.total)}
-      </div>
-
-      <div className="col-span-3 flex justify-end gap-2">
-
-        {/* VER */}
         <button
           onClick={() => onSelect({ ...order, mode: "view" })}
-          className="px-3 py-1 text-xs bg-blue-600 rounded text-white"
+          className="
+            px-3 py-1.5
+            text-sm font-medium
+            border border-gray-300
+            rounded-lg
+            text-gray-700
+            hover:bg-gray-100
+            transition
+          "
         >
           Ver
         </button>
@@ -135,7 +85,15 @@ export default function OrderCard({
         {!isFullyPaid && (
           <button
             onClick={() => onMarkAsPaid(order)}
-            className="px-3 py-1 text-xs bg-yellow-600 rounded text-black"
+            className="
+              px-3 py-1.5
+              text-sm font-medium
+              rounded-lg
+              bg-amber-500
+              text-white
+              hover:bg-amber-600
+              transition
+            "
           >
             Pagado
           </button>
@@ -146,12 +104,23 @@ export default function OrderCard({
             <button
               onClick={onNextStatus}
               disabled={order.status === "sent" && !isFullyPaid}
-              className="px-3 py-1 text-xs bg-green-600 rounded text-white"
+              className="
+                px-3 py-1.5
+                text-sm font-medium
+                rounded-lg
+                bg-gray-900
+                text-white
+                hover:bg-black
+                disabled:opacity-40
+                transition
+              "
             >
-              →
+              Avanzar →
             </button>
           )}
+
       </div>
+
     </div>
   );
 }

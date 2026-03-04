@@ -10,8 +10,8 @@ export default function ProductsPage() {
   const [branchId, setBranchId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [variantTypes, setVariantTypes] = useState<any[]>([]);
-const [kitchens, setKitchens] = useState<any[]>([]);
-const [kitchenProducts, setKitchenProducts] = useState<any[]>([]);
+  const [kitchens, setKitchens] = useState<any[]>([]);
+  const [kitchenProducts, setKitchenProducts] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [selectedDayParts, setSelectedDayParts] = useState<string[]>([]);
   const [name, setName] = useState("");
@@ -80,20 +80,19 @@ const [kitchenProducts, setKitchenProducts] = useState<any[]>([]);
       setProducts(prods || []);
 
       const { data: kitchensData } = await supabase
-  .from("kitchens")
-  .select("*")
-  .eq("tenant_id", userRecord.tenant_id)
-  .eq("branch_id", userRecord.branch_id);
+        .from("kitchens")
+        .select("*")
+        .eq("tenant_id", userRecord.tenant_id)
+        .eq("branch_id", userRecord.branch_id);
 
-setKitchens(kitchensData || []);
+      setKitchens(kitchensData || []);
 
-const { data: kitchenProductsData } = await supabase
-  .from("kitchen_products")
-  .select("*")
-  .eq("tenant_id", userRecord.tenant_id);
+      const { data: kitchenProductsData } = await supabase
+        .from("kitchen_products")
+        .select("*")
+        .eq("tenant_id", userRecord.tenant_id);
 
-setKitchenProducts(kitchenProductsData || []);
-      
+      setKitchenProducts(kitchenProductsData || []);
     }
 
     loadData();
@@ -123,51 +122,41 @@ setKitchenProducts(kitchenProductsData || []);
   };
 
   const getProductKitchenOverride = (productId: string) => {
-  const override = kitchenProducts.find(
-    (kp) => kp.product_id === productId
-  );
-  return override ? override.kitchen_id : "";
-};
+    const override = kitchenProducts.find((kp) => kp.product_id === productId);
+    return override ? override.kitchen_id : "";
+  };
 
-const handleKitchenChange = async (
-  productId: string,
-  kitchenId: string
-) => {
-  const existing = kitchenProducts.find(
-    (kp) => kp.product_id === productId
-  );
+  const handleKitchenChange = async (productId: string, kitchenId: string) => {
+    const existing = kitchenProducts.find((kp) => kp.product_id === productId);
 
-  if (kitchenId === "") {
-    // Volver a seguir categoría
-    if (existing) {
-      await supabase
-        .from("kitchen_products")
-        .delete()
-        .eq("id", existing.id);
-    }
-  } else {
-    if (existing) {
-      await supabase
-        .from("kitchen_products")
-        .update({ kitchen_id: kitchenId })
-        .eq("id", existing.id);
+    if (kitchenId === "") {
+      // Volver a seguir categoría
+      if (existing) {
+        await supabase.from("kitchen_products").delete().eq("id", existing.id);
+      }
     } else {
-      await supabase.from("kitchen_products").insert({
-        tenant_id: tenantId,
-        product_id: productId,
-        kitchen_id: kitchenId,
-      });
+      if (existing) {
+        await supabase
+          .from("kitchen_products")
+          .update({ kitchen_id: kitchenId })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("kitchen_products").insert({
+          tenant_id: tenantId,
+          product_id: productId,
+          kitchen_id: kitchenId,
+        });
+      }
     }
-  }
 
-  // recargar overrides
-  const { data } = await supabase
-    .from("kitchen_products")
-    .select("*")
-    .eq("tenant_id", tenantId);
+    // recargar overrides
+    const { data } = await supabase
+      .from("kitchen_products")
+      .select("*")
+      .eq("tenant_id", tenantId);
 
-  setKitchenProducts(data || []);
-};
+    setKitchenProducts(data || []);
+  };
   const handleVariantChange = (index: number, field: string, value: any) => {
     const updated = [...variants];
     updated[index][field] = value;
@@ -486,26 +475,24 @@ const handleKitchenChange = async (
             <div key={product.id} className="bg-black p-4 rounded shadow">
               <h3 className="font-semibold">{product.name}</h3>
               <div className="mt-2">
-  <label className="text-sm text-gray-400">
-    Cocina:
-  </label>
+                <label className="text-sm text-gray-400">Cocina:</label>
 
-  <select
-    className="ml-2 border p-1 text-sm"
-    value={getProductKitchenOverride(product.id)}
-    onChange={(e) =>
-      handleKitchenChange(product.id, e.target.value)
-    }
-  >
-    <option value="">Seguir categoría</option>
+                <select
+                  className="ml-2 border p-1 text-sm"
+                  value={getProductKitchenOverride(product.id)}
+                  onChange={(e) =>
+                    handleKitchenChange(product.id, e.target.value)
+                  }
+                >
+                  <option value="">Seguir categoría</option>
 
-    {kitchens.map((kitchen) => (
-      <option key={kitchen.id} value={kitchen.id}>
-        {kitchen.name}
-      </option>
-    ))}
-  </select>
-</div>
+                  {kitchens.map((kitchen) => (
+                    <option key={kitchen.id} value={kitchen.id}>
+                      {kitchen.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               {product.product_variants?.map((variant: any) => (
                 <div
                   key={variant.id}

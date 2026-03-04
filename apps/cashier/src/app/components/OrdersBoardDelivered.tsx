@@ -1,17 +1,18 @@
-
-
 "use client";
 
-import { supabase } from "@kablam/supabase";
 import OrderCard from "./OrderCard";
-import { useState } from "react";
 
-const STATUSES = [
-  "delivered",
-  "cancelled",
-];
+const STATUSES = ["delivered", "cancelled"];
 
-const STATUS_META: any = {
+const STATUS_META: Record<
+  string,
+  {
+    label: string;
+    header: string;
+    badge: string;
+    accent: string;
+  }
+> = {
   delivered: {
     label: "Entregados",
     header: "bg-green-900/40",
@@ -26,50 +27,16 @@ const STATUS_META: any = {
   },
 };
 
-export default function OrdersBoard({
+export default function DeliveredBoard({
   orders,
   onSelect,
-  reloadOrders,
 }: any) {
-
-  const [loading, setLoading] = useState(false);
-
   const getOrdersByStatus = (status: string) =>
     orders.filter((o: any) => o.status === status);
 
-  const getNextStatus = (current: string) => {
-    const index = STATUSES.indexOf(current);
-    return STATUSES[index + 1] || current;
-  };
-
-  const handleNextStatus = async (order: any) => {
-    if (loading) return;
-    setLoading(true);
-
-    const nextStatus = getNextStatus(order.status);
-
-    if (nextStatus === "delivered") {
-      if ((order.paid_amount || 0) < order.total) {
-        alert("No se puede entregar: pago incompleto");
-        setLoading(false);
-        return;
-      }
-    }
-
-    await supabase
-      .from("orders")
-      .update({ status: nextStatus })
-      .eq("id", order.id);
-
-    setLoading(false);
-    reloadOrders();
-  };
-
   return (
     <div className="h-full overflow-y-auto p-3 space-y-3 bg-gray-950">
-
       {STATUSES.map((status) => {
-
         const list = getOrdersByStatus(status);
         const meta = STATUS_META[status];
 
@@ -108,7 +75,6 @@ export default function OrdersBoard({
 
             {/* CONTENT */}
             <div className="p-5 space-y-4">
-
               {list.length === 0 ? (
                 <div className="flex items-center justify-center py-4 text-xs italic text-gray-500 border border-dashed border-gray-700 rounded-xl bg-gray-800">
                   No hay pedidos en este estado
@@ -119,16 +85,13 @@ export default function OrdersBoard({
                     key={order.id}
                     order={order}
                     onSelect={onSelect}
-                    onNextStatus={() => handleNextStatus(order)}
                   />
                 ))
               )}
-
             </div>
           </div>
         );
       })}
-
     </div>
   );
 }
