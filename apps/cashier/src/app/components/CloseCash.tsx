@@ -2,6 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@kablam/supabase";
+type BillDenomination =
+  | 10
+  | 20
+  | 50
+  | 100
+  | 200
+  | 500
+  | 1000
+  | 2000
+  | 10000
+  | 20000;
+
+type BillsState = Record<BillDenomination, number>;
+
+const BILL_DENOMINATIONS: BillDenomination[] = [
+  20000, 10000, 2000, 1000, 500, 200, 100, 50, 20, 10,
+];
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-AR").format(value || 0);
@@ -14,7 +31,8 @@ export default function CloseCash({ session, onClosed }: any) {
   const [summary, setSummary] = useState<any>(null);
   const [countedCash, setCountedCash] = useState("");
   const [carryOver, setCarryOver] = useState("");
-  const [bills, setBills] = useState({
+
+  const [bills, setBills] = useState<BillsState>({
     10: 0,
     20: 0,
     50: 0,
@@ -199,8 +217,8 @@ export default function CloseCash({ session, onClosed }: any) {
 
         opened_at: session.opened_at,
         closed_at: new Date(),
-carry_over: Number(carryOver),
-bills_detail: bills,
+        carry_over: Number(carryOver),
+        bills_detail: bills,
         opening_amount: session.opening_amount,
         closing_amount: Number(countedCash),
         expected_cash: summary.expectedCash,
@@ -278,102 +296,100 @@ bills_detail: bills,
           <span>${formatCurrency(session.opening_amount)}</span>
         </div>
       </div>
-        <div className="bg-gray-900 p-6 rounded-lg space-y-3">
-          <div className="flex justify-between">
-            <span>Total órdenes</span>
-            <span>{summary.totalOrders}</span>
-          </div>
-
-          <div className="flex justify-between">
-            <span>Ticket promedio</span>
-            <span>${formatCurrency(summary.ticketAverage)}</span>
-          </div>
-
-          <div className="flex justify-between">
-            <span>Total unidades</span>
-            <span>{summary.totalUnits}</span>
-          </div>
-
-          <div className="flex justify-between">
-            <span>Costo total</span>
-            <span>${formatCurrency(summary.totalCost)}</span>
-          </div>
-
-          <div className="flex justify-between text-green-400 font-bold">
-            <span>Ganancia bruta</span>
-            <span>${formatCurrency(summary.profit)}</span>
-          </div>
-        </div>
-
-        <div className="bg-gray-900 p-6 rounded-lg space-y-4">
-          <h3 className="font-bold text-lg border-b border-gray-700 pb-2">
-            Productos Vendidos
-          </h3>
-
-          {Object.entries(summary.products).map(([name, data]: any) => (
-            <div key={name} className="space-y-1 border-t border-gray-800 pt-3">
-              <div className="flex justify-between font-semibold">
-                <span>{name}</span>
-                <span>{data.total}</span>
-              </div>
-
-              {Object.entries(data.variants).map(([variant, qty]: any) => (
-                <div
-                  key={variant}
-                  className="flex justify-between text-sm text-gray-400 pl-4"
-                >
-                  <span>{variant}</span>
-                  <span>{qty}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
+      <div className="bg-gray-900 p-6 rounded-lg space-y-3">
         <div className="flex justify-between">
-          <span>Apertura</span>
-          <span>${formatCurrency(session.opening_amount)}</span>
+          <span>Total órdenes</span>
+          <span>{summary.totalOrders}</span>
         </div>
 
-        {Object.entries(summary.payments).map(([name, amount]: any) => (
-          <div key={name} className="flex justify-between">
-            <span>{name}</span>
-            <span>${formatCurrency(amount)}</span>
+        <div className="flex justify-between">
+          <span>Ticket promedio</span>
+          <span>${formatCurrency(summary.ticketAverage)}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span>Total unidades</span>
+          <span>{summary.totalUnits}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span>Costo total</span>
+          <span>${formatCurrency(summary.totalCost)}</span>
+        </div>
+
+        <div className="flex justify-between text-green-400 font-bold">
+          <span>Ganancia bruta</span>
+          <span>${formatCurrency(summary.profit)}</span>
+        </div>
+      </div>
+
+      <div className="bg-gray-900 p-6 rounded-lg space-y-4">
+        <h3 className="font-bold text-lg border-b border-gray-700 pb-2">
+          Productos Vendidos
+        </h3>
+
+        {Object.entries(summary.products).map(([name, data]: any) => (
+          <div key={name} className="space-y-1 border-t border-gray-800 pt-3">
+            <div className="flex justify-between font-semibold">
+              <span>{name}</span>
+              <span>{data.total}</span>
+            </div>
+
+            {Object.entries(data.variants).map(([variant, qty]: any) => (
+              <div
+                key={variant}
+                className="flex justify-between text-sm text-gray-400 pl-4"
+              >
+                <span>{variant}</span>
+                <span>{qty}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between">
+        <span>Apertura</span>
+        <span>${formatCurrency(session.opening_amount)}</span>
+      </div>
+
+      {Object.entries(summary.payments).map(([name, amount]: any) => (
+        <div key={name} className="flex justify-between">
+          <span>{name}</span>
+          <span>${formatCurrency(amount)}</span>
+        </div>
+      ))}
+
+      <div className="border-t border-gray-700 pt-2 flex justify-between font-bold text-lg">
+        <span>Efectivo esperado</span>
+        <span>${formatCurrency(summary.expectedCash)}</span>
+      </div>
+      <div className="bg-gray-900 p-6 rounded-lg space-y-4">
+        <h3 className="font-bold">Contador de billetes</h3>
+        {BILL_DENOMINATIONS.map((value) => (
+          <div key={value} className="flex justify-between items-center">
+            <span>${value}</span>
+
+            <input
+              type="number"
+              value={bills[value]}
+              onChange={(e) =>
+                setBills((prev) => ({
+                  ...prev,
+                  [value]: Number(e.target.value),
+                }))
+              }
+              className="w-20 bg-gray-800 border border-gray-700 rounded p-2 text-center"
+            />
           </div>
         ))}
 
-        <div className="border-t border-gray-700 pt-2 flex justify-between font-bold text-lg">
-          <span>Efectivo esperado</span>
-          <span>${formatCurrency(summary.expectedCash)}</span>
+        <div className="flex justify-between font-bold text-lg border-t border-gray-700 pt-3">
+          <span>Total contado</span>
+          <span>${formatCurrency(calculateBillsTotal())}</span>
         </div>
-        <div className="bg-gray-900 p-6 rounded-lg space-y-4">
-          <h3 className="font-bold">Contador de billetes</h3>
-
-          {Object.keys(bills).map((value) => (
-            <div key={value} className="flex justify-between items-center">
-              <span>${value}</span>
-
-              <input
-                type="number"
-                value={bills[value]}
-                onChange={(e) =>
-                  setBills({
-                    ...bills,
-                    [value]: Number(e.target.value),
-                  })
-                }
-                className="w-20 bg-gray-800 border border-gray-700 rounded p-2 text-center"
-              />
-            </div>
-          ))}
-
-          <div className="flex justify-between font-bold text-lg border-t border-gray-700 pt-3">
-            <span>Total contado</span>
-            <span>${formatCurrency(calculateBillsTotal())}</span>
-          </div>
-        </div>
+      </div>
 
       <div className="bg-gray-900 p-6 rounded-lg space-y-3">
-
         <div
           className={`text-lg font-semibold ${
             difference === 0 ? "text-green-400" : "text-red-400"

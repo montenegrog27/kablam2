@@ -156,21 +156,27 @@ const handleOpen = async () => {
       }
 
       // 🆕 Crear nueva sesión
-      const { data: newSession, error: insertError } = await supabase
-        .from("cash_sessions")
-        .insert({
-          tenant_id: userRecord.tenant_id,
-          branch_id: userRecord.branch_id,
-          cash_register_id: selectedRegister.id,
-          opened_by: userRecord.id,
-          opening_amount: Number(amount),
-          status: "open",
-        })
-        .select()
-        .single();
+const { data: newSession, error } = await supabase
+  .from("cash_sessions")
+  .insert({
+    tenant_id: userRecord.tenant_id,
+    branch_id: userRecord.branch_id,
+    cash_register_id: selectedRegister.id,
+    opened_by: userRecord.id,
+    opening_amount: Number(amount),
+    status: "open",
+  })
+  .select()
+  .single();
 
-      if (insertError) throw insertError;
+if (error) {
+  if (error.code === "23505") {
+    alert("Ya existe una sesión abierta para esta caja.");
+    return;
+  }
 
+  throw error;
+}
       onOpened(newSession);
 
     } catch (err: any) {

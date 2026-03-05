@@ -60,7 +60,8 @@ export default function AdminLayout({
           <Link href="/day-parts">Turnos</Link>
           <Link href="/printers">Impresoras</Link>
           <Link href="/kitchens">Cocinas</Link>
-
+          <Link href="/coupons">Cupones</Link>
+          <Link href="/delivery-settings">Configuracion delivery</Link>
           <Link href="/settings">Configuración</Link>
         </nav>
 
