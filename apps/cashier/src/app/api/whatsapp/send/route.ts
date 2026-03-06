@@ -1,12 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(req: Request) {
+
+  const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   const body = await req.json();
 
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "customer not found" });
   }
 
-  // 3️⃣ buscar número de whatsapp de la sucursal
+  // 3️⃣ buscar número whatsapp
 
   const { data: number } = await supabase
     .from("whatsapp_numbers")
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "whatsapp number not configured" });
   }
 
-  // 4️⃣ enviar a meta
+  // 4️⃣ enviar mensaje
 
   const url =
     `https://graph.facebook.com/v18.0/${number.phone_number_id}/messages`;
@@ -63,9 +63,7 @@ export async function POST(req: Request) {
       messaging_product: "whatsapp",
       to: customer.phone,
       type: "text",
-      text: {
-        body: text,
-      },
+      text: { body: text }
     }),
   });
 
@@ -79,15 +77,12 @@ export async function POST(req: Request) {
   // 5️⃣ guardar mensaje
 
   await supabase.from("messages").insert({
-
     tenant_id: conversation.tenant_id,
     branch_id: conversation.branch_id,
     conversation_id: conversation.id,
-
     sender_type: "cashier",
     message: text,
     media_type: "text"
-
   });
 
   return NextResponse.json({ success: true });
