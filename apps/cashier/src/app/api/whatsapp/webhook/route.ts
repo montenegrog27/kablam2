@@ -9,7 +9,9 @@ const supabase = createClient(
 export async function POST(req: Request) {
 
   const body = await req.json();
+console.log("WEBHOOK RECEIVED")
 
+console.log(JSON.stringify(body, null, 2))
   const entry = body.entry?.[0];
   const change = entry?.changes?.[0];
   const value = change?.value;

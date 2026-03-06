@@ -50,24 +50,36 @@ export async function POST(req: Request) {
 
   // 4️⃣ enviar mensaje
 
-  const url =
-    `https://graph.facebook.com/v18.0/${number.phone_number_id}/messages`;
+console.log("SEND WHATSAPP START")
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${number.access_token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: customer.phone,
-      type: "text",
-      text: { body: text }
-    }),
-  });
+console.log("conversationId:", conversationId)
+console.log("text:", text)
 
-  const result = await res.json();
+console.log("customer:", customer)
+console.log("number:", number)
+
+const url =
+  `https://graph.facebook.com/v18.0/${number.phone_number_id}/messages`;
+
+console.log("META URL:", url)
+
+const res = await fetch(url, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${number.access_token}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    messaging_product: "whatsapp",
+    to: customer.phone,
+    type: "text",
+    text: { body: text }
+  }),
+});
+
+const result = await res.json();
+
+console.log("META RESPONSE:", result)
 
   if (result.error) {
     console.error(result.error);
