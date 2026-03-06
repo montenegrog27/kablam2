@@ -1,0 +1,95 @@
+import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: Request) {
+
+  const body = await req.json();
+
+  const { conversationId, text } = body;
+
+  // 1️⃣ buscar conversación
+
+  const { data: conversation } = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("id", conversationId)
+    .single();
+
+  if (!conversation) {
+    return NextResponse.json({ error: "conversation not found" });
+  }
+
+  // 2️⃣ buscar customer
+
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("*")
+    .eq("id", conversation.customer_id)
+    .single();
+
+  if (!customer) {
+    return NextResponse.json({ error: "customer not found" });
+  }
+
+  // 3️⃣ buscar número de whatsapp de la sucursal
+
+  const { data: number } = await supabase
+    .from("whatsapp_numbers")
+    .select("*")
+    .eq("branch_id", conversation.branch_id)
+    .single();
+
+  if (!number) {
+    return NextResponse.json({ error: "whatsapp number not configured" });
+  }
+
+  // 4️⃣ enviar a meta
+
+  const url =
+    `https://graph.facebook.com/v18.0/${number.phone_number_id}/messages`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${number.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: customer.phone,
+      type: "text",
+      text: {
+        body: text,
+      },
+    }),
+  });
+
+  const result = await res.json();
+
+  if (result.error) {
+    console.error(result.error);
+    return NextResponse.json({ error: result.error.message });
+  }
+
+  // 5️⃣ guardar mensaje
+
+  await supabase.from("messages").insert({
+
+    tenant_id: conversation.tenant_id,
+    branch_id: conversation.branch_id,
+    conversation_id: conversation.id,
+
+    sender_type: "cashier",
+    message: text,
+    media_type: "text"
+
+  });
+
+  return NextResponse.json({ success: true });
+
+}

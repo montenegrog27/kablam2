@@ -43,6 +43,7 @@ export default function OrdersBoard({
 
   const [loading, setLoading] = useState(false);
 
+  
   const getOrdersByStatus = (status: string) =>
     orders.filter((o: any) => o.status === status);
 
