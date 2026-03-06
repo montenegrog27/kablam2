@@ -9,6 +9,7 @@ export default function OrderCard({
   onSelect,
   onNextStatus,
   onMarkAsPaid,
+  onMessages,
 }: any) {
 
   const paid = order.paid_amount || 0;
@@ -81,6 +82,20 @@ export default function OrderCard({
         >
           Ver
         </button>
+        <button
+  onClick={() => onMessages(order)}
+  className="
+    px-3 py-1.5
+    text-sm font-medium
+    border border-gray-300
+    rounded-lg
+    text-gray-700
+    hover:bg-gray-100
+    transition
+  "
+>
+  Mensajes
+</button>
 
         {!isFullyPaid && (
           <button

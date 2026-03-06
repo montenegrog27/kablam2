@@ -99,7 +99,11 @@ export async function validateCoupon({
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
     const weeklyUses =
-      uses?.filter((u) => new Date(u.used_at) > oneWeekAgo).length || 0;
+  uses?.filter(
+    (u) =>
+      u.used_at &&
+      new Date(u.used_at) > oneWeekAgo
+  ).length || 0;
 
     if (coupon.weekly_limit && weeklyUses >= coupon.weekly_limit) {
       return {

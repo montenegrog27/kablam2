@@ -187,16 +187,27 @@ export default function CloseCash({ session, onClosed }: any) {
 
     try {
       // 🔎 1. Validar que siga abierta
-      const { data: freshSession } = await supabase
-        .from("cash_sessions")
-        .select(
-          `
-  *,
-  users ( full_name )
-`,
-        )
-        .eq("id", session.id)
-        .single();
+const { data: freshSession, error } = await supabase
+  .from("cash_sessions")
+  .select("*")
+  .eq("id", session.id)
+  .single();
+
+if (error) {
+  console.error("Error cargando sesión:", error);
+  alert("No se pudo verificar la sesión.");
+  return;
+}
+
+if (!freshSession) {
+  alert("Sesión no encontrada.");
+  return;
+}
+
+if (freshSession.status !== "open") {
+  alert("Esta sesión ya fue cerrada.");
+  return;
+}
 
       if (!freshSession || freshSession.status !== "open") {
         alert("Esta sesión ya fue cerrada.");

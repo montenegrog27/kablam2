@@ -38,7 +38,7 @@ export default function OrderSidePanel({
 
   const [branchLat, setBranchLat] = useState<number | null>(null);
   const [branchLng, setBranchLng] = useState<number | null>(null);
-
+const [couponError, setCouponError] = useState("");
   const [deliverySettings, setDeliverySettings] = useState<any>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -78,37 +78,46 @@ export default function OrderSidePanel({
     }
   };
 
- const loadDeliverySettings = async () => {
-  const { data, error } = await supabase
-    .from("delivery_settings")
-    .select("*")
-    .eq("tenant_id", session.tenant_id)
-    .eq("branch_id", session.branch_id);
+  const loadDeliverySettings = async () => {
+    const { data, error } = await supabase
+      .from("delivery_settings")
+      .select("*")
+      .eq("tenant_id", session.tenant_id)
+      .eq("branch_id", session.branch_id);
 
-  console.log("DELIVERY RAW DATA:", data);
-  console.log("DELIVERY ERROR:", error);
+    console.log("DELIVERY RAW DATA:", data);
+    console.log("DELIVERY ERROR:", error);
 
-  if (data && data.length > 0) {
-    setDeliverySettings(data[0]);
-  }
-};
+    if (data && data.length > 0) {
+      setDeliverySettings(data[0]);
+    }
+  };
 
   const addressRef = useRef<HTMLInputElement | null>(null);
-console.log("Delivery settings:", deliverySettings);
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (window.google && addressRef.current) {
+        const corrientesBounds = new window.google.maps.LatLngBounds(
+          { lat: -27.55, lng: -58.92 }, // SW
+          { lat: -27.35, lng: -58.7 }, // NE
+        );
+
         const autocomplete = new window.google.maps.places.Autocomplete(
           addressRef.current,
           {
             componentRestrictions: { country: "ar" },
+            bounds: corrientesBounds,
+            strictBounds: true,
             fields: ["formatted_address", "geometry"],
             types: ["address"],
           },
         );
 
+        // 🔹 IMPORTANTE: capturar dirección seleccionada
         autocomplete.addListener("place_changed", () => {
           const place = autocomplete.getPlace();
+
           if (!place.geometry) return;
 
           const location = place.geometry.location;
@@ -125,45 +134,45 @@ console.log("Delivery settings:", deliverySettings);
     return () => clearInterval(interval);
   }, []);
 
-useEffect(() => {
-  if (!autoShippingEnabled) return;
-  if (orderType !== "delivery") return;
-  if (customerLat === null || customerLng === null) return;
-  if (branchLat === null || branchLng === null) return;
-  if (!deliverySettings) return;
+  useEffect(() => {
+    if (!autoShippingEnabled) return;
+    if (orderType !== "delivery") return;
+    if (customerLat === null || customerLng === null) return;
+    if (branchLat === null || branchLng === null) return;
+    if (!deliverySettings) return;
 
-  const distance = calculateDistanceKm(
+    const distance = calculateDistanceKm(
+      branchLat,
+      branchLng,
+      customerLat,
+      customerLng,
+    );
+
+    console.log("DISTANCE:", distance);
+
+    const cost = calculateShippingCost({
+      distanceKm: distance,
+      settings: deliverySettings,
+    });
+
+    console.log("SHIPPING COST:", cost);
+
+    if (cost === null) {
+      alert("Fuera de zona de entrega");
+      setShippingCost(0);
+      return;
+    }
+
+    setShippingCost(cost);
+  }, [
+    orderType,
+    customerLat,
+    customerLng,
     branchLat,
     branchLng,
-    customerLat,
-    customerLng
-  );
-
-  console.log("DISTANCE:", distance);
-
-  const cost = calculateShippingCost({
-    distanceKm: distance,
-    settings: deliverySettings,
-  });
-
-  console.log("SHIPPING COST:", cost);
-
-  if (cost === null) {
-    alert("Fuera de zona de entrega");
-    setShippingCost(0);
-    return;
-  }
-
-  setShippingCost(cost);
-}, [
-  orderType,
-  customerLat,
-  customerLng,
-  branchLat,
-  branchLng,
-  deliverySettings,
-  autoShippingEnabled,
-]);
+    deliverySettings,
+    autoShippingEnabled,
+  ]);
   useEffect(() => {
     loadProducts();
     loadCategories();
@@ -355,7 +364,13 @@ useEffect(() => {
 
   const isPhoneMissingForCoupon = couponRequiresPhone && !customerPhone?.trim();
 
-  const isCheckoutBlocked = cart.length === 0 || isPhoneMissingForCoupon;
+  const isPhoneRequiredForDelivery =
+  orderType === "delivery" && !customerPhone?.trim();
+
+const isCheckoutBlocked =
+  cart.length === 0 ||
+  isPhoneMissingForCoupon ||
+  isPhoneRequiredForDelivery;
 
   const removePaymentLine = (index: number) => {
     setPayments(payments.filter((_, i) => i !== index));
@@ -366,29 +381,31 @@ useEffect(() => {
   };
   console.log("SESSION:", session);
 
-  const handleValidateCoupon = async () => {
-    if (!couponCode.trim()) {
-      alert("Ingresá un código");
-      return;
-    }
-    const result = await validateCoupon({
-      code: couponCode,
-      tenantId: session.tenant_id,
-      phone: customerPhone,
-      orderTotal: calculateSubtotal() - calculateDiscount(),
-      shippingCost: calculateShipping(),
-      hasDailyDiscount: false,
-    });
-    if (!result.valid) {
-      alert(result.message);
-      return;
-    }
+ const handleValidateCoupon = async () => {
+  if (!couponCode.trim()) {
+    setCouponError("Ingresá un código");
+    return;
+  }
 
-    // 🔥 reemplaza automáticamente
-    setAppliedCoupon(result.coupon);
-    setCouponDiscount(result.discountAmount || 0);
-    setCouponCode("");
-  };
+  const result = await validateCoupon({
+    code: couponCode,
+    tenantId: session.tenant_id,
+    phone: customerPhone,
+    orderTotal: calculateSubtotal() - calculateDiscount(),
+    shippingCost: calculateShipping(),
+    hasDailyDiscount: false,
+  });
+
+  if (!result.valid) {
+    setCouponError("Cupón inválido");
+    return;
+  }
+
+  setCouponError("");
+  setAppliedCoupon(result.coupon);
+  setCouponDiscount(result.discountAmount || 0);
+  setCouponCode("");
+};
   // ================= SAVE =================
   const handleSave = async () => {
     const subtotal = calculateSubtotal();
@@ -664,6 +681,48 @@ useEffect(() => {
               />
             )}
 
+            {orderType === "delivery" && autoShippingEnabled && (
+  <div className="text-xs text-gray-500">
+    Envío calculado automáticamente según distancia
+  </div>
+)}
+{orderType === "delivery" && (
+  <div className="flex bg-gray-100 rounded-lg p-1">
+    <button
+      type="button"
+      onClick={() => setAutoShippingEnabled(true)}
+      className={`flex-1 py-2 text-xs rounded-md ${
+        autoShippingEnabled
+          ? "bg-white shadow text-gray-900"
+          : "text-gray-500"
+      }`}
+    >
+      Automático
+    </button>
+
+    <button
+      type="button"
+      onClick={() => setAutoShippingEnabled(false)}
+      className={`flex-1 py-2 text-xs rounded-md ${
+        !autoShippingEnabled
+          ? "bg-white shadow text-gray-900"
+          : "text-gray-500"
+      }`}
+    >
+      Manual
+    </button>
+  </div>
+)}
+{orderType === "delivery" && !autoShippingEnabled && (
+  <input
+    type="number"
+    value={shippingCost}
+    onChange={(e) => setShippingCost(Number(e.target.value))}
+    placeholder="Costo de envío"
+    className="w-full border border-gray-300 p-3 rounded-lg text-sm"
+  />
+)}
+
             <input
               value={manualDiscount}
               onChange={(e) => setManualDiscount(e.target.value)}
@@ -716,6 +775,22 @@ useEffect(() => {
                 </div>
               )}
             </div>
+
+            {couponError && (
+  <div className="text-xs bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-md">
+    {couponError}
+  </div>
+)}
+{appliedCoupon?.requires_phone && (
+  <div className="text-xs bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-md">
+    Hola {appliedCoupon.name}, tu cupón es válido 🎉
+  </div>
+)}
+{couponRequiresPhone && !customerPhone && (
+  <div className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 py-2 rounded-md">
+    Este cupón requiere ingresar un teléfono
+  </div>
+)}
             <div className="border-t pt-4 space-y-4">
               <h3 className="font-semibold text-gray-800">Método de pago</h3>
 

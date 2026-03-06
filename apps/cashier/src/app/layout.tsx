@@ -40,26 +40,3 @@ export default function RootLayout({
   );
 }
 
-
-
-
-
-// import "./globals.css";
-
-// export const metadata = {
-//   title: "Cashier - Kablam",
-// };
-
-// export default function RootLayout({
-//   children,
-// }: {
-//   children: React.ReactNode;
-// }) {
-//   return (
-//     <html lang="es">
-//       <body>{children}</body>
-//     </html>
-//   );
-// }
-
-

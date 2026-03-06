@@ -37,6 +37,7 @@ const STATUS_META: any = {
 export default function OrdersBoard({
   orders,
   onSelect,
+  onMessages,
   reloadOrders,
 }: any) {
 
@@ -175,12 +176,13 @@ if (nextStatus === "delivered") {
                       ${index !== list.length - 1 ? "border-b border-gray-100" : ""}
                     `}
                   >
-                    <OrderCard
-                      order={order}
-                      onSelect={onSelect}
-                      onNextStatus={() => handleNextStatus(order)}
-                        onMarkAsPaid={handleMarkAsPaid}
-                    />
+<OrderCard
+  order={order}
+  onSelect={onSelect}
+  onNextStatus={() => handleNextStatus(order)}
+  onMarkAsPaid={handleMarkAsPaid}
+  onMessages={() => onMessages(order)}
+/>
                   </div>
                 ))
               )}
