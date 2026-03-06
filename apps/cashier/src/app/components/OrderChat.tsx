@@ -29,15 +29,29 @@ export default function OrderChat({
 
     // 1️⃣ buscar o crear customer
 
-    const { data: customer } = await supabase
-      .from("customers")
-      .upsert({
-        tenant_id: order.tenant_id,
-        phone: order.customer_phone,
-        name: order.customer_name,
-      })
-      .select()
-      .single();
+let { data: customer } = await supabase
+  .from("customers")
+  .select("*")
+  .eq("tenant_id", order.tenant_id)
+  .eq("phone", order.customer_phone)
+  .maybeSingle();
+
+if (!customer) {
+
+  const { data } = await supabase
+    .from("customers")
+    .insert({
+      tenant_id: order.tenant_id,
+      branch_id: order.branch_id,
+      phone: order.customer_phone,
+      name: order.customer_name
+    })
+    .select()
+    .single();
+
+  customer = data;
+
+}
 
     // 2️⃣ buscar conversación
 
