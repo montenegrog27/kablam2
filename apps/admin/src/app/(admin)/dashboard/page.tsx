@@ -5,7 +5,7 @@ import { supabase } from "@kablam/supabase";
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
-  const [tenant, setTenant] = useState(null);
+  const [tenant, setTenant] = useState<any>(null);
   const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
@@ -41,12 +41,12 @@ export default function Dashboard() {
   return (
     <div className="p-10">
       <h1 className="text-2xl font-bold">
-        Bienvenido a {tenant.name}
+        Bienvenido a {tenant?.name}
       </h1>
 
       <p>Rol: {userRole}</p>
 
-      <p>Plan: {tenant.plan}</p>
+      <p>Plan: {tenant?.plan}</p>
 
       <p>Trial termina: {tenant.trial_ends_at}</p>
     </div>
