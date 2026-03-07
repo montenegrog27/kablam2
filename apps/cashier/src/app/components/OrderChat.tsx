@@ -65,10 +65,11 @@ if (!customer) {
 
       const { data: newConv } = await supabase
         .from("conversations")
-        .insert({
-          tenant_id: order.tenant_id,
-          customer_id: customer.id,
-        })
+.insert({
+  tenant_id: order.tenant_id,
+  branch_id: order.branch_id,
+  customer_id: customer.id,
+})
         .select()
         .single();
 
