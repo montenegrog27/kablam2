@@ -561,6 +561,65 @@ export default function OrderSidePanel({
         .eq("id", appliedCoupon.id);
     }
     await reloadOrders();
+
+// ===============================
+// CONVERSACIÓN
+// ===============================
+
+let { data: conversation } = await supabase
+  .from("conversations")
+  .select("*")
+  .eq("customer_id", customer.id)
+  .maybeSingle();
+
+if (!conversation) {
+
+  const { data } = await supabase
+    .from("conversations")
+    .insert({
+      tenant_id: session.tenant_id,
+      branch_id: session.branch_id,
+      customer_id: customer.id
+    })
+    .select()
+    .single();
+
+  conversation = data;
+
+}
+
+// ===============================
+// TEXTO DEL PEDIDO
+// ===============================
+
+const orderText = cart
+  .map((item) =>
+    `${item.quantity}x ${item.variant.name} $${item.variant.price * item.quantity}`
+  )
+  .join(" • ");
+
+
+// ===============================
+// ENVIAR WHATSAPP
+// ===============================
+
+await fetch("/api/whatsapp/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    conversationId: conversation.id,
+    type: "template",
+    templateName: "confirmacion_pedido_detallado",
+    params: [
+      customerName,
+      orderText,
+      total.toString()
+    ]
+  })
+});
+
     setSelectedOrder(null);
     resetForm();
   };

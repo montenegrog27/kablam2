@@ -217,6 +217,8 @@ export async function POST(req: Request) {
   }
 
 
+  
+
   // ===============================
   // MENSAJE ENTRANTE
   // ===============================
@@ -251,7 +253,46 @@ export async function POST(req: Request) {
   if (message.audio) {
     mediaType = "audio";
   }
+if (message.type === "button") {
 
+  const payload = message.button?.payload;
+  const originalMessageId = message.context?.id;
+
+  if (!originalMessageId) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("whatsapp_message_id", originalMessageId)
+    .maybeSingle();
+
+  if (!order) return NextResponse.json({ ok: true });
+
+  if (payload === "confirmar_pedido") {
+
+    await supabase
+      .from("orders")
+      .update({
+        status: "confirmed"
+      })
+      .eq("id", order.id);
+
+  }
+
+  if (payload === "cancelar_pedido") {
+
+    await supabase
+      .from("orders")
+      .update({
+        status: "cancelled"
+      })
+      .eq("id", order.id);
+
+  }
+
+}
 
   // ===============================
   // BUSCAR NÚMERO WHATSAPP
