@@ -109,41 +109,64 @@ export default function OrderChat({ order, session, onClose }: any) {
   // REALTIME
   // -----------------------------
 
-  useEffect(() => {
-    if (!conversationId) return;
+useEffect(() => {
+  if (!conversationId) return;
 
-    const channel = supabase
-      .channel(`chat-${conversationId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
+  const channel = supabase
+    .channel(`chat-${conversationId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload) => {
 
-          setTimeout(() => {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-          }, 100);
-        },
-      )
-      .subscribe();
+        const newMessage = payload.new;
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [conversationId]);
+        setMessages((prev:any) => {
+
+          const exists = prev.find((m:any) => m.id === newMessage.id);
+
+          if (exists) return prev;
+
+          return [...prev, newMessage];
+
+        });
+
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+
+}, [conversationId]);
 
   // -----------------------------
   // SEND TEXT
   // -----------------------------
 
- const sendMessage = async () => {
+const sendMessage = async () => {
   if (!text.trim()) return;
   if (!conversationId) return;
+
+  const tempMessage = {
+    id: crypto.randomUUID(),
+    message: text,
+    media_type: "text",
+    sender_type: "cashier",
+    created_at: new Date().toISOString()
+  };
+
+  // ⚡ mostrar instantáneamente
+  setMessages((prev) => [...prev, tempMessage]);
+
+  const messageText = text;
+  setText("");
 
   const res = await fetch("/api/whatsapp/send", {
     method: "POST",
@@ -152,19 +175,15 @@ export default function OrderChat({ order, session, onClose }: any) {
     },
     body: JSON.stringify({
       conversationId,
-      text,
+      text: messageText,
     }),
   });
 
   const data = await res.json();
 
   if (data.error) {
-    console.error("WhatsApp error:", data.error);
-    alert(data.error);
-    return;
+    console.error(data.error);
   }
-
-  setText("");
 };
 
   // -----------------------------
