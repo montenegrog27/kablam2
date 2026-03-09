@@ -114,13 +114,14 @@ export async function POST(req: Request) {
 
   const body = await req.json();
 
-  const {
-    conversationId,
-    type = "text",
-    text,
-    templateName,
-    params = []
-  } = body;
+const {
+  conversationId,
+  orderId,
+  type = "text",
+  text,
+  templateName,
+  params = []
+} = body;
 
   // =============================
   // buscar conversación
@@ -245,7 +246,6 @@ export async function POST(req: Request) {
   });
 
   const result = await res.json();
-
   console.log("META RESPONSE:", result);
 
   if (result.error) {
@@ -254,7 +254,20 @@ export async function POST(req: Request) {
   }
 
   const messageId = result.messages?.[0]?.id;
+// =============================
+// guardar messageId en order
+// =============================
 
+if (orderId && messageId) {
+
+  await supabase
+    .from("orders")
+    .update({
+      whatsapp_message_id: messageId
+    })
+    .eq("id", orderId);
+
+}
   
   // =============================
   // guardar mensaje

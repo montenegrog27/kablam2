@@ -258,9 +258,14 @@ if (message.type === "button") {
   const payload = message.button?.payload;
   const originalMessageId = message.context?.id;
 
+  console.log("BUTTON CLICK:", payload);
+  console.log("MESSAGE CONTEXT:", originalMessageId);
+
   if (!originalMessageId) {
     return NextResponse.json({ ok: true });
   }
+
+  // buscar pedido por messageId
 
   const { data: order } = await supabase
     .from("orders")
@@ -268,7 +273,14 @@ if (message.type === "button") {
     .eq("whatsapp_message_id", originalMessageId)
     .maybeSingle();
 
-  if (!order) return NextResponse.json({ ok: true });
+  if (!order) {
+    console.log("ORDER NOT FOUND FOR MESSAGE");
+    return NextResponse.json({ ok: true });
+  }
+
+  // =========================
+  // CONFIRMAR PEDIDO
+  // =========================
 
   if (payload === "confirmar_pedido") {
 
@@ -279,7 +291,13 @@ if (message.type === "button") {
       })
       .eq("id", order.id);
 
+    console.log("ORDER CONFIRMED:", order.id);
+
   }
+
+  // =========================
+  // CANCELAR PEDIDO
+  // =========================
 
   if (payload === "cancelar_pedido") {
 
@@ -290,10 +308,13 @@ if (message.type === "button") {
       })
       .eq("id", order.id);
 
+    console.log("ORDER CANCELLED:", order.id);
+
   }
 
-}
+  return NextResponse.json({ ok: true });
 
+}
   // ===============================
   // BUSCAR NÚMERO WHATSAPP
   // ===============================

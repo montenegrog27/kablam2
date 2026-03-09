@@ -608,16 +608,17 @@ await fetch("/api/whatsapp/send", {
   headers: {
     "Content-Type": "application/json"
   },
-  body: JSON.stringify({
-    conversationId: conversation.id,
-    type: "template",
-    templateName: "confirmacion_pedido_detallado",
-    params: [
-      customerName,
-      orderText,
-      total.toString()
-    ]
-  })
+body: JSON.stringify({
+  conversationId: conversation.id,
+  orderId: orderId,
+  type: "template",
+  templateName: "confirmacion_pedido_detallado",
+  params: [
+    customerName,
+    orderText,
+    total.toString()
+  ]
+})
 });
 
     setSelectedOrder(null);
