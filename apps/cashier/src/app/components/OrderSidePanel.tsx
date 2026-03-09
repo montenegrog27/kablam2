@@ -438,29 +438,37 @@ export default function OrderSidePanel({
       appliedCoupon?.discount_type === "free_shipping"
         ? 0
         : calculateShipping();
-    const phone = customerPhone.replace(/\D/g, "");
-    let { data: customer } = await supabase
-      .from("customers")
-      .select("*")
-      .eq("tenant_id", session.tenant_id)
-      .eq("phone", phone)
-      .maybeSingle();
+const phone = customerPhone.replace(/\D/g, "");
 
-    if (!customer) {
-      const { data } = await supabase
-        .from("customers")
-        .insert({
-          tenant_id: session.tenant_id,
-          branch_id: session.branch_id,
-          name: customerName,
-          phone: customerPhone,
-        })
-        .select()
-        .single();
+let { data: customer } = await supabase
+  .from("customers")
+  .select("*")
+  .eq("tenant_id", session.tenant_id)
+  .eq("phone", phone)
+  .maybeSingle();
 
-      customer = data;
-    }
 
+if (!customer) {
+
+  const { data } = await supabase
+    .from("customers")
+    .insert({
+      tenant_id: session.tenant_id,
+      branch_id: session.branch_id,
+      name: customerName,
+      phone: phone
+    })
+    .select()
+    .single();
+
+  customer = data;
+
+}
+
+if (!customer) {
+  console.error("Customer creation failed");
+  return;
+}
     if (isBuilder) {
       const { data, error } = await supabase
         .from("orders")
@@ -477,7 +485,7 @@ export default function OrderSidePanel({
           type: orderType,
 
           customer_name: customerName,
-          customer_phone: customerPhone,
+          customer_phone:phone,
           address: orderType === "delivery" ? address : null,
           subtotal,
           discount,
@@ -603,34 +611,48 @@ const orderText = cart
 // ENVIAR WHATSAPP
 // ===============================
 
-await fetch("/api/whatsapp/send", {
+const res = await fetch("/api/whatsapp/send", {
   method: "POST",
   headers: {
     "Content-Type": "application/json"
   },
-body: JSON.stringify({
-  conversationId: conversation.id,
-  orderId: orderId,
-  type: "template",
-  templateName: "confirmacion_pedido_detallado",
-  params: [
-    customerName,
-    orderText,
-    total.toString()
-  ]
-})
+  body: JSON.stringify({
+    conversationId: conversation.id,
+    orderId: orderId,
+    type: "template",
+    templateName: "confirmacion_pedido_detallado",
+    params: [
+      customerName,
+      orderText,
+      total.toString()
+    ]
+  })
 });
 
+const data: any = await res.json();
+
+if (data?.messageId) {
+
+  await supabase
+    .from("orders")
+    .update({
+      whatsapp_message_id: data.messageId
+    })
+    .eq("id", orderId);
+
+}
     setSelectedOrder(null);
     resetForm();
   };
   // ================= UI =================
   // (TU UI ORIGINAL + bloque de pagos agregado en checkout)
-  const isSplitPayment = payments.length > 1;
+// ================= UI =================
 
-  const totalPayments = isSplitPayment
-    ? payments.reduce((acc, p) => acc + Number(p.amount || 0), 0)
-    : calculateTotal();
+
+const totalPayments = payments.reduce(
+  (acc, p) => acc + Number(p.amount || 0),
+  0
+);
 
   return (
     <div className="w-[520px] h-full flex flex-col bg-white border-l border-gray-200">
