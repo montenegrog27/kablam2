@@ -114,6 +114,7 @@ useEffect(() => {
 
   const channel = supabase
     .channel(`chat-${conversationId}`)
+
     .on(
       "postgres_changes",
       {
@@ -123,21 +124,26 @@ useEffect(() => {
         filter: `conversation_id=eq.${conversationId}`,
       },
       (payload) => {
-
         const newMessage = payload.new;
 
         setMessages((prev:any) => {
-
           const exists = prev.find((m:any) => m.id === newMessage.id);
-
           if (exists) return prev;
-
           return [...prev, newMessage];
-
         });
-
       }
     )
+
+    .on("broadcast", { event: "new_message" }, (payload) => {
+      const newMessage = payload.payload;
+
+      setMessages((prev:any) => {
+        const exists = prev.find((m:any) => m.id === newMessage.id);
+        if (exists) return prev;
+        return [...prev, newMessage];
+      });
+    })
+
     .subscribe();
 
   return () => {

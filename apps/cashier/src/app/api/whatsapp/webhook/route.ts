@@ -388,24 +388,36 @@
     }
 
 
-    // ===============================
-    // GUARDAR MENSAJE
-    // ===============================
+// ===============================
+// GUARDAR MENSAJE
+// ===============================
 
-    await supabase
-      .from("messages")
-      .insert({
-        tenant_id: tenantId,
-        branch_id: branchId,
-        conversation_id: conversation.id,
-        sender_type: "customer",
-        message: text,
-        media_type: mediaType,
-        media_url: mediaUrl,
-            created_at: new Date()
-      });
+const { data: inserted } = await supabase
+  .from("messages")
+  .insert({
+    tenant_id: tenantId,
+    branch_id: branchId,
+    conversation_id: conversation.id,
+    sender_type: "customer",
+    message: text,
+    media_type: mediaType,
+    media_url: mediaUrl,
+    created_at: new Date()
+  })
+  .select()
+  .single();
 
+// ===============================
+// EMITIR EVENTO REALTIME
+// ===============================
 
+await supabase
+  .channel(`chat-${conversation.id}`)
+  .send({
+    type: "broadcast",
+    event: "new_message",
+    payload: inserted
+  });
     // ===============================
     // ACTUALIZAR CONVERSACIÓN
     // ===============================
