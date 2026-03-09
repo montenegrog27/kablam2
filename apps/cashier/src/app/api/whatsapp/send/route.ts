@@ -268,7 +268,7 @@ if (orderId && messageId) {
     .eq("id", orderId);
 
 }
-  
+  console.log("ORDER ID RECEIVED:", orderId);
   // =============================
   // guardar mensaje
   // =============================
