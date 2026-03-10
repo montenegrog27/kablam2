@@ -27,7 +27,7 @@
     }, []);
 
     
-    const loadOrders = async () => {
+  const loadOrders = async () => {
 
   const { data: ordersData } = await supabase
     .from("orders")
@@ -41,22 +41,23 @@
   const orders = ordersData ?? [];
   const conversations = conversationsData ?? [];
 
-  // mapa customer_id -> conversation_id
-  const conversationMap = Object.fromEntries(
-    conversations.map((c:any) => [String(c.customer_id), c.id])
-  );
-  console.log("CONVERSATION MAP", conversationMap);
+  // crear mapa customer_id -> conversation_id
+  const conversationMap: Record<string, string> = {};
 
-  const ordersWithConversation = orders.map((o:any) => {
-
-    const convId = conversationMap[String(o.customer_id)] || null;
-console.log("ORDER ->", o.customer_id, convId);
-    return {
-      ...o,
-      conversation_id: convId
-    };
-
+  conversations.forEach((c:any) => {
+    if (c.customer_id) {
+      conversationMap[c.customer_id] = c.id;
+    }
   });
+
+  const ordersWithConversation = orders.map((o:any) => ({
+    ...o,
+    conversation_id: o.customer_id
+      ? conversationMap[o.customer_id] || null
+      : null
+  }));
+
+  console.log("ORDERS WITH CONVERSATION:", ordersWithConversation);
 
   setOrders(ordersWithConversation);
 };
