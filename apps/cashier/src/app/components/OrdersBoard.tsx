@@ -37,10 +37,10 @@ export default function OrdersBoard({
 }: any) {
   const [loading, setLoading] = useState(false);
   const [unread, setUnread] = useState<any>({});
-const [boardOrders, setBoardOrders] = useState<any[]>(orders);
-useEffect(() => {
-  setBoardOrders(orders);
-}, [orders]);
+  const [boardOrders, setBoardOrders] = useState<any[]>(orders);
+  useEffect(() => {
+    setBoardOrders(orders);
+  }, [orders]);
   useEffect(() => {
     const channel = supabase
       .channel("messages-board")
@@ -52,24 +52,23 @@ useEffect(() => {
           schema: "public",
           table: "messages",
         },
-   (payload) => {
+        (payload) => {
+          const msg = payload.new;
 
-  const msg = payload.new;
+          console.log("MESSAGE CONVERSATION:", msg.conversation_id);
 
-  console.log("MESSAGE CONVERSATION:", msg.conversation_id);
+          // si el chat ya está abierto no mostramos badge
+          if (msg.conversation_id === activeConversationId) {
+            return;
+          }
 
-  // si el chat ya está abierto no mostramos badge
-  if (msg.conversation_id === activeConversationId) {
-    return;
-  }
+          if (msg.sender_type !== "customer") return;
 
-  if (msg.sender_type !== "customer") return;
-
-  setUnread((prev: any) => ({
-    ...prev,
-    [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1,
-  }));
-}
+          setUnread((prev: any) => ({
+            ...prev,
+            [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1,
+          }));
+        },
       )
 
       .subscribe();
@@ -89,19 +88,17 @@ useEffect(() => {
           schema: "public",
           table: "orders",
         },
-  (payload) => {
+        (payload) => {
+          const updated = payload.new;
 
-  const updated = payload.new;
+          console.log("ORDER UPDATED REALTIME:", updated);
 
-  console.log("ORDER UPDATED REALTIME:", updated);
-
-  setBoardOrders((prev:any) =>
-    prev.map((o:any) =>
-      o.id === updated.id ? { ...o, ...updated } : o
-    )
-  );
-
-}
+          setBoardOrders((prev: any) =>
+            prev.map((o: any) =>
+              o.id === updated.id ? { ...o, ...updated } : o,
+            ),
+          );
+        },
       )
       .subscribe();
 
@@ -109,8 +106,8 @@ useEffect(() => {
       supabase.removeChannel(channel);
     };
   }, []);
-const getOrdersByStatus = (status: string) =>
-  boardOrders.filter((o: any) => o.status === status);
+  const getOrdersByStatus = (status: string) =>
+    boardOrders.filter((o: any) => o.status === status);
 
   const getNextStatus = (current: string) => {
     if (current === "sent") return "delivered";
@@ -135,7 +132,7 @@ const getOrdersByStatus = (status: string) =>
       setLoading(false);
       return;
     }
-console.log("ORDER:", order);
+    console.log("ORDER:", order);
     if (!payments || payments.length === 0) {
       alert("Esta orden no tiene métodos de pago definidos");
       setLoading(false);
@@ -227,36 +224,39 @@ console.log("ORDER:", order);
                   No hay pedidos en este estado
                 </div>
               ) : (
-                
                 list.map((order: any, index: number) => {
-                  
-  console.log("ORDER CONVERSATION:", order.id, order.conversation_id);
+                  console.log(
+                    "ORDER CONVERSATION:",
+                    order.id,
+                    order.conversation_id,
+                  );
 
-  return (
-                  <div
-                    key={order.id}
-                    className={`
+                  return (
+                    <div
+                      key={order.id}
+                      className={`
                       ${index !== list.length - 1 ? "border-b border-gray-100" : ""}
                     `}
-                  >
-                    <OrderCard
-                      order={order}
-                      unread={unread[order.conversation_id] || 0}
-                      onSelect={onSelect}
-                      onNextStatus={() => handleNextStatus(order)}
-                      onMarkAsPaid={handleMarkAsPaid}
-                      onMessages={() => {
-                        // limpiar contador de mensajes
-                        setUnread((prev: any) => ({
-                          ...prev,
-                          [order.conversation_id]: 0,
-                        }));
+                    >
+                      <OrderCard
+                        order={order}
+                        unread={unread[order.conversation_id] || 0}
+                        onSelect={onSelect}
+                        onNextStatus={() => handleNextStatus(order)}
+                        onMarkAsPaid={handleMarkAsPaid}
+                        onMessages={() => {
+                          // limpiar contador de mensajes
+                          setUnread((prev: any) => ({
+                            ...prev,
+                            [order.conversation_id]: 0,
+                          }));
 
-                        onMessages(order);
-                      }}
-                    />
-                  </div>)
-      })
+                          onMessages(order);
+                        }}
+                      />
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
