@@ -35,32 +35,61 @@ export default function OrdersBoard({
   reloadOrders,
 }: any) {
   const [loading, setLoading] = useState(false);
-useEffect(() => {
+  const [unread, setUnread] = useState<any>({});
 
-  const channel = supabase
-    .channel("orders-realtime")
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "orders",
-      },
-      (payload) => {
+  useEffect(() => {
+    const channel = supabase
+      .channel("messages-board")
 
-        console.log("ORDER UPDATED REALTIME:", payload);
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          const msg = payload.new;
 
-        reloadOrders();
+          // solo mensajes del cliente
+          if (msg.sender_type !== "customer") return;
 
-      }
-    )
-    .subscribe();
+          setUnread((prev: any) => ({
+            ...prev,
+            [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1,
+          }));
+        },
+      )
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
+      .subscribe();
 
-}, []);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("orders-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "orders",
+        },
+        (payload) => {
+          console.log("ORDER UPDATED REALTIME:", payload);
+
+          reloadOrders();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
   const getOrdersByStatus = (status: string) =>
     orders.filter((o: any) => o.status === status);
 
@@ -188,10 +217,19 @@ useEffect(() => {
                   >
                     <OrderCard
                       order={order}
+                      unread={unread[order.conversation_id] || 0}
                       onSelect={onSelect}
                       onNextStatus={() => handleNextStatus(order)}
                       onMarkAsPaid={handleMarkAsPaid}
-                      onMessages={() => onMessages(order)}
+                      onMessages={() => {
+                        // limpiar contador de mensajes
+                        setUnread((prev: any) => ({
+                          ...prev,
+                          [order.conversation_id]: 0,
+                        }));
+
+                        onMessages(order);
+                      }}
                     />
                   </div>
                 ))
