@@ -9,22 +9,32 @@
     const [orders, setOrders] = useState<any[]>([]);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
-    useEffect(() => {
-      loadOrders();
+useEffect(() => {
 
-      const channel = supabase
-        .channel("orders-realtime")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "orders" },
-          () => loadOrders(),
-        )
-        .subscribe();
+  loadOrders();
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }, []);
+  const channel = supabase
+    .channel("orders-realtime")
+
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "orders" },
+      () => loadOrders()
+    )
+
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      () => loadOrders()
+    )
+
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+
+}, []);
 
     
   const loadOrders = async () => {
