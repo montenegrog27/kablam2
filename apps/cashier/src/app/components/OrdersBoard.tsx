@@ -51,6 +51,7 @@ export default function OrdersBoard({
         (payload) => {
           const msg = payload.new;
     console.log("NEW MESSAGE REALTIME:", payload);
+    console.log("MESSAGE CONVERSATION:", msg.conversation_id);
           // solo mensajes del cliente
           if (msg.sender_type !== "customer") return;
 
@@ -208,7 +209,12 @@ console.log("ORDER:", order);
                   No hay pedidos en este estado
                 </div>
               ) : (
-                list.map((order: any, index: number) => (
+                
+                list.map((order: any, index: number) => {
+                  
+  console.log("ORDER CONVERSATION:", order.id, order.conversation_id);
+
+  return (
                   <div
                     key={order.id}
                     className={`
@@ -231,8 +237,8 @@ console.log("ORDER:", order);
                         onMessages(order);
                       }}
                     />
-                  </div>
-                ))
+                  </div>)
+      })
               )}
             </div>
           </div>
