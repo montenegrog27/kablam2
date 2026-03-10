@@ -11,32 +11,66 @@ export default function SalesTab({ session }: any) {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [panelMode, setPanelMode] = useState<"order" | "chat">("order");
 
-  useEffect(() => {
-    loadOrders();
+useEffect(() => {
+  loadOrders();
 
-    const channel = supabase
-      .channel("orders-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => loadOrders(),
-      )
-      .subscribe();
+  const channel = supabase
+    .channel("orders-realtime")
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "orders" },
+      () => loadOrders()
+    )
 
-  const loadOrders = async () => {
-    const { data } = await supabase
-      .from("orders")
-      .select("*")
-      .not("status", "in", "(delivered,cancelled)")
-      .order("created_at", { ascending: false });
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      () => loadOrders()
+    )
 
-    setOrders(data || []);
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
   };
+}, []);
+
+const loadOrders = async () => {
+
+  const { data: ordersData } = await supabase
+    .from("orders")
+    .select("*")
+    .not("status", "in", "(delivered,cancelled)")
+    .order("created_at", { ascending: false });
+
+  const { data: conversationsData } = await supabase
+    .from("conversations")
+    .select("id, customer_id");
+    
+
+  const orders = ordersData ?? [];
+  const conversations = conversationsData ?? [];
+
+  const conversationMap: Record<string, string> = {};
+
+  conversations.forEach((c:any) => {
+    if (c.customer_id) {
+      conversationMap[c.customer_id] = c.id;
+    }
+  });
+
+  const ordersWithConversation = orders.map((o:any) => ({
+    ...o,
+    conversation_id: o.customer_id
+      ? conversationMap[o.customer_id] || null
+      : null
+  }));
+
+  console.log("ORDERS WITH CONVERSATION:", ordersWithConversation);
+
+  setOrders(ordersWithConversation);
+};
 
   return (
     <div className="flex h-full overflow-hidden">
