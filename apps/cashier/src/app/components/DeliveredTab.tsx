@@ -25,28 +25,38 @@
         supabase.removeChannel(channel);
       };
     }, []);
-const loadOrders = async () => {
 
-  const { data: orders } = await supabase
+    
+    const loadOrders = async () => {
+
+  const { data: ordersData } = await supabase
     .from("orders")
     .select("*")
     .order("created_at", { ascending: false });
 
-  const { data: conversations } = await supabase
+  const { data: conversationsData } = await supabase
     .from("conversations")
     .select("id, customer_id");
 
-  const ordersList = orders ?? [];
-  const conversationsList = conversations ?? [];
+  const orders = ordersData ?? [];
+  const conversations = conversationsData ?? [];
 
+  // mapa customer_id -> conversation_id
   const conversationMap = Object.fromEntries(
-    conversationsList.map((c:any) => [c.customer_id, c.id])
+    conversations.map((c:any) => [String(c.customer_id), c.id])
   );
+  console.log("CONVERSATION MAP", conversationMap);
 
-  const ordersWithConversation = ordersList.map((o:any) => ({
-    ...o,
-    conversation_id: conversationMap[o.customer_id] || null
-  }));
+  const ordersWithConversation = orders.map((o:any) => {
+
+    const convId = conversationMap[String(o.customer_id)] || null;
+console.log("ORDER ->", o.customer_id, convId);
+    return {
+      ...o,
+      conversation_id: convId
+    };
+
+  });
 
   setOrders(ordersWithConversation);
 };
