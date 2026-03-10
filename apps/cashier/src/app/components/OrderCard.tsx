@@ -80,9 +80,9 @@ export default function OrderCard({
         >
           Ver
         </button>
- <button
-  onClick={() => onMessages(order)}
-  className="
+        <button
+          onClick={() => onMessages(order)}
+          className="
     relative
     px-3 py-1.5
     text-sm font-medium
@@ -92,12 +92,11 @@ export default function OrderCard({
     hover:bg-gray-100
     transition
   "
->
-  Mensajes
-
-  {unread > 0 && (
-    <span
-      className="
+        >
+          Mensajes
+          {unread > 0 && (
+            <span
+              className="
         absolute
         -top-2
         -right-2
@@ -107,11 +106,11 @@ export default function OrderCard({
         px-1.5
         rounded-full
       "
-    >
-      {unread}
-    </span>
-  )}
-</button>
+            >
+              {unread}
+            </span>
+          )}
+        </button>
 
         {!isFullyPaid && (
           <button

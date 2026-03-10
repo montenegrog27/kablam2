@@ -50,7 +50,7 @@ export default function OrdersBoard({
         },
         (payload) => {
           const msg = payload.new;
-
+    console.log("NEW MESSAGE REALTIME:", payload);
           // solo mensajes del cliente
           if (msg.sender_type !== "customer") return;
 
@@ -116,7 +116,7 @@ export default function OrdersBoard({
       setLoading(false);
       return;
     }
-
+console.log("ORDER:", order);
     if (!payments || payments.length === 0) {
       alert("Esta orden no tiene métodos de pago definidos");
       setLoading(false);

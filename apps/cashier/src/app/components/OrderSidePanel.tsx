@@ -377,7 +377,6 @@ export default function OrderSidePanel({
     setAppliedCoupon(null);
     setCouponDiscount(0);
   };
-  console.log("SESSION:", session);
 
   const handleValidateCoupon = async () => {
     if (!couponCode.trim()) {
