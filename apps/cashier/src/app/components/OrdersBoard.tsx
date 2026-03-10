@@ -30,13 +30,17 @@ const STATUS_META: any = {
 
 export default function OrdersBoard({
   orders,
+  activeConversationId,
   onSelect,
   onMessages,
   reloadOrders,
 }: any) {
   const [loading, setLoading] = useState(false);
   const [unread, setUnread] = useState<any>({});
-
+const [boardOrders, setBoardOrders] = useState<any[]>(orders);
+useEffect(() => {
+  setBoardOrders(orders);
+}, [orders]);
   useEffect(() => {
     const channel = supabase
       .channel("messages-board")
@@ -48,18 +52,24 @@ export default function OrdersBoard({
           schema: "public",
           table: "messages",
         },
-        (payload) => {
-          const msg = payload.new;
-    console.log("NEW MESSAGE REALTIME:", payload);
-    console.log("MESSAGE CONVERSATION:", msg.conversation_id);
-          // solo mensajes del cliente
-          if (msg.sender_type !== "customer") return;
+   (payload) => {
 
-          setUnread((prev: any) => ({
-            ...prev,
-            [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1,
-          }));
-        },
+  const msg = payload.new;
+
+  console.log("MESSAGE CONVERSATION:", msg.conversation_id);
+
+  // si el chat ya está abierto no mostramos badge
+  if (msg.conversation_id === activeConversationId) {
+    return;
+  }
+
+  if (msg.sender_type !== "customer") return;
+
+  setUnread((prev: any) => ({
+    ...prev,
+    [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1,
+  }));
+}
       )
 
       .subscribe();
@@ -79,11 +89,19 @@ export default function OrdersBoard({
           schema: "public",
           table: "orders",
         },
-        (payload) => {
-          console.log("ORDER UPDATED REALTIME:", payload);
+  (payload) => {
 
-          reloadOrders();
-        },
+  const updated = payload.new;
+
+  console.log("ORDER UPDATED REALTIME:", updated);
+
+  setBoardOrders((prev:any) =>
+    prev.map((o:any) =>
+      o.id === updated.id ? { ...o, ...updated } : o
+    )
+  );
+
+}
       )
       .subscribe();
 
@@ -91,8 +109,8 @@ export default function OrdersBoard({
       supabase.removeChannel(channel);
     };
   }, []);
-  const getOrdersByStatus = (status: string) =>
-    orders.filter((o: any) => o.status === status);
+const getOrdersByStatus = (status: string) =>
+  boardOrders.filter((o: any) => o.status === status);
 
   const getNextStatus = (current: string) => {
     if (current === "sent") return "delivered";

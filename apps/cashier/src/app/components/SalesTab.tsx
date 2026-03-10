@@ -76,18 +76,21 @@ const loadOrders = async () => {
     <div className="flex h-full overflow-hidden">
       {/* BOARD */}
       <div className="flex-1 overflow-y-auto">
-        <OrdersBoard
-          orders={orders}
-          onSelect={(order: any) => {
-            setPanelMode("order");
-            setSelectedOrder(order);
-          }}
-          onMessages={(order: any) => {
-            setPanelMode("chat");
-            setSelectedOrder(order);
-          }}
-          reloadOrders={loadOrders}
-        />
+<OrdersBoard
+  orders={orders}
+  activeConversationId={
+    panelMode === "chat" ? selectedOrder?.conversation_id : null
+  }
+  onSelect={(order: any) => {
+    setPanelMode("order");
+    setSelectedOrder(order);
+  }}
+  onMessages={(order: any) => {
+    setPanelMode("chat");
+    setSelectedOrder(order);
+  }}
+  reloadOrders={loadOrders}
+/>
       </div>
 
       {/* PANEL DERECHO */}
