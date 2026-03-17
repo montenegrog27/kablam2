@@ -35,7 +35,7 @@ export default function SidebarCarritoDelivery({
 const handleCheckout = () => {
   if (carrito.length === 0) return;
 
-  sessionStorage.setItem("cart", JSON.stringify(carrito));
+  sessionStorage.setItem(`cart_${branchSlug}`, JSON.stringify(carrito));
 
   window.location.href = `/${branchSlug}/checkout`;
 };
