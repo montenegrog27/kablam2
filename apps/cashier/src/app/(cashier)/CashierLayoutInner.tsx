@@ -20,28 +20,30 @@ export default function CashierLayoutInner({ children }: any) {
   useEffect(() => {
     init();
   }, []);
-useEffect(() => {
-  if (!userRecord) return;
+  useEffect(() => {
+    if (!userRecord) return;
 
-  recoverOpenSession();
-}, [userRecord]);
+    recoverOpenSession();
+  }, [userRecord]);
 
-const recoverOpenSession = async () => {
-  const { data } = await supabase
-    .from("cash_sessions")
-    .select(`
+  const recoverOpenSession = async () => {
+    const { data } = await supabase
+      .from("cash_sessions")
+      .select(
+        `
       *,
       cash_registers (*)
-    `)
-    .eq("opened_by", userRecord.id)
-    .eq("status", "open")
-    .maybeSingle();
+    `,
+      )
+      .eq("opened_by", userRecord.id)
+      .eq("status", "open")
+      .maybeSingle();
 
-  if (data) {
-    setCashSession(data);
-    setSelectedRegister(data.cash_registers);
-  }
-};
+    if (data) {
+      setCashSession(data);
+      setSelectedRegister(data.cash_registers);
+    }
+  };
   const init = async () => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -104,9 +106,7 @@ const recoverOpenSession = async () => {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-950">
         <div className="bg-gray-900 p-8 rounded-xl border border-gray-800 text-center space-y-4">
-          <h2 className="text-xl font-bold text-white">
-            Caja ocupada
-          </h2>
+          <h2 className="text-xl font-bold text-white">Caja ocupada</h2>
           <p className="text-gray-400">
             Esta caja está abierta por {registerOccupiedBy}
           </p>

@@ -1,88 +1,58 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { headers } from "next/headers";
 import { supabase } from "@kablam/supabase";
 
-export default function Home() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+type Tenant = {
+  id: string;
+  name: string;
+};
 
-  useEffect(() => {
-    loadMenu();
-  }, []);
+type Branch = {
+  name: string;
+  slug: string;
+};
 
-  const loadMenu = async () => {
+export default async function Landing() {
+  const headersList = await headers();
+  const host = headersList.get("host") ?? "";
 
-    const { data: productsData } = await supabase
-      .from("products")
-      .select("*")
-      .eq("active", true)
-      .order("name");
+  let tenantSlug = host.split(".")[0];
 
-    const { data: categoriesData } = await supabase
-      .from("categories")
-      .select("*")
-      .order("name");
+  // modo desarrollo
+  if (host.includes("localhost")) {
+    tenantSlug = "mordiscoburgers";
+  }
 
-    setProducts(productsData || []);
-    setCategories(categoriesData || []);
-  };
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("id,name")
+    .eq("slug", tenantSlug)
+    .single();
+
+  if (!tenant) {
+    return <div>Tenant no encontrado</div>;
+  }
+
+  const { data: branches } = await supabase
+    .from("branches")
+    .select("name,slug")
+    .eq("tenant_id", tenant.id)
+    .eq("active", true);
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-10">
-      <h1 className="text-3xl font-bold mb-8">
-        Menú
-      </h1>
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-6">{tenant.name}</h1>
 
-      {categories.map((cat:any) => {
-
-        const items = products.filter(
-          (p:any) => p.category_id === cat.id
-        );
-
-        if (!items.length) return null;
-
-        return (
-          <div key={cat.id} className="mb-10">
-
-            <h2 className="text-xl font-semibold mb-4">
-              {cat.name}
-            </h2>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-
-              {items.map((product:any) => (
-                <div
-                  key={product.id}
-                  className="bg-white rounded-xl p-4 shadow-sm"
-                >
-                  {product.image && (
-                    <img
-                      src={product.image}
-                      className="w-full h-40 object-cover rounded-lg mb-3"
-                    />
-                  )}
-
-                  <h3 className="font-semibold">
-                    {product.name}
-                  </h3>
-
-                  <p className="text-sm text-gray-500">
-                    {product.description}
-                  </p>
-
-                  <div className="mt-2 font-bold">
-                    ${product.price}
-                  </div>
-
-                </div>
-              ))}
-
-            </div>
-
-          </div>
-        );
-      })}
+      <div className="space-y-4">
+        {branches?.map((b: Branch) => (
+          <a
+            key={b.slug}
+            href={`/${b.slug}/order`}
+            className="block border p-4 rounded-lg"
+          >
+            {b.name}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

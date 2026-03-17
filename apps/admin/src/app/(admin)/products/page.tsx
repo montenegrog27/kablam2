@@ -18,7 +18,10 @@ export default function ProductsPage() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [dayParts, setDayParts] = useState<any[]>([]);
-
+  const [modifierGroups, setModifierGroups] = useState<any[]>([]);
+  const [productGroups, setProductGroups] = useState<Record<string, string[]>>(
+    {},
+  );
   const [variants, setVariants] = useState<any[]>([
     {
       name: "",
@@ -93,6 +96,29 @@ export default function ProductsPage() {
         .eq("tenant_id", userRecord.tenant_id);
 
       setKitchenProducts(kitchenProductsData || []);
+      const { data: groups } = await supabase
+        .from("modifier_groups")
+        .select("*")
+        .eq("tenant_id", userRecord.tenant_id)
+        .order("position");
+
+      setModifierGroups(groups || []);
+      const { data: relations } = await supabase
+        .from("modifier_group_products")
+        .select("*")
+        .eq("tenant_id", userRecord.tenant_id);
+
+      const map: Record<string, string[]> = {};
+
+      relations?.forEach((r) => {
+        if (!map[r.product_id]) {
+          map[r.product_id] = [];
+        }
+
+        map[r.product_id].push(r.modifier_group_id);
+      });
+
+      setProductGroups(map);
     }
 
     loadData();
@@ -292,7 +318,42 @@ export default function ProductsPage() {
   };
 
   const filteredProducts = getProductsByCategory();
+  const toggleGroup = async (productId: string, groupId: string) => {
+    const existing = productGroups[productId]?.includes(groupId);
 
+    if (existing) {
+      await supabase
+        .from("modifier_group_products")
+        .delete()
+        .eq("product_id", productId)
+        .eq("modifier_group_id", groupId);
+    } else {
+      await supabase.from("modifier_group_products").insert({
+        tenant_id: tenantId,
+        product_id: productId,
+        modifier_group_id: groupId,
+      });
+    }
+
+    // recargar relaciones
+
+    const { data } = await supabase
+      .from("modifier_group_products")
+      .select("*")
+      .eq("tenant_id", tenantId);
+
+    const map: Record<string, string[]> = {};
+
+    data?.forEach((r) => {
+      if (!map[r.product_id]) {
+        map[r.product_id] = [];
+      }
+
+      map[r.product_id].push(r.modifier_group_id);
+    });
+
+    setProductGroups(map);
+  };
   return (
     <div className="flex gap-6">
       <aside className="w-64 bg-black rounded shadow p-4">
@@ -493,6 +554,21 @@ export default function ProductsPage() {
                   ))}
                 </select>
               </div>
+              <h4 className="mt-4 font-semibold">Extras disponibles</h4>
+
+              {modifierGroups.map((group) => (
+                <label key={group.id} className="flex gap-2 items-center">
+                  <input
+                    type="checkbox"
+                    checked={
+                      productGroups[product.id]?.includes(group.id) || false
+                    }
+                    onChange={() => toggleGroup(product.id, group.id)}
+                  />
+
+                  {group.name}
+                </label>
+              ))}
               {product.product_variants?.map((variant: any) => (
                 <div
                   key={variant.id}
