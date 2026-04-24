@@ -21,36 +21,7 @@ async function createBeverageProducts() {
 
   console.log("Creating beverage products...");
 
-  const products = [
-    {
-      name: "Coca-Cola en Lata",
-      description: "Lata 354ml",
-      is_suggestable: true,
-      show_in_menu: true,
-      price: 1200,
-    },
-    {
-      name: "Pepsi en Lata",
-      description: "Lata 354ml",
-      is_suggestable: true,
-      show_in_menu: true,
-      price: 1100,
-    },
-    {
-      name: "Agua Mineral 500ml",
-      description: "Agua sin gas",
-      is_suggestable: false, // Not suggestable by rules, but show_in_menu = false makes it complementary
-      show_in_menu: false, // Will appear as "Producto complementario"
-      price: 800,
-    },
-    {
-      name: "Jugo de Naranja",
-      description: "Jugo natural",
-      is_suggestable: true,
-      show_in_menu: true,
-      price: 1500,
-    },
-  ];
+  const products = [ ];
 
   for (const productData of products) {
     // Insert product
