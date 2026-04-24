@@ -9,6 +9,7 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "prettier": "^3.7.4",
     "turbo": "^2.8.10",
     "typescript": "5.9.2"
@@ -22,6 +23,7 @@
     "packages/*"
   ],
   "dependencies": {
+    "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.97.0",
     "lucide-react": "^0.575.0"
   }

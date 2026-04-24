@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
 export default function IngredientsPage() {
   const [ingredients, setIngredients] = useState<any[]>([]);
@@ -10,9 +10,11 @@ export default function IngredientsPage() {
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("g");
   const [cost, setCost] = useState("");
+  const [salePrice, setSalePrice] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingCost, setEditingCost] = useState("");
+  const [editingSalePrice, setEditingSalePrice] = useState("");
 
   useEffect(() => {
     loadData();
@@ -42,7 +44,6 @@ export default function IngredientsPage() {
     setIngredients(data || []);
   };
 
-  // 🔥 RECALCULAR TODAS LAS VARIANTES AFECTADAS
   const recalcVariantsUsingIngredient = async (ingredientId: string) => {
     const { data: recipes } = await supabase
       .from("product_recipes")
@@ -51,9 +52,7 @@ export default function IngredientsPage() {
 
     if (!recipes) return;
 
-    const uniqueVariantIds = [
-      ...new Set(recipes.map((r) => r.variant_id)),
-    ];
+    const uniqueVariantIds = [...new Set(recipes.map((r) => r.variant_id))];
 
     for (const variantId of uniqueVariantIds) {
       const { data: items } = await supabase
@@ -64,10 +63,7 @@ export default function IngredientsPage() {
       if (!items) continue;
 
       const total = items.reduce((acc: number, item: any) => {
-        return (
-          acc +
-          item.quantity * (item.ingredients?.cost_per_unit || 0)
-        );
+        return acc + item.quantity * (item.ingredients?.cost_per_unit || 0);
       }, 0);
 
       await supabase
@@ -80,153 +76,230 @@ export default function IngredientsPage() {
   const handleCreate = async (e: any) => {
     e.preventDefault();
 
-    if (!tenantId || !name || !cost) return;
+    if (!tenantId || !name || !cost) {
+      alert("Completá nombre y costo");
+      return;
+    }
+
+    const sale = Number(salePrice) || Number(cost);
 
     await supabase.from("ingredients").insert({
       tenant_id: tenantId,
       name,
       unit,
       cost_per_unit: Number(cost),
+      sale_price: sale,
     });
 
     setName("");
     setCost("");
+    setSalePrice("");
     loadData();
   };
 
-  // ✏ EDITAR COSTO
-  const handleUpdateCost = async (id: string) => {
+  const handleUpdate = async (id: string) => {
     await supabase
       .from("ingredients")
-      .update({ cost_per_unit: Number(editingCost) })
+      .update({
+        cost_per_unit: Number(editingCost),
+        sale_price: Number(editingSalePrice) || Number(editingCost),
+      })
       .eq("id", id);
 
     setEditingId(null);
-    setEditingCost("");
 
     await recalcVariantsUsingIngredient(id);
     loadData();
   };
 
-  // 🗑 ELIMINAR
   const handleDelete = async (id: string) => {
-    await supabase
-      .from("ingredients")
-      .delete()
-      .eq("id", id);
+    if (!confirm("¿Eliminar este ingrediente?")) return;
 
-    await recalcVariantsUsingIngredient(id);
+    await supabase.from("ingredients").delete().eq("id", id);
     loadData();
+  };
+
+  const startEdit = (ing: any) => {
+    setEditingId(ing.id);
+    setEditingCost(ing.cost_per_unit?.toString() || "");
+    setEditingSalePrice(
+      ing.sale_price?.toString() || ing.cost_per_unit?.toString() || "",
+    );
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">
-        Ingredientes
-      </h1>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-6">Ingredientes</h1>
 
       {/* Crear */}
-      <form
-        onSubmit={handleCreate}
-        className="bg-black p-6 rounded shadow mb-8 space-y-4"
-      >
-        <input
-          className="border p-2 w-full"
-          placeholder="Nombre ingrediente"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+      <form onSubmit={handleCreate} className="bg-gray-900 p-6 rounded-lg mb-8">
+        <h2 className="font-semibold mb-4">Nuevo Ingrediente</h2>
 
-        <select
-          className="border bg-gray-900 p-2 w-full"
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-        >
-          <option value="g">Gramos</option>
-          <option value="ml">Mililitros</option>
-          <option value="unidad">Unidad</option>
-          <option value="kg">Kilogramo</option>
-          <option value="litro">Litro</option>
-        </select>
+        <div className="grid grid-cols-4 gap-4">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Nombre</label>
+            <input
+              className="border p-2 w-full rounded bg-gray-800"
+              placeholder="Ej: Panceta"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
 
-        <input
-          className="border p-2 w-full"
-          type="number"
-          placeholder="Costo por unidad"
-          value={cost}
-          onChange={(e) => setCost(e.target.value)}
-        />
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Unidad</label>
+            <select
+              className="border p-2 w-full rounded bg-gray-800"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+            >
+              <option value="g">Gramos</option>
+              <option value="ml">Mililitros</option>
+              <option value="unidad">Unidad</option>
+              <option value="kg">Kilogramo</option>
+              <option value="litro">Litro</option>
+            </select>
+          </div>
 
-        <button className="bg-black text-white px-4 py-2 rounded">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              Costo (stock)
+            </label>
+            <input
+              className="border p-2 w-full rounded bg-gray-800"
+              type="number"
+              placeholder="Precio de costo"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              Precio venta
+            </label>
+            <input
+              className="border p-2 w-full rounded bg-gray-800"
+              type="number"
+              placeholder="Precio al cliente"
+              value={salePrice}
+              onChange={(e) => setSalePrice(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500 mt-2 mb-4">
+          Costo = para stock. Precio venta = lo que paga el cliente al agregarlo
+          como extra.
+        </p>
+
+        <button className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
           Crear Ingrediente
         </button>
       </form>
 
       {/* Lista */}
-      <div className="space-y-4">
+      <div className="bg-gray-900 rounded-lg overflow-hidden">
+        <div className="grid grid-cols-6 gap-4 p-4 border-b border-gray-800 text-xs text-gray-400 uppercase">
+          <div>Nombre</div>
+          <div>Unidad</div>
+          <div>Costo</div>
+          <div>Precio Venta</div>
+          <div>Margen</div>
+          <div>Acciones</div>
+        </div>
+
         {ingredients.map((ing) => (
           <div
             key={ing.id}
-            className="bg-gray-800 p-4 rounded shadow flex justify-between items-center"
+            className="grid grid-cols-6 gap-4 p-4 border-b border-gray-800 items-center hover:bg-gray-800/50"
           >
-            <div>
-              <div className="font-semibold">
-                {ing.name}
-              </div>
-              <div className="text-sm text-gray-400">
-                Unidad: {ing.unit}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {editingId === ing.id ? (
-                <>
+            {editingId === ing.id ? (
+              <>
+                <div className="col-span-1 font-medium">{ing.name}</div>
+                <div className="col-span-1 text-gray-400">{ing.unit}</div>
+                <div className="col-span-1">
                   <input
                     type="number"
-                    className="border p-1 w-24"
+                    className="border p-1 w-full rounded bg-gray-800"
                     value={editingCost}
-                    onChange={(e) =>
-                      setEditingCost(e.target.value)
-                    }
+                    onChange={(e) => setEditingCost(e.target.value)}
                   />
+                </div>
+                <div className="col-span-1">
+                  <input
+                    type="number"
+                    className="border p-1 w-full rounded bg-gray-800"
+                    value={editingSalePrice}
+                    onChange={(e) => setEditingSalePrice(e.target.value)}
+                  />
+                </div>
+                <div className="col-span-1"></div>
+                <div className="col-span-1 flex gap-2">
                   <button
-                    onClick={() =>
-                      handleUpdateCost(ing.id)
-                    }
-                    className="text-green-400"
+                    onClick={() => handleUpdate(ing.id)}
+                    className="text-green-400 hover:text-green-300"
                   >
-                    ✔
+                    ✓
                   </button>
-                </>
-              ) : (
-                <>
-                  <div className="font-semibold">
-                    ${ing.cost_per_unit}
-                  </div>
                   <button
-                    onClick={() => {
-                      setEditingId(ing.id);
-                      setEditingCost(
-                        ing.cost_per_unit
-                      );
-                    }}
-                    className="text-blue-400"
+                    onClick={() => setEditingId(null)}
+                    className="text-gray-400 hover:text-gray-300"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="col-span-1 font-medium">{ing.name}</div>
+                <div className="col-span-1 text-gray-400">{ing.unit}</div>
+                <div className="col-span-1">
+                  <span className="text-red-400">${ing.cost_per_unit}</span>
+                </div>
+                <div className="col-span-1">
+                  <span className="text-green-400 font-semibold">
+                    ${ing.sale_price || ing.cost_per_unit}
+                  </span>
+                </div>
+                <div className="col-span-1">
+                  {(() => {
+                    const sale = ing.sale_price || ing.cost_per_unit;
+                    const margen = sale - ing.cost_per_unit;
+                    return (
+                      <span
+                        className={`text-xs ${margen >= 0 ? "text-green-500" : "text-red-500"}`}
+                      >
+                        {margen >= 0 ? "+" : ""}
+                        {margen}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="col-span-1 flex gap-2">
+                  <button
+                    onClick={() => startEdit(ing)}
+                    className="text-blue-400 hover:text-blue-300 text-sm"
                   >
                     Editar
                   </button>
                   <button
-                    onClick={() =>
-                      handleDelete(ing.id)
-                    }
-                    className="text-red-500"
+                    onClick={() => handleDelete(ing.id)}
+                    className="text-red-400 hover:text-red-300 text-sm"
                   >
                     Eliminar
                   </button>
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </div>
         ))}
+
+        {ingredients.length === 0 && (
+          <div className="p-8 text-center text-gray-500">
+            No hay ingredientes creados
+          </div>
+        )}
       </div>
     </div>
   );

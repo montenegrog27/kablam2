@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
 export default function OrderChat({ order, session, onClose }: any) {
   const [messages, setMessages] = useState<any[]>([]);
@@ -16,10 +16,10 @@ export default function OrderChat({ order, session, onClose }: any) {
   // -----------------------------
 
   useEffect(() => {
-  if (!messages.length) return;
+    if (!messages.length) return;
 
-  bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-}, [messages]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
     if (!order) return;
@@ -27,8 +27,12 @@ export default function OrderChat({ order, session, onClose }: any) {
   }, [order]);
 
   const initConversation = async () => {
-    // 1️⃣ buscar o crear customer
+    if (!order.customer_phone) {
+      console.log("No customer phone available");
+      return;
+    }
 
+    // 1️⃣ buscar o crear customer
     let { data: customer } = await supabase
       .from("customers")
       .select("*")
@@ -51,14 +55,19 @@ export default function OrderChat({ order, session, onClose }: any) {
       customer = data;
     }
 
+    if (!customer) {
+      console.log("Could not find or create customer");
+      return;
+    }
+
     // 2️⃣ buscar conversación
 
-  let { data: conv } = await supabase
-  .from("conversations")
-  .select("*")
-  .eq("customer_id", customer.id)
-  .eq("branch_id", order.branch_id)
-  .maybeSingle();
+    let { data: conv } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("customer_id", customer.id)
+      .eq("branch_id", order.branch_id)
+      .maybeSingle();
 
     if (!conv) {
       const { data: newConv } = await supabase
@@ -74,10 +83,14 @@ export default function OrderChat({ order, session, onClose }: any) {
       conv = newConv;
     }
 
+    if (!conv) {
+      console.log("Could not find or create conversation");
+      return;
+    }
+
     setConversationId(conv.id);
 
     // link order
-
     await supabase.from("conversation_orders").upsert({
       conversation_id: conv.id,
       order_id: order.id,
@@ -109,88 +122,87 @@ export default function OrderChat({ order, session, onClose }: any) {
   // REALTIME
   // -----------------------------
 
-useEffect(() => {
-  if (!conversationId) return;
+  useEffect(() => {
+    if (!conversationId) return;
 
-  const channel = supabase
-    .channel(`chat-${conversationId}`)
+    const channel = supabase
+      .channel(`chat-${conversationId}`)
 
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "messages",
-        filter: `conversation_id=eq.${conversationId}`,
-      },
-      (payload) => {
-        const newMessage = payload.new;
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const newMessage = payload.new;
 
-        setMessages((prev:any) => {
-          const exists = prev.find((m:any) => m.id === newMessage.id);
+          setMessages((prev: any) => {
+            const exists = prev.find((m: any) => m.id === newMessage.id);
+            if (exists) return prev;
+            return [...prev, newMessage];
+          });
+        },
+      )
+
+      .on("broadcast", { event: "new_message" }, (payload) => {
+        const newMessage = payload.payload;
+
+        setMessages((prev: any) => {
+          const exists = prev.find((m: any) => m.id === newMessage.id);
           if (exists) return prev;
           return [...prev, newMessage];
         });
-      }
-    )
+      })
 
-    .on("broadcast", { event: "new_message" }, (payload) => {
-      const newMessage = payload.payload;
+      .subscribe();
 
-      setMessages((prev:any) => {
-        const exists = prev.find((m:any) => m.id === newMessage.id);
-        if (exists) return prev;
-        return [...prev, newMessage];
-      });
-    })
-
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-
-}, [conversationId]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId]);
 
   // -----------------------------
   // SEND TEXT
   // -----------------------------
 
-const sendMessage = async () => {
-  if (!text.trim()) return;
-  if (!conversationId) return;
+  const sendMessage = async () => {
+    if (!text.trim()) return;
+    if (!conversationId) return;
 
-  const tempMessage = {
-    id: crypto.randomUUID(),
-    message: text,
-    media_type: "text",
-    sender_type: "cashier",
-    created_at: new Date().toISOString()
+    const tempMessage = {
+      id: crypto.randomUUID(),
+      message: text,
+      media_type: "text",
+      sender_type: "cashier",
+      created_at: new Date().toISOString(),
+    };
+
+    // ⚡ mostrar instantáneamente
+    setMessages((prev) => [...prev, tempMessage]);
+
+    const messageText = text;
+    setText("");
+
+    const res = await fetch("/api/whatsapp/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        conversationId,
+        text: messageText,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+      console.error(data.error);
+    }
   };
-
-  // ⚡ mostrar instantáneamente
-  setMessages((prev) => [...prev, tempMessage]);
-
-  const messageText = text;
-  setText("");
-
-  const res = await fetch("/api/whatsapp/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      conversationId,
-      text: messageText,
-    }),
-  });
-
-  const data = await res.json();
-
-  if (data.error) {
-    console.error(data.error);
-  }
-};
 
   // -----------------------------
   // FILE UPLOAD

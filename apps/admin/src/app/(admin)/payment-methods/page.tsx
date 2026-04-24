@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
 export default function PaymentMethodsPage() {
   const [methods, setMethods] = useState<any[]>([]);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import OrdersBoardDelivered from "./OrdersBoardDelivered";
 import OrderSidePanel from "./OrderSidePanel";
 
@@ -9,22 +9,23 @@ export default function DeliveredTab({ session }: any) {
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
-  useEffect(() => {
-    loadOrders();
+ useEffect(() => {
+  loadOrders();
 
-    const channel = supabase
-      .channel("orders-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => loadOrders(),
-      )
-      .subscribe();
+  const channel = supabase.channel("orders-realtime-delivered");
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  channel.on(
+    "postgres_changes",
+    { event: "UPDATE", schema: "public", table: "orders" },
+    () => loadOrders()
+  );
+
+  channel.subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
 
   const loadOrders = async () => {
     const { data } = await supabase

@@ -1,4 +1,4 @@
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
 interface ValidateParams {
   code: string;

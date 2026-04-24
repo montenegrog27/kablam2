@@ -18,9 +18,10 @@
         "name": "next"
       }
     ],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+  "paths": {
+  "@/*": ["./src/*"],
+  "@kablam/supabase": ["../../packages/supabase"]
+}
   },
   "include": [
     "next-env.d.ts",

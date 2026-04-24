@@ -1,5 +1,5 @@
 import { validateCoupon } from "@/lib/validateCoupon";
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
 export async function POST(req: Request) {
   try {

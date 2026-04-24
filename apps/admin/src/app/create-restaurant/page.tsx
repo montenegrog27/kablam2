@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { supabase } from "@kablam/supabase"
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { useRouter } from "next/navigation"
 
 export default function CreateRestaurant() {
@@ -9,7 +9,7 @@ export default function CreateRestaurant() {
   const [slug, setSlug] = useState("")
   const router = useRouter()
 
-  const handleCreate = async (e) => {
+  const handleCreate = async (e:any) => {
     e.preventDefault()
 
     const { data: userData } = await supabase.auth.getUser()

@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { supabase } from "@kablam/supabase";
+import { createSupabaseServer } from "@kablam/supabase/server";
 
 type Tenant = {
   id: string;
@@ -12,6 +12,7 @@ type Branch = {
 };
 
 export default async function Landing() {
+  const supabase = await createSupabaseServer();
   const headersList = await headers();
   const host = headersList.get("host") ?? "";
 
@@ -19,6 +20,9 @@ export default async function Landing() {
 
   // modo desarrollo
   if (host.includes("localhost")) {
+    tenantSlug = "mordiscoburgers";
+  }
+    if (host.includes("kablam2-")) {
     tenantSlug = "mordiscoburgers";
   }
 

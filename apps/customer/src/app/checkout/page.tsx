@@ -2,17 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import type { CartItem } from "@/types/menu";
+
+type Coupon = {
+  requires_phone?: boolean;
+  code: string;
+};
 
 export default function CheckoutPage() {
   const params = useParams();
   const branchSlug = params.branchSlug as string;
 
-  const [cart, setCart] = useState<any[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
 
-  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState(0);
 
@@ -24,17 +30,14 @@ export default function CheckoutPage() {
     if (!branchSlug) return;
 
     const stored = sessionStorage.getItem(`cart_${branchSlug}`);
-    if (stored) setCart(JSON.parse(stored));
+    if (stored) setCart(JSON.parse(stored)); // eslint-disable-line react-hooks/set-state-in-effect
   }, [branchSlug]);
 
   /* =========================
      CALCULOS
   ========================= */
 
-  const subtotal = cart.reduce(
-    (acc, p) => acc + p.price * p.quantity,
-    0
-  );
+  const subtotal = cart.reduce((acc, p) => acc + p.price * p.quantity, 0);
 
   const total = Math.max(subtotal - discount, 0);
 
@@ -45,7 +48,7 @@ export default function CheckoutPage() {
   const applyCoupon = async () => {
     if (!couponCode || !branchSlug) return;
 
-    const phoneNormalized = phone.replace(/\D/g, "");
+    const phoneNormalized = (phone || "").replace(/\D/g, "");
 
     const res = await fetch("/api/coupons/validate", {
       method: "POST",
@@ -77,8 +80,7 @@ export default function CheckoutPage() {
 
   const couponRequiresPhone = appliedCoupon?.requires_phone === true;
 
-  const isPhoneMissingForCoupon =
-    couponRequiresPhone && !phone?.trim();
+  const isPhoneMissingForCoupon = couponRequiresPhone && !phone?.trim();
 
   /* =========================
      SUBMIT
@@ -96,10 +98,18 @@ export default function CheckoutPage() {
       },
       body: JSON.stringify({
         branchSlug,
-        name,
-        phone: phoneNormalized,
-        address,
-        items: cart,
+        customer: {
+          name,
+          phone: phoneNormalized,
+          address,
+        },
+        items: cart.map((item) => ({
+          items: cart.map((item) => ({
+            variantId: item.variantId,
+            quantity: item.quantity,
+          })),
+          quantity: item.quantity,
+        })),
         total,
       }),
     });
@@ -132,9 +142,7 @@ export default function CheckoutPage() {
         placeholder="Teléfono"
         className="border p-2 w-full"
         value={phone}
-        onChange={(e) =>
-          setPhone(e.target.value.replace(/\D/g, ""))
-        }
+        onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
       />
 
       <input
@@ -150,15 +158,10 @@ export default function CheckoutPage() {
           placeholder="Cupón"
           className="border p-2 flex-1"
           value={couponCode}
-          onChange={(e) =>
-            setCouponCode(e.target.value.toUpperCase())
-          }
+          onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
         />
 
-        <button
-          onClick={applyCoupon}
-          className="bg-black text-white px-4"
-        >
+        <button onClick={applyCoupon} className="bg-black text-white px-4">
           Aplicar
         </button>
       </div>

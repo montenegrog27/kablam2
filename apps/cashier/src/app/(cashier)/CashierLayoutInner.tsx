@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import OpenCash from "../components/OpenCash";
 import SelectCashRegister from "../components/SelectCashRegister";
 import { useRouter } from "next/navigation";

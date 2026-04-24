@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const router = useRouter();
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e:any) => {
     e.preventDefault();
 
     const { error } = await supabase.auth.signInWithPassword({

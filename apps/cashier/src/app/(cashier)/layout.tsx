@@ -1,14 +1,15 @@
 "use client";
 
 import { CashSessionProvider } from "./context/CashSessionContext";
+import { BranchProvider } from "./context/BranchContext";
 import CashierLayoutInner from "./CashierLayoutInner";
 
 export default function Layout({ children }: any) {
   return (
-    <CashSessionProvider>
-      <CashierLayoutInner>
-        {children}
-      </CashierLayoutInner>
-    </CashSessionProvider>
+    <BranchProvider>
+      <CashSessionProvider>
+        <CashierLayoutInner>{children}</CashierLayoutInner>
+      </CashSessionProvider>
+    </BranchProvider>
   );
 }

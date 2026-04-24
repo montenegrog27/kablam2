@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { validateCoupon } from "@/lib/validateCoupon";
 import { calculateShippingCost } from "@/lib/calculateShippingCost";
 import { calculateDistanceKm } from "@/lib/calculateDelivery";
+import { useCurrentBranch } from "../(cashier)/context/BranchContext";
 
 type PaymentLine = {
   payment_method_id: string;
@@ -24,6 +25,8 @@ export default function OrderSidePanel({
   reloadOrders,
   setSelectedOrder,
 }: any) {
+  const { branchId, tenantId, userRecord } = useCurrentBranch();
+
   const [step, setStep] = useState<"build" | "checkout">("build");
   const [mode, setMode] = useState<"builder" | "view" | "edit">("builder");
   const [shippingCost, setShippingCost] = useState(0);
@@ -59,17 +62,17 @@ export default function OrderSidePanel({
 
   // ================= EFFECT =================
   useEffect(() => {
-    if (!session) return;
+    if (!branchId) return;
 
     loadBranch();
     loadDeliverySettings();
-  }, [session]);
+  }, [branchId, tenantId]);
 
   const loadBranch = async () => {
     const { data } = await supabase
       .from("branches")
       .select("lat, lng")
-      .eq("id", session.branch_id)
+      .eq("id", branchId)
       .single();
 
     if (data) {
@@ -82,8 +85,8 @@ export default function OrderSidePanel({
     const { data, error } = await supabase
       .from("delivery_settings")
       .select("*")
-      .eq("tenant_id", session.tenant_id)
-      .eq("branch_id", session.branch_id);
+      .eq("tenant_id", tenantId)
+      .eq("branch_id", branchId);
 
     console.log("DELIVERY RAW DATA:", data);
     console.log("DELIVERY ERROR:", error);
@@ -207,25 +210,31 @@ export default function OrderSidePanel({
   // ================= LOAD =================
 
   const loadProducts = async () => {
+    if (!branchId) return;
     const { data } = await supabase
       .from("products")
-      .select("*, product_variants(*)");
+      .select("*, product_variants(*)")
+      .eq("branch_id", branchId);
     setProducts(data || []);
   };
 
   const loadCategories = async () => {
+    if (!branchId) return;
     const { data } = await supabase
       .from("categories")
       .select("*")
+      .eq("branch_id", branchId)
       .order("position");
     setCategories(data || []);
   };
 
   const loadPaymentMethods = async () => {
+    if (!branchId) return;
     const { data } = await supabase
       .from("payment_methods")
       .select("*")
       .eq("is_active", true)
+      .eq("branch_id", branchId)
       .order("name");
 
     setPaymentMethods(data || []);
@@ -234,13 +243,13 @@ export default function OrderSidePanel({
   const loadOrderForEdit = async () => {
     const { data: items } = await supabase
       .from("order_items")
-      .select("*, product_variants(*)")
+      .select("*, products(*)")
       .eq("order_id", selectedOrder.id);
 
     if (items) {
       setCart(
         items.map((item: any) => ({
-          variant: item.product_variants,
+          variant: { ...item.products, product_id: item.product_id },
           quantity: item.quantity,
           note: item.note || "",
         })),
@@ -386,7 +395,7 @@ export default function OrderSidePanel({
 
     const result = await validateCoupon({
       code: couponCode,
-      tenantId: session.tenant_id,
+      tenantId: tenantId,
       phone: customerPhone,
       orderTotal: calculateSubtotal() - calculateDiscount(),
       shippingCost: calculateShipping(),
@@ -405,372 +414,342 @@ export default function OrderSidePanel({
   };
   // ================= SAVE =================
   const handleSave = async () => {
+    const subtotal = calculateSubtotal();
+    const discount = calculateDiscount();
+    const total = calculateTotal();
 
-  const subtotal = calculateSubtotal();
-  const discount = calculateDiscount();
-  const total = calculateTotal();
+    const isSplitPayment = payments.length > 1;
 
-  const isSplitPayment = payments.length > 1;
-
-  if (!payments[0].payment_method_id) {
-    alert("Seleccioná un método de pago");
-    return;
-  }
-
-  let totalPayments;
-
-  if (!isSplitPayment) {
-    totalPayments = total;
-  } else {
-    totalPayments = payments.reduce(
-      (acc, p) => acc + Number(p.amount || 0),
-      0,
-    );
-
-    if (totalPayments !== total) {
-      alert("Los pagos no coinciden con el total");
+    if (!payments[0].payment_method_id) {
+      alert("Seleccioná un método de pago");
       return;
     }
-  }
 
-  let orderId = selectedOrder?.id;
+    let totalPayments;
 
-  const finalShipping =
-    appliedCoupon?.discount_type === "free_shipping"
-      ? 0
-      : calculateShipping();
+    if (!isSplitPayment) {
+      totalPayments = total;
+    } else {
+      totalPayments = payments.reduce(
+        (acc, p) => acc + Number(p.amount || 0),
+        0,
+      );
 
-  const phone = customerPhone.replace(/\D/g, "");
+      if (totalPayments !== total) {
+        alert("Los pagos no coinciden con el total");
+        return;
+      }
+    }
 
-  // ===============================
-  // CUSTOMER
-  // ===============================
+    let orderId = selectedOrder?.id;
 
-  let { data: customer } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("tenant_id", session.tenant_id)
-    .eq("phone", phone)
-    .maybeSingle();
+    const finalShipping =
+      appliedCoupon?.discount_type === "free_shipping"
+        ? 0
+        : calculateShipping();
 
-  if (!customer) {
+    const phone = customerPhone.replace(/\D/g, "");
 
-    const { data } = await supabase
+    // ===============================
+    // CUSTOMER
+    // ===============================
+
+    let { data: customer } = await supabase
       .from("customers")
-      .insert({
-        tenant_id: session.tenant_id,
-        branch_id: session.branch_id,
-        name: customerName,
-        phone: phone
-      })
-      .select()
-      .single();
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("phone", phone)
+      .maybeSingle();
 
-    customer = data;
+    if (!customer) {
+      const { data } = await supabase
+        .from("customers")
+        .insert({
+          tenant_id: tenantId,
+          branch_id: branchId,
+          name: customerName,
+          phone: phone,
+        })
+        .select()
+        .single();
 
-  }
+      customer = data;
+    }
 
-  if (!customer) {
-    console.error("Customer creation failed");
-    return;
-  }
-
-  // ===============================
-  // CUSTOMER TYPE
-  // ===============================
-
-  const { count } = await supabase
-    .from("orders")
-    .select("*", { count: "exact", head: true })
-    .eq("customer_id", customer.id)
-
-  const customerType = count === 0 ? "new" : "returning"
-
-
-  // ===============================
-  // CREATE ORDER
-  // ===============================
-
-  if (isBuilder) {
-
-    const { data, error } = await supabase
-      .from("orders")
-      .insert({
-        tenant_id: session.tenant_id,
-        branch_id: session.branch_id,
-        cash_session_id: session.id,
-        cash_register_id: session.cash_register_id,
-        created_by: session.opened_by,
-
-        customer_id: customer.id,
-
-        status: "unconfirmed",
-        type: orderType,
-
-        customer_name: customerName,
-        customer_phone: phone,
-        address: orderType === "delivery" ? address : null,
-
-        subtotal,
-        discount,
-        total,
-        paid_amount: 0,
-        is_paid: false,
-
-        shipping_cost: finalShipping,
-        original_shipping_cost: calculateShipping(),
-
-      })
-      .select()
-      .single();
-
-    if (error || !data) {
-      console.error("Error creando orden:", error);
+    if (!customer) {
+      console.error("Customer creation failed");
       return;
     }
 
-    orderId = data.id;
+    // ===============================
+    // CUSTOMER TYPE
+    // ===============================
 
-  }
-
-  if (!orderId) {
-    console.error("orderId undefined");
-    return;
-  }
-
-  // ===============================
-  // INSERT ITEMS
-  // ===============================
-
-  const itemsToInsert = cart.map((item) => ({
-    order_id: orderId,
-    product_id: item.variant.product_id,
-    variant_id: item.variant.id,
-    quantity: item.quantity,
-    unit_price: item.variant.price,
-    total: item.variant.price * item.quantity,
-    note: item.note || "",
-  }));
-
-  if (itemsToInsert.length) {
-    await supabase.from("order_items").insert(itemsToInsert);
-  }
-
-  // ===============================
-  // INSERT PAYMENTS
-  // ===============================
-
-  let paymentInsert;
-
-  if (!isSplitPayment) {
-
-    paymentInsert = await supabase.from("order_payments").insert({
-      order_id: orderId,
-      payment_method_id: payments[0].payment_method_id,
-      amount: total,
-      reference: payments[0].reference || null,
-    });
-
-  } else {
-
-    paymentInsert = await supabase.from("order_payments").insert(
-      payments.map((p) => ({
-        order_id: orderId,
-        payment_method_id: p.payment_method_id,
-        amount: Number(p.amount),
-        reference: p.reference || null,
-      })),
-    );
-
-  }
-
-  if (paymentInsert.error) {
-    console.error("ERROR INSERTANDO PAYMENT:", paymentInsert.error);
-    alert("Error insertando pago.");
-    return;
-  }
-
-  // ===============================
-  // CUPONES
-  // ===============================
-
-  if (appliedCoupon) {
-
-    await supabase.from("coupon_uses").insert({
-      coupon_id: appliedCoupon.id,
-      order_id: orderId,
-      customer_phone: customerPhone || null,
-    });
-
-    await supabase
-      .from("coupons")
-      .update({
-        total_uses: appliedCoupon.total_uses + 1,
-      })
-      .eq("id", appliedCoupon.id);
-
-  }
-
-  await reloadOrders();
-
-  // ===============================
-  // ANALYTICS CALCULATIONS
-  // ===============================
-
-  const productCounts: any = {}
-  const categoryCounts: any = {}
-
-  cart.forEach((item) => {
-
-    const productId = item.variant.product_id
-    const categoryId = item.variant.category_id
-
-    if (!productCounts[productId]) productCounts[productId] = 0
-    if (!categoryCounts[categoryId]) categoryCounts[categoryId] = 0
-
-    productCounts[productId] += item.quantity
-    categoryCounts[categoryId] += item.quantity
-
-  })
-
-  const mainProductId = Object.keys(productCounts).sort(
-    (a,b) => productCounts[b] - productCounts[a]
-  )[0]
-
-  const mainCategoryId = Object.keys(categoryCounts).sort(
-    (a,b) => categoryCounts[b] - categoryCounts[a]
-  )[0]
-
-  const itemsCount = cart.length
-
-  const productsCount = cart.reduce(
-    (acc, item) => acc + item.quantity,
-    0
-  )
-
-  const hasUpsell = cart.length > 1
-
-  // ===============================
-  // ORDER ANALYTICS
-  // ===============================
-
-  await supabase.from("order_analytics").insert({
-
-    tenant_id: session.tenant_id,
-    branch_id: session.branch_id,
-    order_id: orderId,
-
-    subtotal,
-    discount,
-    shipping: finalShipping,
-    total,
-
-    customer_id: customer.id,
-    customer_type: customerType,
-
-    sales_channel: "cashier",
-
-    order_type: orderType,
-
-    promo_source: appliedCoupon ? "coupon" : null,
-    coupon_id: appliedCoupon?.id ?? null,
-
-    items_count: itemsCount,
-    products_count: productsCount,
-    has_upsell: hasUpsell,
-
-    main_product_id: mainProductId,
-    main_category_id: mainCategoryId,
-
-    lat: customerLat,
-    lng: customerLng
-
-  })
-
-  // ===============================
-  // CONVERSATION
-  // ===============================
-
-  let { data: conversation } = await supabase
-    .from("conversations")
-    .select("*")
-    .eq("customer_id", customer.id)
-    .maybeSingle();
-
-  if (!conversation) {
-
-    const { data } = await supabase
-      .from("conversations")
-      .insert({
-        tenant_id: session.tenant_id,
-        branch_id: session.branch_id,
-        customer_id: customer.id
-      })
-      .select()
-      .single();
-
-    conversation = data;
-
-  }
-
-  // ===============================
-  // ORDER TEXT
-  // ===============================
-
-  const orderText = cart
-    .map((item) =>
-      `${item.quantity}x ${item.variant.name} $${item.variant.price * item.quantity}`
-    )
-    .join(" • ");
-
-  // ===============================
-  // SEND WHATSAPP
-  // ===============================
-
-  const res = await fetch("/api/whatsapp/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      conversationId: conversation.id,
-      orderId: orderId,
-      type: "template",
-      templateName: "confirmacion_pedido_detallado",
-      params: [
-        customerName,
-        orderText,
-        total.toString()
-      ]
-    })
-  });
-
-  const data: any = await res.json();
-
-  if (data?.messageId) {
-
-    await supabase
+    const { count } = await supabase
       .from("orders")
-      .update({
-        whatsapp_message_id: data.messageId
-      })
-      .eq("id", orderId);
+      .select("*", { count: "exact", head: true })
+      .eq("customer_id", customer.id);
 
-  }
+    const customerType = count === 0 ? "new" : "returning";
 
-  setSelectedOrder(null);
-  resetForm();
+    // ===============================
+    // CREATE ORDER
+    // ===============================
 
-};
+    if (isBuilder) {
+      const { data, error } = await supabase
+        .from("orders")
+        .insert({
+          tenant_id: tenantId,
+          branch_id: branchId,
+          cash_session_id: session.id,
+          cash_register_id: session.cash_register_id,
+          created_by: session.opened_by,
+
+          customer_id: customer.id,
+
+          status: "unconfirmed",
+          type: orderType,
+
+          customer_name: customerName,
+          customer_phone: phone,
+          address: orderType === "delivery" ? address : null,
+
+          subtotal,
+          discount,
+          total,
+          paid_amount: 0,
+          is_paid: false,
+
+          shipping_cost: finalShipping,
+          original_shipping_cost: calculateShipping(),
+        })
+        .select()
+        .single();
+
+      if (error || !data) {
+        console.error("Error creando orden:", error);
+        return;
+      }
+
+      orderId = data.id;
+    }
+
+    if (!orderId) {
+      console.error("orderId undefined");
+      return;
+    }
+
+    // ===============================
+    // INSERT ITEMS
+    // ===============================
+
+    const itemsToInsert = cart.map((item) => ({
+      order_id: orderId,
+      product_id: item.variant.id,
+      quantity: item.quantity,
+      unit_price: item.variant.price,
+      total: item.variant.price * item.quantity,
+      note: item.note || "",
+    }));
+
+    if (itemsToInsert.length) {
+      await supabase.from("order_items").insert(itemsToInsert);
+    }
+
+    // ===============================
+    // INSERT PAYMENTS
+    // ===============================
+
+    let paymentInsert;
+
+    if (!isSplitPayment) {
+      paymentInsert = await supabase.from("order_payments").insert({
+        order_id: orderId,
+        payment_method_id: payments[0].payment_method_id,
+        amount: total,
+        reference: payments[0].reference || null,
+      });
+    } else {
+      paymentInsert = await supabase.from("order_payments").insert(
+        payments.map((p) => ({
+          order_id: orderId,
+          payment_method_id: p.payment_method_id,
+          amount: Number(p.amount),
+          reference: p.reference || null,
+        })),
+      );
+    }
+
+    if (paymentInsert.error) {
+      console.error("ERROR INSERTANDO PAYMENT:", paymentInsert.error);
+      alert("Error insertando pago.");
+      return;
+    }
+
+    // ===============================
+    // CUPONES
+    // ===============================
+
+    if (appliedCoupon) {
+      await supabase.from("coupon_uses").insert({
+        coupon_id: appliedCoupon.id,
+        order_id: orderId,
+        customer_phone: customerPhone || null,
+      });
+
+      await supabase
+        .from("coupons")
+        .update({
+          total_uses: appliedCoupon.total_uses + 1,
+        })
+        .eq("id", appliedCoupon.id);
+    }
+
+    await reloadOrders();
+
+    // ===============================
+    // ANALYTICS CALCULATIONS
+    // ===============================
+
+    const productCounts: any = {};
+    const categoryCounts: any = {};
+
+    cart.forEach((item) => {
+      const productId = item.variant.id;
+      const categoryId = item.variant.category_id;
+
+      if (!productCounts[productId]) productCounts[productId] = 0;
+      if (!categoryCounts[categoryId]) categoryCounts[categoryId] = 0;
+
+      productCounts[productId] += item.quantity;
+      categoryCounts[categoryId] += item.quantity;
+    });
+
+    const mainProductId = Object.keys(productCounts).sort(
+      (a, b) => productCounts[b] - productCounts[a],
+    )[0];
+
+    const mainCategoryId = Object.keys(categoryCounts).sort(
+      (a, b) => categoryCounts[b] - categoryCounts[a],
+    )[0];
+
+    const itemsCount = cart.length;
+
+    const productsCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+
+    const hasUpsell = cart.length > 1;
+
+    // ===============================
+    // ORDER ANALYTICS
+    // ===============================
+
+    await supabase.from("order_analytics").insert({
+      tenant_id: tenantId,
+      branch_id: branchId,
+      order_id: orderId,
+
+      subtotal,
+      discount,
+      shipping: finalShipping,
+      total,
+
+      customer_id: customer.id,
+      customer_type: customerType,
+
+      sales_channel: "cashier",
+
+      order_type: orderType,
+
+      promo_source: appliedCoupon ? "coupon" : null,
+      coupon_id: appliedCoupon?.id ?? null,
+
+      items_count: itemsCount,
+      products_count: productsCount,
+      has_upsell: hasUpsell,
+
+      main_product_id: mainProductId,
+      main_category_id: mainCategoryId,
+
+      lat: customerLat,
+      lng: customerLng,
+    });
+
+    // ===============================
+    // CONVERSATION
+    // ===============================
+
+    let { data: conversation } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("customer_id", customer.id)
+      .maybeSingle();
+
+    if (!conversation) {
+      const { data } = await supabase
+        .from("conversations")
+        .insert({
+          tenant_id: tenantId,
+          branch_id: branchId,
+          customer_id: customer.id,
+        })
+        .select()
+        .single();
+
+      conversation = data;
+    }
+
+    // ===============================
+    // ORDER TEXT
+    // ===============================
+
+    const orderText = cart
+      .map(
+        (item) =>
+          `${item.quantity}x ${item.variant.name} $${item.variant.price * item.quantity}`,
+      )
+      .join(" • ");
+
+    // ===============================
+    // SEND WHATSAPP
+    // ===============================
+
+    const res = await fetch("/api/whatsapp/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        orderId: orderId,
+        type: "template",
+        templateName: "confirmacion_pedido_detallado",
+        params: [customerName, orderText, total.toString()],
+      }),
+    });
+
+    const data: any = await res.json();
+
+    if (data?.messageId) {
+      await supabase
+        .from("orders")
+        .update({
+          whatsapp_message_id: data.messageId,
+        })
+        .eq("id", orderId);
+    }
+
+    setSelectedOrder(null);
+    resetForm();
+  };
   // ================= UI =================
   // (TU UI ORIGINAL + bloque de pagos agregado en checkout)
-// ================= UI =================
+  // ================= UI =================
 
-
-const totalPayments = payments.reduce(
-  (acc, p) => acc + Number(p.amount || 0),
-  0
-);
+  const totalPayments = payments.reduce(
+    (acc, p) => acc + Number(p.amount || 0),
+    0,
+  );
 
   return (
     <div className="w-[520px] h-full flex flex-col bg-white border-l border-gray-200">
@@ -852,25 +831,23 @@ const totalPayments = payments.reduce(
                   (p) =>
                     !selectedCategory || p.category_id === selectedCategory,
                 )
-                .flatMap((product) =>
-                  product.product_variants.map((variant: any) => (
-                    <div
-                      key={variant.id}
-                      className="py-3 flex justify-between items-center"
+                .map((product) => (
+                  <div
+                    key={product.id}
+                    className="py-3 flex justify-between items-center"
+                  >
+                    <button
+                      onClick={() => addToCart(product)}
+                      className="text-left text-sm text-gray-800 hover:text-black"
                     >
-                      <button
-                        onClick={() => addToCart(variant)}
-                        className="text-left text-sm text-gray-800 hover:text-black"
-                      >
-                        {product.name} · {variant.name}
-                      </button>
+                      {product.name}
+                    </button>
 
-                      <span className="text-sm font-medium text-gray-700">
-                        ${variant.price}
-                      </span>
-                    </div>
-                  )),
-                )}
+                    <span className="text-sm font-medium text-gray-700">
+                      ${product.price}
+                    </span>
+                  </div>
+                ))}
             </div>
           </>
         )}

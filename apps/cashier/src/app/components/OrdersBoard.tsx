@@ -1,6 +1,6 @@
 "use client";
 
-import { supabase } from "@kablam/supabase";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import OrderCard from "./OrderCard";
 import { useState, useEffect } from "react";
 
@@ -106,6 +106,53 @@ export default function OrdersBoard({
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // ===============================
+  // NOTIFY RIDER
+  // ===============================
+
+  const handleNotifyRider = async (order: any, rider: any) => {
+    const mapUrl = order.address
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`
+      : "";
+
+    const message = `📦 Pedido #${order.id.slice(0, 4)}
+
+👤 Cliente: ${order.customer_name || "Cliente"} (${order.customer_phone || "Sin teléfono"})
+📍 Dirección: ${order.address || "No especificada"}
+🗺️ Mapa: ${mapUrl}
+📲 Mensaje al cliente: https://wa.me/${order.customer_phone?.replace(/\D/g, "")}?text=Hola!%20soy%20el%20repartidor%20y%20estoy%20afuera%20de%20tu%20domicilio%20con%20tu%20pedido
+
+💰 Total a cobrar: $${order.total?.toLocaleString("es-AR") || 0}
+
+🚚 ¡A entregarlo!`;
+
+    try {
+      const res = await fetch("/api/whatsapp/send-direct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: rider.phone,
+          message,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`✅ Mensaje enviado a ${rider.name}`);
+      } else {
+        alert(`❌ Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Error sending to rider:", err);
+      alert("Error al enviar mensaje");
+    }
+  };
+
+  const handleAssignRider = (orderId: string, rider: any) => {
+    console.log("Rider asignado:", orderId, rider);
+  };
   const getOrdersByStatus = (status: string) =>
     boardOrders.filter((o: any) => o.status === status);
 
@@ -188,6 +235,28 @@ export default function OrdersBoard({
       .update({ status: nextStatus })
       .eq("id", order.id);
 
+    if (nextStatus === "ready" && order.type === "takeaway") {
+      const { data: conversation } = await supabase
+        .from("conversations")
+        .select("*")
+        .eq("customer_id", order.customer_id)
+        .single();
+
+      if (conversation) {
+        const message = `¡Hola ${order.customer_name}! Tu pedido está listo para retirar. 🎉`;
+        await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            orderId: order.id,
+            type: "text",
+            text: message,
+          }),
+        });
+      }
+    }
+
     setLoading(false);
     reloadOrders();
   };
@@ -253,6 +322,12 @@ export default function OrdersBoard({
 
                           onMessages(order);
                         }}
+                        onNotifyRider={handleNotifyRider}
+                        onAssignRider={handleAssignRider}
+                        canChangeRider={
+                          order.status !== "sent" &&
+                          order.status !== "delivered"
+                        }
                       />
                     </div>
                   );

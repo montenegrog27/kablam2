@@ -1,16 +1,8 @@
 "use client";
 
 import { Dispatch, SetStateAction } from "react";
-
+import type { CartItem, Branding } from "@/types/menu";
 /* ========= TIPOS ========= */
-
-type CartItem = {
-  uid: string;
-  productId: string;
-  name: string;
-  price: number;
-  quantity: number;
-};
 
 type Props = {
   abierto: boolean;
@@ -18,6 +10,7 @@ type Props = {
   carrito: CartItem[];
   setCarrito: Dispatch<SetStateAction<CartItem[]>>;
   branchSlug: string; // 👈 NUEVO
+  branding?: Branding;
 };
 
 /* ========= COMPONENTE ========= */
@@ -28,22 +21,42 @@ export default function SidebarCarritoDelivery({
   carrito,
   setCarrito,
   branchSlug, // 👈 AQUI
+  branding,
 }: Props) {
   if (!abierto) return null;
 
+  const handleCheckout = () => {
+    if (carrito.length === 0) return;
 
-const handleCheckout = () => {
-  if (carrito.length === 0) return;
+    // Guardar todas las propiedades necesarias para el checkout y upsell
+    const cleanCart = carrito.map((item) => ({
+      uid: item.uid,
+      variantId: item.variantId,
+      productId: item.productId,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      variant: item.variant,
+      extras: item.extras || [],
+      allowHalf: item.allowHalf,
+      halves: item.halves,
+      removedIngredients: item.removedIngredients || [],
+      categories: item.categories || [], // CRÍTICO para sistema de upsell
+    }));
 
-  sessionStorage.setItem(`cart_${branchSlug}`, JSON.stringify(carrito));
+    console.log(
+      "SidebarCarrito: Saving cart to sessionStorage with categories:",
+      cleanCart.map((item) => ({
+        name: item.name,
+        categories: item.categories,
+      })),
+    );
 
-  window.location.href = `/${branchSlug}/checkout`;
-};
+    sessionStorage.setItem(`cart_${branchSlug}`, JSON.stringify(cleanCart));
+    window.location.href = `/${branchSlug}/checkout`;
+  };
 
-  const total = carrito.reduce(
-    (acc, p) => acc + p.price * p.quantity,
-    0
-  );
+  const total = carrito.reduce((acc, p) => acc + p.price * p.quantity, 0);
 
   const eliminarItem = (uid: string) => {
     setCarrito((prev) => prev.filter((p) => p.uid !== uid));
@@ -51,25 +64,21 @@ const handleCheckout = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      <div
-        className="flex-1 bg-black/40"
-        onClick={onClose}
-      />
+      <div className="flex-1 bg-black/40" onClick={onClose} />
 
-      <div className="w-96 bg-white p-4 flex flex-col">
-        <h2 className="text-xl font-bold mb-4">
-          Tu pedido
-        </h2>
+      <div
+        className="w-96 bg-white p-4 flex flex-col"
+        style={{
+          fontFamily:
+            branding?.font_family || branding?.font_primary || "CustomFont",
+        }}
+      >
+        <h2 className="text-xl font-bold mb-4">Tu pedido</h2>
 
         <div className="flex-1 space-y-3 overflow-y-auto">
           {carrito.map((item) => (
-            <div
-              key={item.uid}
-              className="border rounded-lg p-3"
-            >
-              <p className="font-semibold">
-                {item.name}
-              </p>
+            <div key={item.uid} className="border rounded-lg p-3">
+              <p className="font-semibold">{item.name}</p>
 
               <p className="text-sm text-gray-500">
                 ${item.price} x {item.quantity}
@@ -91,12 +100,12 @@ const handleCheckout = () => {
             <span>${total}</span>
           </div>
 
-<button
-  onClick={handleCheckout}
-  className="w-full bg-black text-white py-3 rounded-lg"
->
-  Finalizar pedido
-</button>
+          <button
+            onClick={handleCheckout}
+            className="w-full bg-black text-white py-3 rounded-lg"
+          >
+            Finalizar pedido
+          </button>
         </div>
       </div>
     </div>

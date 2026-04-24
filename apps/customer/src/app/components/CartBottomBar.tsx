@@ -1,11 +1,6 @@
 "use client";
 
-type CartItem = {
-  uid: string;
-  name: string;
-  price: number;
-  quantity: number;
-};
+import type { CartItem } from "@/types/menu";
 
 type Props = {
   carrito: CartItem[];
