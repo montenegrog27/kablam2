@@ -73,12 +73,12 @@ export default function SidebarCarritoDelivery({
             branding?.font_family || branding?.font_primary || "CustomFont",
         }}
       >
-        <h2 className="text-xl font-bold mb-4">Tu pedido</h2>
+        <h2 className="text-xl font-bold mb-4 text-gray-900">Tu pedido</h2>
 
         <div className="flex-1 space-y-3 overflow-y-auto">
           {carrito.map((item) => (
             <div key={item.uid} className="border rounded-lg p-3">
-              <p className="font-semibold">{item.name}</p>
+              <p className="font-semibold text-gray-900">{item.name}</p>
 
               <p className="text-sm text-gray-500">
                 ${item.price} x {item.quantity}
