@@ -642,12 +642,7 @@ export default function CheckoutForm({
                 </>
               )}
             </button>
-            <p
-              className="text-xs text-gray-500 mt-3 text-center"
-              style={{ fontFamily }}
-            >
-              Al confirmar, aceptás nuestros términos y condiciones
-            </p>
+
 
             {/* Validación de datos */}
             {!isValid() && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type {
   Product,
   Combo,
@@ -28,6 +28,26 @@ export default function MenuPageClient({
   const [sidebar, setSidebar] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modal, setModal] = useState(false);
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem(`cart_${branchSlug}`);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setCarrito(parsed);
+        }
+      } catch (e) {
+        console.error("Error parsing cart:", e);
+      }
+    }
+  }, [branchSlug]);
+
+  useEffect(() => {
+    if (carrito.length > 0) {
+      sessionStorage.setItem(`cart_${branchSlug}`, JSON.stringify(carrito));
+    }
+  }, [carrito, branchSlug]);
 
   const agregarAlCarrito = (product: Product) => {
     setSelectedProduct(product);

@@ -1,65 +1,32 @@
-"use client";
+import { createSupabaseServer } from "@kablam/supabase/server";
+import CheckoutPageClient from "./CheckoutPageClient";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import CheckoutForm from "@/app/components/CheckoutForm";
-import OrderModeSelector from "@/app/components/OrderModeSelector";
-import type { CartItem } from "@/types/menu";
+export default async function CheckoutPage({
+  params,
+}: {
+  params: Promise<{ branchSlug: string }>;
+}) {
+  const supabase = await createSupabaseServer();
+  const { branchSlug } = await params;
 
-export default function CheckoutPage() {
-  const params = useParams();
-  const branchSlug = params.branchSlug as string;
+  const { data: branch } = await supabase
+    .from("branches")
+    .select("id")
+    .eq("slug", branchSlug)
+    .single();
 
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [orderMode, setOrderMode] = useState<"delivery" | "takeaway" | null>(
-    null,
-  );
+  let branding = undefined;
+  if (branch) {
+    const { data: settings } = await supabase
+      .from("branch_settings")
+      .select("*")
+      .eq("branch_id", branch.id)
+      .single();
 
-  useEffect(() => {
-    const stored = sessionStorage.getItem(`cart_${branchSlug}`);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      console.log("Checkout: Cart loaded from sessionStorage:", parsed);
-      console.log("Checkout: First item categories:", parsed[0]?.categories);
-      setCart(parsed); // eslint-disable-line react-hooks/set-state-in-effect
+    if (settings) {
+      branding = JSON.parse(JSON.stringify(settings));
     }
-  }, [branchSlug]);
+  }
 
-  const addToCart = (item: CartItem) => {
-    console.log("Checkout: Adding item to cart:", item);
-    console.log("Checkout: Item categories:", item.categories);
-
-    const updatedCart = [...cart];
-
-    // Verificar si ya existe el mismo item (misma variante, mismos extras, mismos ingredientes removidos)
-    // Por simplicidad, agregamos como nuevo item
-    updatedCart.push(item);
-
-    setCart(updatedCart);
-    sessionStorage.setItem(`cart_${branchSlug}`, JSON.stringify(updatedCart));
-  };
-
-  const updateCart = (newCart: CartItem[]) => {
-    setCart(newCart);
-    sessionStorage.setItem(`cart_${branchSlug}`, JSON.stringify(newCart));
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="max-w-6xl mx-auto">
-        {!orderMode ? (
-          <OrderModeSelector onSelect={setOrderMode} />
-        ) : (
-          <CheckoutForm
-            cart={cart}
-            orderMode={orderMode}
-            branchSlug={branchSlug}
-            onBack={() => setOrderMode(null)}
-            onAddToCart={addToCart}
-            onUpdateCart={updateCart}
-          />
-        )}
-      </div>
-    </div>
-  );
+  return <CheckoutPageClient branchSlug={branchSlug} branding={branding} />;
 }
