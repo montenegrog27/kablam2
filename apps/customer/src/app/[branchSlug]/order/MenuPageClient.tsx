@@ -13,6 +13,7 @@ import SidebarCarritoDelivery from "../../components/SidebarCarritoDelivery";
 import ProductModal from "../../components/ProductModal";
 import CartBottomBar from "../../components/CartBottomBar";
 import FontLoader from "../../components/FontLoader";
+import MetaTags from "../../components/MetaTags";
 
 export default function MenuPageClient({
   initialMenu,
@@ -36,6 +37,7 @@ export default function MenuPageClient({
   return (
     <>
       <FontLoader branding={branding} />
+      <MetaTags branding={branding} />
       <NavbarDelivery
         onCartClick={() => setSidebar(true)}
         totalItems={carrito.length}

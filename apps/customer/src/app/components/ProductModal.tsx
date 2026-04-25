@@ -495,7 +495,7 @@ export default function ProductModal({
           })}
         </div>
 
-        <div className="sticky bottom-0 border-t border-gray-200 bg-white p-6 space-y-4 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+        <div className="sticky bottom-0 border-t border-gray-200 bg-white px-4 pt-1 pb-3 space-y-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
           {/* Desglose de precios */}
           {(modifiersTotal > 0 || extrasTotal > 0) && (
             <div className="space-y-2 text-sm">
@@ -523,7 +523,6 @@ export default function ProductModal({
           <div className="flex justify-between items-center">
             <div>
               <p className="font-bold text-lg text-gray-900">Total</p>
-              <p className="text-xs text-gray-500">IVA incluido</p>
             </div>
             <div className="text-right">
               <p className="font-bold text-2xl text-gray-900">${total}</p>
@@ -538,7 +537,7 @@ export default function ProductModal({
           {/* Botón agregar */}
           <button
             onClick={handleAddToCart}
-            className="w-full py-4 rounded-xl font-bold text-white transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+            className="w-full py-3 rounded-xl font-bold text-white transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
             style={{ backgroundColor: primaryColor }}
           >
             Agregar al carrito • ${total}

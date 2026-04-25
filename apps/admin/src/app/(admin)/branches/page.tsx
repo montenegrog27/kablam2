@@ -146,6 +146,10 @@ export default function BranchesPage() {
           website_url: branchSettings.website_url,
           web_open: branchSettings.web_open,
           web_closed_message: branchSettings.web_closed_message,
+          favicon_url: branchSettings.favicon_url,
+          meta_title: branchSettings.meta_title,
+          meta_pixel_script: branchSettings.meta_pixel_script,
+          ga4_script: branchSettings.ga4_script,
         },
         { onConflict: "branch_id" },
       );
@@ -161,12 +165,12 @@ export default function BranchesPage() {
       ) {
         alert(
           "Error: Falta agregar columnas a la tabla branch_settings.\n\n" +
-            "Ejecuta el SQL en add_font_family_to_branch_settings.sql:\n\n" +
+            "Ejecuta el SQL en add_meta_fields_to_branch_settings.sql:\n\n" +
             "ALTER TABLE branch_settings\n" +
-            "ADD COLUMN IF NOT EXISTS brand_color TEXT DEFAULT '#FF6B35',\n" +
-            "ADD COLUMN IF NOT EXISTS accent_color TEXT DEFAULT '#1A1A1A',\n" +
-            "ADD COLUMN IF NOT EXISTS font_family TEXT DEFAULT 'Arial, sans-serif',\n" +
-            "ADD COLUMN IF NOT EXISTS font_url TEXT;",
+            "ADD COLUMN IF NOT EXISTS favicon_url TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS meta_title TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS meta_pixel_script TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS ga4_script TEXT;",
         );
       } else {
         alert("Error al guardar configuración: " + error.message);
@@ -558,6 +562,86 @@ export default function BranchesPage() {
                   updateLocalSettings(branch.id, "website_url", e.target.value)
                 }
               />
+            </div>
+
+            {/* =============================
+                SEO Y METADATOS
+            ============================= */}
+
+            <div className="space-y-3 border-t pt-4">
+              <h3 className="font-semibold">SEO y Metadatos</h3>
+
+              <input
+                placeholder="Título para la pestaña del navegador"
+                className="border p-2 w-full rounded"
+                value={branchSettings.meta_title || ""}
+                onChange={(e) =>
+                  updateLocalSettings(branch.id, "meta_title", e.target.value)
+                }
+              />
+              <div className="text-xs text-gray-500">
+                Este título aparece en la pestaña del navegador y en resultados
+                de búsqueda
+              </div>
+
+              <input
+                placeholder="URL del Favicon (icono de la pestaña)"
+                className="border p-2 w-full rounded"
+                value={branchSettings.favicon_url || ""}
+                onChange={(e) =>
+                  updateLocalSettings(branch.id, "favicon_url", e.target.value)
+                }
+              />
+              <div className="text-xs text-gray-500">
+                URL de una imagen .ico, .png o .svg (recomendado: 32x32 o 48x48
+                px)
+              </div>
+            </div>
+
+            {/* =============================
+                TRACKING
+            ============================= */}
+
+            <div className="space-y-3 border-t pt-4">
+              <h3 className="font-semibold">Tracking</h3>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Pixel de Meta (Facebook/Meta)
+                </label>
+                <textarea
+                  placeholder="Fragmento de código del Meta Pixel"
+                  className="border p-2 w-full rounded font-mono text-xs h-24"
+                  value={branchSettings.meta_pixel_script || ""}
+                  onChange={(e) =>
+                    updateLocalSettings(
+                      branch.id,
+                      "meta_pixel_script",
+                      e.target.value,
+                    )
+                  }
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  Pega el código del pixel de Meta (eventos de conversión, etc.)
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Google Analytics 4 (GA4)
+                </label>
+                <textarea
+                  placeholder="Fragmento de código de GA4"
+                  className="border p-2 w-full rounded font-mono text-xs h-24"
+                  value={branchSettings.ga4_script || ""}
+                  onChange={(e) =>
+                    updateLocalSettings(branch.id, "ga4_script", e.target.value)
+                  }
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  Pega el código de medición de Google Analytics 4
+                </div>
+              </div>
             </div>
 
             {/* =============================

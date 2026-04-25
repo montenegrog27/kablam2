@@ -96,6 +96,10 @@ export type Branding = {
   font_url?: string;
   font_primary?: string;
   font_secondary?: string;
+  favicon_url?: string;
+  meta_title?: string;
+  meta_pixel_script?: string;
+  ga4_script?: string;
 };
 
 export type Combo = {

@@ -316,6 +316,7 @@ export default function UpsellsPage() {
               />
             </div>
           </div>
+        )}
 
         {suggestionMode === "products" && (
           <div className="mb-4">
