@@ -67,7 +67,9 @@ export default function ProductsPage() {
 
       const { data: prods } = await supabase
         .from("products")
-        .select("*, product_variants(*, variant_types(*))")
+        .select(
+          "*, product_variants(*, variant_types(*)), product_ingredients_display(*, ingredients(*)), product_extras(*, ingredients(*))",
+        )
         .eq("tenant_id", userRecord.tenant_id);
 
       setProducts(prods || []);
@@ -1085,9 +1087,42 @@ export default function ProductsPage() {
                           <span className="text-2xl font-bold text-gray-900">
                             ${product.product_variants?.[0]?.price || 0}
                           </span>
-                          {product.product_variants?.[0]?.cost && (
-                            <span className="text-sm text-gray-500 ml-2">
-                              (Costo: ${product.product_variants[0].cost})
+                          {product.product_variants?.[0]?.cost != null && (
+                            <span className="text-sm ml-2">
+                              <span className="text-gray-500">
+                                Costo: $
+                                {Number(
+                                  product.product_variants[0].cost,
+                                ).toFixed(2)}
+                              </span>
+                              {product.product_variants[0].price > 0 && (
+                                <span
+                                  className={`ml-2 font-medium ${
+                                    ((product.product_variants[0].price -
+                                      product.product_variants[0].cost) /
+                                      product.product_variants[0].price) *
+                                      100 >=
+                                    40
+                                      ? "text-green-600"
+                                      : ((product.product_variants[0].price -
+                                            product.product_variants[0].cost) /
+                                            product.product_variants[0].price) *
+                                            100 >=
+                                          20
+                                        ? "text-yellow-600"
+                                        : "text-red-600"
+                                  }`}
+                                >
+                                  (
+                                  {Math.round(
+                                    ((product.product_variants[0].price -
+                                      product.product_variants[0].cost) /
+                                      product.product_variants[0].price) *
+                                      100,
+                                  )}
+                                  % margen)
+                                </span>
+                              )}
                             </span>
                           )}
                         </div>
@@ -1126,50 +1161,38 @@ export default function ProductsPage() {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <label className="text-gray-500 block mb-1">
-                            Cocina asignada
-                          </label>
-                          <select
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
-                            value={getProductKitchenOverride(product.id)}
-                            onChange={(e) =>
-                              handleKitchenChange(product.id, e.target.value)
-                            }
-                          >
-                            <option value="">Seguir categoría</option>
-                            {kitchens.map((kitchen) => (
-                              <option key={kitchen.id} value={kitchen.id}>
-                                {kitchen.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-gray-500 block mb-1">
-                            Receta
-                          </label>
-                          <a
-                            href={`/products/${product.id}/variants/${product.product_variants?.[0]?.id}/recipe`}
-                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" />
-                            </svg>
-                            Ver receta
-                          </a>
-                        </div>
+                      <div className="text-sm">
+                        <label className="text-gray-500 block mb-1">
+                          Cocina asignada
+                        </label>
+                        <select
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                          value={getProductKitchenOverride(product.id)}
+                          onChange={(e) =>
+                            handleKitchenChange(product.id, e.target.value)
+                          }
+                        >
+                          <option value="">Seguir categoría</option>
+                          {kitchens.map((kitchen) => (
+                            <option key={kitchen.id} value={kitchen.id}>
+                              {kitchen.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
-                      <div className="mt-6 pt-6 border-t border-gray-200">
-                        <h4 className="font-medium text-gray-900 mb-3">
+                      {/* Receta e ingredientes unificados */}
+                      {product.product_variants?.[0] && (
+                        <RecipeSection
+                          variantId={product.product_variants[0].id}
+                          productId={product.id}
+                          tenantId={tenantId}
+                        />
+                      )}
+
+                      {/* Extras disponibles (modifier groups) */}
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="font-medium text-gray-900 mb-3 text-sm">
                           Extras disponibles
                         </h4>
                         {modifierGroups.length > 0 ? (
@@ -1203,6 +1226,47 @@ export default function ProductsPage() {
                           </p>
                         )}
                       </div>
+
+                      {/* Ingredientes display */}
+                      {product.product_ingredients_display?.length > 0 && (
+                        <div className="pt-4 border-t border-gray-200">
+                          <h4 className="font-medium text-gray-900 mb-2 text-sm">
+                            Ingredientes visibles en pedido
+                          </h4>
+                          <div className="flex flex-wrap gap-1.5">
+                            {product.product_ingredients_display.map(
+                              (pi: any) => (
+                                <span
+                                  key={pi.id}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                                    pi.is_essential
+                                      ? "bg-red-50 text-red-700 border border-red-200"
+                                      : "bg-gray-50 text-gray-600 border border-gray-200"
+                                  }`}
+                                >
+                                  {pi.ingredients?.name}
+                                  {pi.is_essential && (
+                                    <span
+                                      className="text-red-400"
+                                      title="Esencial"
+                                    >
+                                      *
+                                    </span>
+                                  )}
+                                  {!pi.is_visible && (
+                                    <span
+                                      className="text-gray-400"
+                                      title="No visible"
+                                    >
+                                      👁‍🗨
+                                    </span>
+                                  )}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -1211,6 +1275,181 @@ export default function ProductsPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+// Componente de receta inline con ingredientes, cantidades y costo
+function RecipeSection({
+  variantId,
+  productId,
+  tenantId,
+}: {
+  variantId: string;
+  productId: string;
+  tenantId: string | null;
+}) {
+  const [ingredients, setIngredients] = useState<any[]>([]);
+  const [recipeItems, setRecipeItems] = useState<any[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [selectedIngredient, setSelectedIngredient] = useState("");
+  const [quantity, setQuantity] = useState("");
+
+  useEffect(() => {
+    if (!variantId || !tenantId) return;
+
+    supabase
+      .from("ingredients")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .then(({ data }) => setIngredients(data || []));
+
+    loadRecipe();
+  }, [variantId, tenantId]);
+
+  const loadRecipe = async () => {
+    const { data: recipe } = await supabase
+      .from("product_recipes")
+      .select("*, ingredients(*)")
+      .eq("variant_id", variantId);
+
+    setRecipeItems(recipe || []);
+    updateVariantCost(recipe || []);
+  };
+
+  const updateVariantCost = async (items: any[]) => {
+    const total = items.reduce(
+      (acc: number, item: any) =>
+        acc + (item.ingredients?.cost_per_unit || 0) * item.quantity,
+      0,
+    );
+
+    await supabase
+      .from("product_variants")
+      .update({ cost: total })
+      .eq("id", variantId);
+  };
+
+  const handleAdd = async (e: any) => {
+    e.preventDefault();
+    if (!selectedIngredient || !quantity) return;
+
+    await supabase.from("product_recipes").insert({
+      variant_id: variantId,
+      ingredient_id: selectedIngredient,
+      quantity: Number(quantity),
+    });
+
+    setSelectedIngredient("");
+    setQuantity("");
+    await loadRecipe();
+  };
+
+  const handleRemove = async (id: string) => {
+    await supabase.from("product_recipes").delete().eq("id", id);
+    await loadRecipe();
+  };
+
+  const totalCost = recipeItems.reduce(
+    (acc: number, item: any) =>
+      acc + (item.ingredients?.cost_per_unit || 0) * item.quantity,
+    0,
+  );
+
+  return (
+    <div className="pt-4 border-t border-gray-200">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center justify-between w-full text-left"
+      >
+        <h4 className="font-medium text-gray-900 text-sm">Receta</h4>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">
+            {recipeItems.length} ingredientes
+            {totalCost > 0 && ` · $${totalCost.toFixed(2)}`}
+          </span>
+          <svg
+            className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          {/* Lista actual */}
+          <div className="space-y-1.5">
+            {recipeItems.map((item: any) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded text-sm"
+              >
+                <span className="text-gray-700">
+                  {item.ingredients?.name}{" "}
+                  <span className="text-gray-400">
+                    ({item.quantity} {item.ingredients?.unit})
+                  </span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-600 font-medium">
+                    $
+                    {(
+                      item.quantity * (item.ingredients?.cost_per_unit || 0)
+                    ).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => handleRemove(item.id)}
+                    className="text-red-400 hover:text-red-600 text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+            {recipeItems.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-2">
+                Sin ingredientes en la receta
+              </p>
+            )}
+          </div>
+
+          {/* Agregar ingrediente */}
+          <form onSubmit={handleAdd} className="flex gap-2">
+            <select
+              className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs"
+              value={selectedIngredient}
+              onChange={(e) => setSelectedIngredient(e.target.value)}
+            >
+              <option value="">Seleccionar...</option>
+              {ingredients.map((ing) => (
+                <option key={ing.id} value={ing.id}>
+                  {ing.name} ({ing.unit})
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Cant."
+              className="w-16 border border-gray-300 rounded px-2 py-1.5 text-xs"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+            />
+            <button className="px-3 py-1.5 bg-black text-white text-xs rounded hover:bg-gray-800">
+              +
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

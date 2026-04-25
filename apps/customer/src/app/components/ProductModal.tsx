@@ -345,93 +345,41 @@ export default function ProductModal({
             </div>
           )}
 
-          {/* Sección de ingredientes esenciales (solo lectura) */}
-          {essentialIngredients.length > 0 && (
-            <div className="space-y-2">
-              <p className="font-semibold text-gray-700">Incluye</p>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="flex flex-wrap gap-2">
-                  {essentialIngredients.map((ing) => (
-                    <div
-                      key={ing.id}
-                      className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5"
-                    >
-                      <span className="text-sm text-gray-600">
-                        {ing.ingredients?.name}
-                      </span>
-                      <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
-                        incluido
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  Estos ingredientes son parte fundamental del producto y no se
-                  pueden modificar.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Sección de ingredientes personalizables (se pueden quitar) */}
+          {/* Sección de ingredientes personalizables (se pueden quitar) - Tags "sin [ingrediente]" */}
           {removableIngredients.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="font-semibold text-gray-700">
-                  Personalizar ingredientes
+                  Quitar ingredientes
                 </p>
                 <span className="text-xs text-gray-500">
                   {removableIngredients.length} opciones
                 </span>
               </div>
-              <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
                 {removableIngredients.map((ing) => {
                   const isRemoved = removedIngredients.includes(
                     ing.ingredient_id,
                   );
                   return (
-                    <div
+                    <button
                       key={ing.id}
-                      className={`flex justify-between items-center border rounded-lg p-4 transition-all duration-200 ${
+                      onClick={() => toggleIngredient(ing.ingredient_id)}
+                      className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
                         isRemoved
-                          ? "border-red-300 bg-red-50"
-                          : "border-gray-200 hover:border-gray-300"
+                          ? "bg-red-100 border-red-300 text-red-700 line-through opacity-60"
+                          : "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200"
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        {isRemoved ? (
-                          <div className="flex items-center gap-2">
-                            <Minus className="text-red-500" size={16} />
-                            <span className="line-through text-gray-500">
-                              {ing.ingredients?.name}
-                            </span>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span className="font-medium text-gray-800">
-                              {ing.ingredients?.name}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => toggleIngredient(ing.ingredient_id)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                          isRemoved
-                            ? "bg-red-500 text-white hover:bg-red-600"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                      >
-                        {isRemoved ? "Agregar" : "Quitar"}
-                      </button>
-                    </div>
+                      sin {ing.ingredients?.name}
+                    </button>
                   );
                 })}
               </div>
             </div>
           )}
 
+          {/* Sección de extras - Tags "extra [ingrediente]" */}
           {extras.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -440,7 +388,7 @@ export default function ProductModal({
                   {extras.length} opciones
                 </span>
               </div>
-              <div className="grid gap-3">
+              <div className="flex flex-wrap gap-2">
                 {extras.map((extra) => {
                   const isSelected = selectedExtras["extras"]?.includes(
                     extra.id,
@@ -453,50 +401,21 @@ export default function ProductModal({
                     <button
                       key={extra.id}
                       onClick={() => toggleExtra(extra.id)}
-                      className={`w-full flex justify-between items-center border-2 rounded-xl p-4 transition-all duration-200 ${
+                      className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
                         isSelected
-                          ? `border-[${primaryColor}] bg-[${primaryColor}]/5`
-                          : "border-gray-200 hover:border-gray-300"
+                          ? "border-2 text-white"
+                          : "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200"
                       }`}
-                      style={isSelected ? { borderColor: primaryColor } : {}}
+                      style={
+                        isSelected
+                          ? {
+                              borderColor: primaryColor,
+                              backgroundColor: primaryColor,
+                            }
+                          : {}
+                      }
                     >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            isSelected
-                              ? `border-[${primaryColor}] bg-[${primaryColor}]`
-                              : "border-gray-300"
-                          }`}
-                          style={
-                            isSelected
-                              ? {
-                                  borderColor: primaryColor,
-                                  backgroundColor: primaryColor,
-                                }
-                              : {}
-                          }
-                        >
-                          {isSelected && (
-                            <div className="w-2 h-2 rounded-full bg-white"></div>
-                          )}
-                        </div>
-                        <div className="text-left">
-                          <span
-                            className={`font-medium ${
-                              isSelected ? "text-gray-900" : "text-gray-700"
-                            }`}
-                          >
-                            {extra.ingredients?.name}
-                          </span>
-                        </div>
-                      </div>
-                      <span
-                        className={`font-bold ${
-                          isSelected ? "text-gray-900" : "text-gray-600"
-                        }`}
-                      >
-                        +${price}
-                      </span>
+                      extra {extra.ingredients?.name} +${price}
                     </button>
                   );
                 })}
@@ -625,10 +544,6 @@ export default function ProductModal({
             Agregar al carrito • ${total}
           </button>
 
-          {/* Mensaje de seguridad */}
-          <p className="text-center text-xs text-gray-400">
-            No se cobrará nada hasta que confirmes el pedido.
-          </p>
         </div>
       </div>
     </div>

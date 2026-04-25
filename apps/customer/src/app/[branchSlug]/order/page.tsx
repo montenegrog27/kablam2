@@ -1,8 +1,8 @@
-import { loadMenuServer } from "@/lib/loadMenu";
+import { loadMenuServer, loadCombos } from "@/lib/loadMenu";
 import MenuPageClient from "./MenuPageClient";
 import { createSupabaseServer } from "@kablam/supabase/server";
 import { getCustomerSession } from "@/lib/customer-session";
-import type { Product } from "@/types/menu";
+import type { Product, Combo } from "@/types/menu";
 
 export default async function OrderPage({
   params,
@@ -42,6 +42,14 @@ export default async function OrderPage({
     const menu: Product[] = await loadMenuServer(branchSlug);
     console.log("Menu loaded with", menu.length, "products");
 
+    const combos = await loadCombos(branchSlug);
+    console.log(
+      "Combos loaded with",
+      combos.length,
+      "combos",
+      combos.map((c) => ({ name: c.name, price: c.price })),
+    );
+
     // Obtener sesión del cliente si existe y corresponde a esta sucursal
     let customer = null;
     const session = await getCustomerSession();
@@ -58,6 +66,7 @@ export default async function OrderPage({
     return (
       <MenuPageClient
         initialMenu={menu}
+        initialCombos={combos}
         branding={settings ? JSON.parse(JSON.stringify(settings)) : undefined}
         branchSlug={branchSlug}
         customer={customer}

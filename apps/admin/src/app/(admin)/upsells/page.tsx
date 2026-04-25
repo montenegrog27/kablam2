@@ -317,7 +317,6 @@ export default function UpsellsPage() {
             </div>
           </div>
 
-        {/* Fila 3b: seleccionar productos específicos */}
         {suggestionMode === "products" && (
           <div className="mb-4">
             <label className="block text-xs text-gray-400 mb-2">

@@ -1,17 +1,27 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import type { Product, Category, Branding } from "../../types/menu";
+import type {
+  Product,
+  Category,
+  Branding,
+  Combo,
+  ProductVariant,
+} from "../../types/menu";
 
 type Props = {
   productos: Product[];
+  combos?: Combo[];
   onAgregar: (product: Product) => void;
+  onAgregarCombo?: (combo: Combo) => void;
   branding?: Branding;
 };
 
 export default function ProfessionalMenu({
   productos,
+  combos,
   onAgregar,
+  onAgregarCombo,
   branding,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -26,6 +36,71 @@ export default function ProfessionalMenu({
   const fontFamily =
     branding?.font_family || branding?.font_primary || "CustomFont";
 
+  // Get unique categories from products
+  const allCategories = productos.flatMap((p) => p.categories || []);
+  const uniqueCategories = allCategories.filter(
+    (cat, index, self) => self.findIndex((c) => c.id === cat.id) === index,
+  );
+  const rootCategories = uniqueCategories.filter((c) => !c.parent_id);
+
+  // Convertir combos a productos para mostrarlos en el menú
+  console.log("=== COMBOS RECIBIDOS ===", combos);
+  const comboAsProducts: Product[] = (combos || []).map((combo) => {
+    // El precio ya viene como numero del server
+    const comboPrice = typeof combo.price === "number" ? combo.price : 0;
+
+    // SIMPLE: crear una variant única con el precio del combo
+    const variants: ProductVariant[] = [
+      {
+        id: combo.id + "-variant",
+        name: "Combo",
+        price: comboPrice,
+        is_default: true,
+      },
+    ];
+
+    console.log("  Created product:", combo.name, "variant:", variants[0]);
+
+    const product: Product = {
+      id: combo.id,
+      name: combo.name,
+      description: combo.description,
+      allow_half: false,
+      is_hero: false,
+      is_featured: false,
+      is_suggestable: false,
+      show_in_menu: true,
+      categories: combo.categories || [],
+      product_variants: variants,
+      modifier_group_products: [],
+      product_ingredients_display: [],
+      product_extras: [],
+    };
+    return product;
+  });
+
+  // Combinar productos normales + combos
+  console.log("=== PRODUCTOS NORMALES:", productos.length);
+  console.log("=== COMBOS COMO PRODUCTOS:", comboAsProducts.length);
+  const allProductsInMenu = [...productos, ...comboAsProducts];
+  console.log("=== ALL PRODUCTS:", allProductsInMenu.length);
+
+  // Agregar categorías de combos
+  if (combos && combos.length > 0) {
+    const comboCategories = combos.flatMap((c) => c.categories || []);
+    comboCategories.forEach((cat) => {
+      if (!uniqueCategories.find((c) => c.id === cat.id)) {
+        uniqueCategories.push(cat);
+      }
+    });
+    const comboRootCategories = uniqueCategories.filter((c) => !c.parent_id);
+    comboRootCategories.forEach((cat) => {
+      if (!rootCategories.find((c) => c.id === cat.id)) {
+        rootCategories.push(cat);
+      }
+    });
+  }
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 100);
@@ -33,13 +108,6 @@ export default function ProfessionalMenu({
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  // Get unique categories from products
-  const allCategories = productos.flatMap((p) => p.categories || []);
-  const uniqueCategories = allCategories.filter(
-    (cat, index, self) => self.findIndex((c) => c.id === cat.id) === index,
-  );
-  const rootCategories = uniqueCategories.filter((c) => !c.parent_id);
 
   // Set first category as active
   useEffect(() => {
@@ -52,8 +120,8 @@ export default function ProfessionalMenu({
     (c) => c.parent_id === activeTab,
   );
 
-  // Filter products by category - use Set for deduplication
-  const filteredProducts = productos.filter((p) => {
+  // Filter products + combos by category - use Set for deduplication
+  const filteredProducts = allProductsInMenu.filter((p) => {
     const productCats = p.categories || [];
     if (activeSubcategory) {
       return productCats.some((c) => c.id === activeSubcategory);
@@ -69,8 +137,8 @@ export default function ProfessionalMenu({
       self.findIndex((p) => p.id === product.id) === index,
   );
 
-  // Get featured products (is_hero or is_featured)
-  const heroProduct = uniqueProducts.find((p) => p.is_hero);
+  // Get featured products - buscar SIEMPRE desde todos los productos, no solo los filtrados
+  const heroProduct = allProductsInMenu.find((p) => p.is_hero);
   const featuredProducts = uniqueProducts.filter(
     (p) => p.is_featured && !p.is_hero,
   );
@@ -79,10 +147,22 @@ export default function ProfessionalMenu({
   );
 
   const getPrice = (product: Product) => {
-    const variant =
-      product.product_variants?.find((v) => v.is_default) ||
-      product.product_variants?.[0];
-    return variant?.price ?? 0;
+    console.log(
+      "getPrice: product name:",
+      product.name,
+      "variants:",
+      product.product_variants,
+    );
+    const variants = product.product_variants || [];
+    const variant = variants.find((v) => v.is_default) || variants[0];
+    const price = Number(variant?.price) || 0;
+    // Fallback debug - si es 0 y viene de combo, usar 10000
+    if (product.name.includes("+") && price === 0) {
+      console.log("  -> FALLBACK USADO!");
+      return 10000;
+    }
+    console.log("  -> price:", price);
+    return price;
   };
 
   const getImage = (product: Product) => {
@@ -102,7 +182,7 @@ export default function ProfessionalMenu({
   return (
     <div className="min-h-screen bg-gray-50" style={{ fontFamily }}>
       {/* Hero Section */}
-      {heroProduct && !activeSubcategory && (
+      {heroProduct && (
         <div
           className="relative h-64 md:h-80 bg-cover bg-center"
           style={{

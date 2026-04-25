@@ -16,6 +16,9 @@ import {
   Package,
   CheckCircle,
   AlertCircle,
+  Plus,
+  Minus,
+  Trash2,
 } from "lucide-react";
 
 type Props = {
@@ -487,7 +490,74 @@ export default function CheckoutForm({
             >
               Resumen del pedido
             </h2>
-            <div className="space-y-3">
+
+            {/* Lista de items del carrito con controles */}
+            <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+              {cart.map((item) => (
+                <div
+                  key={item.uid}
+                  className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {item.name}
+                    </p>
+                    <p className="text-xs text-gray-500">${item.price} c/u</p>
+                  </div>
+                  <div className="flex items-center gap-1 bg-white border rounded-md">
+                    <button
+                      onClick={() => {
+                        if (item.quantity > 1) {
+                          onUpdateCart(
+                            cart.map((c) =>
+                              c.uid === item.uid
+                                ? { ...c, quantity: c.quantity - 1 }
+                                : c,
+                            ),
+                          );
+                        } else {
+                          onUpdateCart(cart.filter((c) => c.uid !== item.uid));
+                        }
+                      }}
+                      className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-600 transition-colors rounded-l-md hover:bg-red-50"
+                    >
+                      {item.quantity > 1 ? (
+                        <Minus size={12} />
+                      ) : (
+                        <Trash2 size={12} />
+                      )}
+                    </button>
+                    <span className="text-sm font-semibold min-w-[24px] text-center">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() =>
+                        onUpdateCart(
+                          cart.map((c) =>
+                            c.uid === item.uid
+                              ? { ...c, quantity: c.quantity + 1 }
+                              : c,
+                          ),
+                        )
+                      }
+                      className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-600 transition-colors rounded-r-md hover:bg-green-50"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900 min-w-[60px] text-right">
+                    ${item.price * item.quantity}
+                  </span>
+                </div>
+              ))}
+              {cart.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-4">
+                  No hay productos en tu pedido
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3 border-t border-gray-200 pt-3">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600" style={{ fontFamily }}>
                   Subtotal

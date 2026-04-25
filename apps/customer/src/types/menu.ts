@@ -98,8 +98,33 @@ export type Branding = {
   font_secondary?: string;
 };
 
+export type Combo = {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category_id?: string;
+  categories?: Category[];
+  combo_products: Array<{
+    id: string;
+    product_id: string;
+    quantity: number;
+    products?: {
+      id: string;
+      name: string;
+      product_variants: Array<{
+        id: string;
+        name: string;
+        price: number;
+        is_default: boolean;
+      }>;
+    };
+  }>;
+};
+
 export type MenuPageClientProps = {
   initialMenu: Product[];
+  initialCombos?: Combo[];
   branding?: Branding;
   branchSlug: string;
   customer?: {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type {
   Product,
+  Combo,
   MenuPageClientProps,
   CartItem,
 } from "../../../types/menu";
@@ -15,11 +16,13 @@ import FontLoader from "../../components/FontLoader";
 
 export default function MenuPageClient({
   initialMenu,
+  initialCombos,
   branding,
   branchSlug,
   customer,
 }: MenuPageClientProps) {
   const [products] = useState<Product[]>(initialMenu ?? []);
+  const [combos] = useState<Combo[]>(initialCombos ?? []);
   const [carrito, setCarrito] = useState<CartItem[]>([]);
   const [sidebar, setSidebar] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -44,7 +47,30 @@ export default function MenuPageClient({
       <div className="pb-24">
         <ProfessionalMenu
           productos={products}
+          combos={combos}
           onAgregar={agregarAlCarrito}
+          onAgregarCombo={(combo) => {
+            // Agregar combo como un item especial (no es un producto real, tiene productId vacío)
+            setCarrito((prev) => [
+              ...prev,
+              {
+                uid: `combo-${combo.id}-${Date.now()}`,
+                variantId: "",
+                productId: "",
+                name: combo.name,
+                price: combo.price,
+                quantity: 1,
+                variant: {
+                  id: "",
+                  name: "Combo",
+                  price: combo.price,
+                  is_default: true,
+                },
+                categories: combo.categories || [],
+                extras: [],
+              },
+            ]);
+          }}
           branding={branding}
         />
       </div>

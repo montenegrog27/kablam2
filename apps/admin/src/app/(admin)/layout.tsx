@@ -100,6 +100,9 @@ export default function AdminLayout({
           >
             Ingredientes x Producto
           </Link>
+          <Link href="/combos" className="px-3 py-2 rounded hover:bg-gray-800">
+            Combos
+          </Link>
           <Link
             href="/product-extras"
             className="px-3 py-2 rounded hover:bg-gray-800"

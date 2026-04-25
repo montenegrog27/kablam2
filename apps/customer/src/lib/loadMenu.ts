@@ -1,6 +1,6 @@
 import { supabaseBrowser } from "@kablam/supabase/client";
 import { createSupabaseServer } from "@kablam/supabase/server";
-import type { Product } from "../types/menu";
+import type { Product, Combo } from "../types/menu";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ProductRow = {
@@ -249,4 +249,130 @@ export async function loadMenu(
 export async function loadMenuServer(branchSlug: string): Promise<Product[]> {
   const supabase = await createSupabaseServer();
   return loadMenu(branchSlug, supabase);
+}
+
+export type ComboRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  branch_id: string;
+  category_id: string | null;
+  price: number;
+  categories: {
+    id: string;
+    name: string;
+    parent_id: string | null;
+  } | null;
+  combo_products: Array<{
+    id: string;
+    product_id: string;
+    quantity: number;
+    products: {
+      id: string;
+      name: string;
+      product_variants: Array<{
+        id: string;
+        name: string;
+        price: number;
+        is_default: boolean;
+      }>;
+    } | null;
+  }>;
+};
+
+export async function loadCombos(
+  branchSlug: string,
+  supabaseClient?: SupabaseClient,
+): Promise<Combo[]> {
+  const supabase = supabaseClient || supabaseBrowser;
+
+  const { data: branch } = await supabase
+    .from("branches")
+    .select("id")
+    .ilike("slug", branchSlug)
+    .limit(1)
+    .single();
+
+  if (!branch) return [];
+
+  const { data, error } = await supabase
+    .from("combos")
+    .select(
+      `
+      id,
+      name,
+      description,
+      branch_id,
+      category_id,
+      price,
+      categories(
+        id,
+        name,
+        parent_id
+      ),
+      combo_products(
+        id,
+        product_id,
+        quantity,
+        products(
+          id,
+          name,
+          product_variants(
+            id,
+            name,
+            price,
+            is_default
+          )
+        )
+      )
+    `,
+    )
+    .eq("branch_id", branch.id)
+    .eq("is_active", true);
+
+  if (error) {
+    console.error("Error loading combos:", error);
+    return [];
+  }
+
+  console.log("loadCombos: Raw data count:", data?.length || 0);
+
+  return ((data as unknown as ComboRow[]) || []).map((c) => {
+    console.log("loadCombos price for", c.name, ":", c.price, typeof c.price);
+    return {
+      id: c.id,
+      name: c.name,
+      description: c.description || undefined,
+      price: Number(c.price) || 0,
+      category_id: c.category_id || undefined,
+      categories: c.categories
+        ? [
+            {
+              id: c.categories.id,
+              name: c.categories.name,
+              parent_id: c.categories.parent_id,
+            },
+          ]
+        : [],
+      combo_products: (c.combo_products || []).map((cp) => ({
+        id: cp.id,
+        product_id: cp.product_id,
+        quantity: cp.quantity,
+        products: cp.products
+          ? {
+              id: cp.products.id,
+              name: cp.products.name,
+              product_variants: (cp.products.product_variants || []).map(
+                (v) => ({
+                  id: v.id,
+                  name: v.name,
+                  price: v.price,
+                  is_default: v.is_default,
+                }),
+              ),
+            }
+          : undefined,
+      })),
+    };
+  });
 }
