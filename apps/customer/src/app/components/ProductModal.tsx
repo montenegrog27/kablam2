@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useId } from "react";
+import { useState, useId, useEffect } from "react";
 import { X, Minus } from "lucide-react";
 import type {
   ProductModalProps,
@@ -31,12 +31,13 @@ export default function ProductModal({
   const [selectedExtras, setSelectedExtras] = useState<
     Record<string, string[]>
   >({});
-  const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
+  const [removedIngredients, setRemovedIngredients] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   const [halves, setHalves] = useState<{
     first: string;
     second: string;
   } | null>(null);
-  const [currentProductId, setCurrentProductId] = useState<string | null>(null);
   const fontFamily =
     branding?.font_family || branding?.font_primary || "CustomFont";
   const primaryColor =
@@ -44,15 +45,16 @@ export default function ProductModal({
   const _accentColor =
     branding?.accent_color || branding?.secondary_color || "#666666";
 
-  if (!open || !product) return null;
+  useEffect(() => {
+    if (open && product) {
+      setVariant(getDefaultVariant(product));
+      setSelectedExtras({});
+      setRemovedIngredients([]);
+      setHalves(product.allow_half ? { first: "", second: "" } : null);
+    }
+  }, [open, product?.id]);
 
-  if (product.id !== currentProductId) {
-    setCurrentProductId(product.id);
-    setVariant(getDefaultVariant(product));
-    setSelectedExtras({});
-    setRemovedIngredients([]);
-    setHalves(product.allow_half ? { first: "", second: "" } : null);
-  }
+  if (!open || !product) return null;
 
   const modifierGroups: ModifierGroup[] =
     product.modifier_group_products?.map((mgp) => ({
@@ -96,17 +98,23 @@ export default function ProductModal({
   };
 
   const toggleIngredient = (ingredientId: string) => {
-    // Verificar si el ingrediente es esencial (no se puede quitar)
     const ingredient = allVisibleIngredients.find(
       (ing) => ing.ingredient_id === ingredientId,
     );
     if (ingredient?.is_essential) return;
 
     setRemovedIngredients((prev) => {
-      if (prev.includes(ingredientId)) {
-        return prev.filter((id) => id !== ingredientId);
+      const exists = prev.find((i) => i.id === ingredientId);
+      if (exists) {
+        return prev.filter((i) => i.id !== ingredientId);
       }
-      return [...prev, ingredientId];
+      return [
+        ...prev,
+        {
+          id: ingredientId,
+          name: ingredient?.ingredients?.name || ingredientId,
+        },
+      ];
     });
   };
 
@@ -122,9 +130,15 @@ export default function ProductModal({
     return all;
   };
 
-  const getAllSelectedExtras = (): ProductExtra[] => {
+  const getAllSelectedExtras = (): Modifier[] => {
     const selectedIds = selectedExtras["extras"] || [];
-    return extras.filter((ex) => selectedIds.includes(ex.id));
+    return extras
+      .filter((ex) => selectedIds.includes(ex.id))
+      .map((ex) => ({
+        id: ex.id,
+        name: ex.ingredients?.name || ex.id,
+        price: ex.ingredients?.sale_price || ex.ingredients?.cost_per_unit || 0,
+      }));
   };
 
   const modifiersTotal = getAllSelectedModifiers().reduce(
@@ -133,9 +147,7 @@ export default function ProductModal({
   );
 
   const extrasTotal = getAllSelectedExtras().reduce((sum, ex) => {
-    const price =
-      ex.ingredients?.sale_price || ex.ingredients?.cost_per_unit || 0;
-    return sum + price;
+    return sum + (ex.price || 0);
   }, 0);
 
   const total = (variant?.price || 0) + modifiersTotal + extrasTotal;
@@ -156,7 +168,7 @@ export default function ProductModal({
       price: total,
       quantity: 1,
       variant,
-      extras: getAllSelectedModifiers(),
+      extras: [...getAllSelectedModifiers(), ...getAllSelectedExtras()],
       allowHalf: product.allow_half,
       halves: halves || undefined,
       removedIngredients:
@@ -173,13 +185,8 @@ export default function ProductModal({
         style={{ fontFamily }}
       >
         <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-          <div>
+          <div className="flex-1 pr-4">
             <h2 className="text-xl font-bold text-gray-900">{product.name}</h2>
-            {product.description && (
-              <p className="text-sm text-gray-500 mt-1 line-clamp-1">
-                {product.description}
-              </p>
-            )}
           </div>
           <button
             onClick={onClose}
@@ -199,6 +206,10 @@ export default function ProductModal({
               />
               <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/20 to-transparent"></div>
             </div>
+          )}
+
+          {product.description && (
+            <p className="text-sm text-gray-600">{product.description}</p>
           )}
 
           {product.product_variants?.length > 1 && !product.allow_half && (
@@ -358,8 +369,8 @@ export default function ProductModal({
               </div>
               <div className="flex flex-wrap gap-2">
                 {removableIngredients.map((ing) => {
-                  const isRemoved = removedIngredients.includes(
-                    ing.ingredient_id,
+                  const isRemoved = removedIngredients.some(
+                    (i) => i.id === ing.ingredient_id,
                   );
                   return (
                     <button
@@ -542,7 +553,6 @@ export default function ProductModal({
           >
             Agregar al carrito • ${total}
           </button>
-
         </div>
       </div>
     </div>

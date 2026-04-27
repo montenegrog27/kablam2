@@ -61,7 +61,7 @@ export type CartItem = {
   extras: Modifier[];
   allowHalf?: boolean;
   halves?: { first: string; second: string };
-  removedIngredients?: string[];
+  removedIngredients?: Array<{ id: string; name: string }>;
   categories?: Category[];
 };
 

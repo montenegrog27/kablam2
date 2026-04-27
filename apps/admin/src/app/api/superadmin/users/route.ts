@@ -140,13 +140,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Insertar en tabla users
+    // 3. Insertar en tabla users (NO incluir email - esa columna no existe en public.users)
     const { data: newUser, error: insertError } = await supabaseService
       .from("users")
       .insert({
         id: authUser.id,
         name: name || email.split("@")[0],
-        email,
         role,
         tenant_id,
         branch_id: branch_id || null,

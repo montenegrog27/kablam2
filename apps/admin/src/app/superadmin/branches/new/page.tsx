@@ -96,7 +96,7 @@ export default function NewBranchPage() {
             ← Volver a Branches
           </Link>
         </div>
-        <h1 className="text-2xl font-bold mb-6">Crear nueva Branch</h1>
+        <h1 className="text-2xl text-black font-bold mb-6">Crear nueva Branch</h1>
         <div className="text-lg">Cargando tenants...</div>
       </div>
     );
@@ -113,7 +113,7 @@ export default function NewBranchPage() {
             ← Volver a Branches
           </Link>
         </div>
-        <h1 className="text-2xl font-bold mb-6">Crear nueva Branch</h1>
+        <h1 className="text-2xl text-black font-bold mb-6">Crear nueva Branch</h1>
         <div className="bg-white border rounded-lg p-8 text-center">
           <p className="text-gray-500 mb-4">
             No hay tenants registrados. Primero debes crear un tenant.
@@ -140,9 +140,9 @@ export default function NewBranchPage() {
         </Link>
       </div>
 
-      <h1 className="text-2xl font-bold mb-6">Crear nueva Branch</h1>
+      <h1 className="text-2xl font-bold text-black mb-6">Crear nueva Branch</h1>
 
-      <div className="max-w-2xl bg-white border rounded-lg p-6">
+      <div className="max-w-2xl bg-gray-700 border rounded-lg p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium mb-2">Tenant *</label>

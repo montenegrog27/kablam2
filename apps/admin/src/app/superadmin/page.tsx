@@ -54,7 +54,7 @@ export default function SuperAdminOverview() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 text-black">
       <h1 className="text-3xl font-bold mb-8">SuperAdmin Dashboard</h1>
       <p className="text-gray-600 mb-10">
         Panel de administración global del sistema Kablam. Aquí puedes gestionar
@@ -107,7 +107,7 @@ export default function SuperAdminOverview() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-black">
         <div className="bg-white border rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-bold mb-4">Acciones rápidas</h2>
           <ul className="space-y-3">

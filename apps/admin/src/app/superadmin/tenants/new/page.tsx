@@ -52,9 +52,9 @@ export default function NewTenantPage() {
         </Link>
       </div>
 
-      <h1 className="text-2xl font-bold mb-6">Crear nuevo Tenant</h1>
+      <h1 className="text-2xl font-bold text-black mb-6">Crear nuevo Tenant</h1>
 
-      <div className="max-w-2xl bg-white border rounded-lg p-6">
+      <div className="max-w-2xl bg-gray-700 border rounded-lg p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium mb-2">

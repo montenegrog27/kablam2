@@ -90,6 +90,7 @@ export default function MenuPageClient({
                 },
                 categories: combo.categories || [],
                 extras: [],
+                removedIngredients: [],
               },
             ]);
           }}

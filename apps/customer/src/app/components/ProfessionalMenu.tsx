@@ -360,6 +360,41 @@ export default function ProfessionalMenu({
           </div>
         )}
       </div>
+
+      {/* Footer */}
+      <footer className="mt-12 py-8 border-t border-gray-200 bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 text-center space-y-4">
+          {branding?.logo_url && (
+            <div className="flex justify-center">
+              <img
+                src={branding.logo_url}
+                alt="Logo"
+                className="h-12 object-contain"
+              />
+            </div>
+          )}
+          <div className="text-sm text-gray-500" style={{ fontFamily }}>
+            <p>
+              Powered by{" "}
+              <span className="font-semibold" style={{ color: brandColor }}>
+                Kablam
+              </span>
+            </p>
+            {branding?.website_url && (
+              <p className="mt-1">
+                <a
+                  href={branding.website_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  {branding.website_url.replace(/^https?:\/\//, "")}
+                </a>
+              </p>
+            )}
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -439,11 +474,9 @@ function FeaturedCard({
         <h4 className="font-bold text-gray-900 mb-1 line-clamp-2">
           {product.name}
         </h4>
-        {product.description && (
-          <p className="text-sm text-gray-500 line-clamp-2 mb-3">
-            {product.description}
-          </p>
-        )}
+        <p className="text-sm text-gray-500 line-clamp-2 mb-3">
+          {product.description || "\u00A0"}
+        </p>
         <div className="flex items-center justify-between">
           <span className="text-xl font-bold" style={{ color: brandColor }}>
             ${formatPrice(getPrice(product))}
@@ -506,11 +539,9 @@ function NormalProductCard({
         <h4 className="font-bold text-gray-900 mb-1 truncate">
           {product.name}
         </h4>
-        {product.description && (
-          <p className="text-sm text-gray-500 line-clamp-2 hidden md:block">
-            {product.description}
-          </p>
-        )}
+        <p className="text-sm text-gray-500 line-clamp-2 md:line-clamp-1">
+          {product.description || "\u00A0"}
+        </p>
       </div>
 
       {/* Price and Button - Right */}
