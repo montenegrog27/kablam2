@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
+export const dynamic = "force-dynamic";
+
 export default function BranchesPage() {
   const [branches, setBranches] = useState<any[]>([]);
   const [settings, setSettings] = useState<any[]>([]);
