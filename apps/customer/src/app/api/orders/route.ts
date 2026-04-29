@@ -230,19 +230,27 @@ export async function POST(req: Request) {
       .join(" • ");
 
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/whatsapp/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          conversationId: conversation.id,
-          orderId: order.id,
-          type: "template",
-          templateName: "confirmacion_pedido_detallado",
-          params: [customer.name, orderText, total.toString()],
-        }),
-      });
+      const cashierUrl = process.env.NEXT_PUBLIC_CASHIER_APP_URL
+        || process.env.NEXT_PUBLIC_APP_URL
+        || "";
+
+      if (!cashierUrl) {
+        console.error("WhatsApp URL not configured (NEXT_PUBLIC_CASHIER_APP_URL)");
+      } else {
+        await fetch(`${cashierUrl}/api/whatsapp/send`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            orderId: order.id,
+            type: "template",
+            templateName: "confirmacion_pedido_detallado",
+            params: [customer.name, orderText, total.toString()],
+          }),
+        });
+      }
     } catch (e) {
       console.error("WhatsApp error:", e);
     }
