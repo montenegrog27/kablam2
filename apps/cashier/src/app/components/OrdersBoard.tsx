@@ -55,7 +55,6 @@ export default function OrdersBoard({
         (payload) => {
           const msg = payload.new;
 
-          console.log("MESSAGE CONVERSATION:", msg.conversation_id);
 
           // si el chat ya está abierto no mostramos badge
           if (msg.conversation_id === activeConversationId) {
@@ -294,11 +293,7 @@ export default function OrdersBoard({
                 </div>
               ) : (
                 list.map((order: any, index: number) => {
-                  console.log(
-                    "ORDER CONVERSATION:",
-                    order.id,
-                    order.conversation_id,
-                  );
+              
 
                   return (
                     <div

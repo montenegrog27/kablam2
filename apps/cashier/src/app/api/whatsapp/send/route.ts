@@ -259,6 +259,7 @@ const {
 // =============================
 
 if (orderId && messageId) {
+  console.log("📝 SAVING whatsapp_message_id on order:", { orderId, messageId });
 
   await supabase
     .from("orders")
@@ -267,6 +268,7 @@ if (orderId && messageId) {
     })
     .eq("id", orderId);
 
+  console.log("✅ whatsapp_message_id saved on order");
 }
   console.log("ORDER ID RECEIVED:", orderId);
   // =============================

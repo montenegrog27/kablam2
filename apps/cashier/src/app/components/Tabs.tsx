@@ -91,6 +91,7 @@ import SalesTab from "./SalesTab";
 import DeliveredTab from "./DeliveredTab";
 import KDSTab from "./KDSTab";
 import CloseCash from "./CloseCash";
+import CustomerChatList from "./CustomerChatList";
 import { useBranch } from "../(cashier)/context/BranchContext";
 import { MapPin } from "lucide-react";
 
@@ -183,9 +184,14 @@ export default function CashierTabs({ session }: any) {
         {tab === "delivered" && <DeliveredTab session={session} />}
 
         {tab === "whatsapp" && (
-          <div className="h-full flex items-center justify-center text-gray-400">
-            Próximamente WhatsApp
-          </div>
+          <CustomerChatList
+            branchId={currentBranch?.id || ""}
+            tenantId={currentBranch?.tenant_id || ""}
+            onClose={() => setTab("board")}
+            onUnreadChange={(count) => {
+              // Podríamos actualizar el badge del tab si es necesario
+            }}
+          />
         )}
 
         {tab === "arqueos" && (

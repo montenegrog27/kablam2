@@ -66,11 +66,16 @@ export async function POST(req: Request) {
 
   const body = await req.json();
 
+  console.log("📦 FULL WEBHOOK BODY:", JSON.stringify(body, null, 2));
+
   const entry = body.entry?.[0];
   const change = entry?.changes?.[0];
   const value = change?.value;
 
-  if (!value) return NextResponse.json({ ok: true });
+  if (!value) {
+    console.log("⚠️ No value in webhook");
+    return NextResponse.json({ ok: true });
+  }
 
   // ===============================
   // MESSAGE STATUS UPDATE
@@ -79,6 +84,7 @@ export async function POST(req: Request) {
   const status = value?.statuses?.[0];
 
   if (status) {
+    console.log("📬 STATUS UPDATE:", status.status, status.id);
     await supabase
       .from("messages")
       .update({ status: status.status })
@@ -93,7 +99,13 @@ export async function POST(req: Request) {
 
   const message = value?.messages?.[0];
 
-  if (!message) return NextResponse.json({ ok: true });
+  if (!message) {
+    console.log("⚠️ No message in webhook value");
+    return NextResponse.json({ ok: true });
+  }
+
+  console.log("💬 MESSAGE TYPE:", message.type);
+  console.log("💬 MESSAGE DUMP:", JSON.stringify(message, null, 2));
 
   const phoneNumberId = value?.metadata?.phone_number_id;
   const phone = message.from;
@@ -119,6 +131,92 @@ export async function POST(req: Request) {
   // Normalizar teléfono: quitar código de país 54 si existe
   const phoneNormalized = phone.replace(/^549/, "54").replace(/^54/, "");
   const phoneWithCountry = phone.startsWith("54") ? phone : `54${phone}`;
+
+  // ===============================
+  // BUTTON CLICK (debe ir ANTES que rider)
+  // ===============================
+
+  if (message.type === "interactive" && (message as any).interactive?.type === "button_reply") {
+    const payload = (message as any).interactive?.button_reply?.id || message.button?.payload;
+    const originalMessageId = message.context?.id;
+
+    console.log("🔘 BUTTON CLICK DETECTED!", { payload, originalMessageId, messageType: message.type });
+
+    if (!originalMessageId) {
+      console.log("⚠️ No context.id in button click - cannot match order");
+      return NextResponse.json({ ok: true });
+    }
+
+    const { data: order } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("whatsapp_message_id", originalMessageId)
+      .maybeSingle();
+
+    console.log("🔍 ORDER LOOKUP:", { originalMessageId, orderFound: !!order, orderStatus: order?.status });
+
+    if (!order) {
+      console.log("⚠️ No order found for whatsapp_message_id:", originalMessageId);
+      return NextResponse.json({ ok: true });
+    }
+
+    // CONFIRM ORDER
+
+    if (payload === "confirmar_pedido") {
+      console.log("✅ CONFIRMING ORDER:", order.id);
+      const { error: updateError } = await supabase
+        .from("orders")
+        .update({ status: "confirmed" })
+        .eq("id", order.id);
+
+      if (updateError) console.error("❌ Error updating order:", updateError);
+      else console.log("✅ Order confirmed successfully:", order.id);
+
+      const esDelivery = order.type === "delivery";
+      const esTransfer = order.payment_method === "transfer";
+
+      let msg = "";
+
+      if (esTransfer) {
+        msg = esDelivery
+          ? "✅ Pedido confirmado. Te avisaremos cuando salga el repartidor.\nALIAS 👇"
+          : "✅ Pedido confirmado. Te avisaremos cuando esté listo para retirar.\nALIAS 👇";
+      } else {
+        msg = esDelivery
+          ? "✅ Pedido confirmado. Te avisaremos cuando salga el repartidor."
+          : "✅ Pedido confirmado. Te avisaremos cuando esté listo para retirar.";
+      }
+
+      await sendText(number, phone, msg);
+
+      if (esTransfer) {
+        await sendText(number, phone, "MORDISCO.ARG");
+      }
+    }
+
+    // CANCEL ORDER
+
+    if (payload === "cancelar_pedido") {
+      console.log("❌ CANCELLING ORDER:", order.id);
+      const { error: cancelError } = await supabase
+        .from("orders")
+        .update({ status: "cancelled" })
+        .eq("id", order.id);
+
+      if (cancelError) console.error("❌ Error cancelling order:", cancelError);
+      else console.log("✅ Order cancelled successfully:", order.id);
+
+      await sendText(
+        number,
+        phone,
+        "❌ Pedido cancelado. Podés hacer otro cuando quieras.",
+      );
+    }
+
+    return NextResponse.json({ ok: true });
+  } else if (message.type === "interactive") {
+    console.log("⚠️ Interactive message but not button_reply:", JSON.stringify((message as any).interactive));
+  }
 
   // ===============================
   // CHECK IF IT'S A RIDER
@@ -262,70 +360,6 @@ export async function POST(req: Request) {
       .single();
 
     conversation = data;
-  }
-
-  // ===============================
-  // BUTTON CLICK
-  // ===============================
-
-  if (message.type === "button") {
-    const payload = message.button?.payload;
-    const originalMessageId = message.context?.id;
-
-    const { data: order } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("whatsapp_message_id", originalMessageId)
-      .maybeSingle();
-
-    if (!order) return NextResponse.json({ ok: true });
-
-    // CONFIRM ORDER
-
-    if (payload === "confirmar_pedido") {
-      await supabase
-        .from("orders")
-        .update({ status: "confirmed" })
-        .eq("id", order.id);
-
-      const esDelivery = order.type === "delivery";
-      const esTransfer = order.payment_method === "transfer";
-
-      let msg = "";
-
-      if (esTransfer) {
-        msg = esDelivery
-          ? "✅ Pedido confirmado. Te avisaremos cuando salga el repartidor.\nALIAS 👇"
-          : "✅ Pedido confirmado. Te avisaremos cuando esté listo para retirar.\nALIAS 👇";
-      } else {
-        msg = esDelivery
-          ? "✅ Pedido confirmado. Te avisaremos cuando salga el repartidor."
-          : "✅ Pedido confirmado. Te avisaremos cuando esté listo para retirar.";
-      }
-
-      await sendText(number, phone, msg);
-
-      if (esTransfer) {
-        await sendText(number, phone, "MORDISCO.ARG");
-      }
-    }
-
-    // CANCEL ORDER
-
-    if (payload === "cancelar_pedido") {
-      await supabase
-        .from("orders")
-        .update({ status: "cancelled" })
-        .eq("id", order.id);
-
-      await sendText(
-        number,
-        phone,
-        "❌ Pedido cancelado. Podés hacer otro cuando quieras.",
-      );
-    }
-
-    return NextResponse.json({ ok: true });
   }
 
   // ===============================

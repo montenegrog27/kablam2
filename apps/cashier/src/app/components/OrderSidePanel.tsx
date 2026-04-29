@@ -33,6 +33,7 @@ export default function OrderSidePanel({
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
+  const [selectedParentCategory, setSelectedParentCategory] = useState<string | null>(null);
   const [autoShippingEnabled, setAutoShippingEnabled] = useState(true);
   const [cart, setCart] = useState<any[]>([]);
   const [orderType, setOrderType] = useState("takeaway");
@@ -59,6 +60,12 @@ export default function OrderSidePanel({
   const isView = mode === "view";
   const isEdit = mode === "edit";
   const isBuilder = mode === "builder";
+
+  // Categorías padre (raíz) y subcategorías según selección
+  const rootCategories = categories.filter((c: any) => !c.parent_id);
+  const subCategories = categories.filter(
+    (c: any) => c.parent_id === selectedParentCategory,
+  );
 
   // ================= EFFECT =================
   useEffect(() => {
@@ -189,7 +196,7 @@ export default function OrderSidePanel({
     loadOrderForEdit();
     setMode(selectedOrder.mode || "view");
     setStep("build");
-  }, [selectedOrder]);
+  }, [selectedOrder, branchId]);
 
   const resetForm = () => {
     setCart([]);
@@ -201,6 +208,8 @@ export default function OrderSidePanel({
     setPayments([{ payment_method_id: "", amount: "", reference: "" }]);
     setMode("builder");
     setStep("build");
+    setSelectedCategory(null);
+    setSelectedParentCategory(null);
   };
 
   const calculateShipping = () => {
@@ -219,11 +228,11 @@ export default function OrderSidePanel({
   };
 
   const loadCategories = async () => {
-    if (!branchId) return;
+    if (!tenantId) return;
     const { data } = await supabase
       .from("categories")
       .select("*")
-      .eq("branch_id", branchId)
+      .eq("tenant_id", tenantId)
       .order("position");
     setCategories(data || []);
   };
@@ -796,59 +805,104 @@ export default function OrderSidePanel({
               ))}
             </div>
 
-            {/* Categorías */}
-            <div className="flex gap-2 overflow-x-auto">
-              <button
-                onClick={() => setSelectedCategory(null)}
-                className={`px-3 py-1 text-xs rounded-full border ${
-                  !selectedCategory
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 border-gray-300"
-                }`}
-              >
-                Todas
-              </button>
-
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1 text-xs rounded-full border ${
-                    selectedCategory === cat.id
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-600 border-gray-300"
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-
-            {/* Productos */}
-            <div className="divide-y divide-gray-200">
-              {products
-                .filter(
-                  (p) =>
-                    !selectedCategory || p.category_id === selectedCategory,
-                )
-                .map((product) => (
-                  <div
-                    key={product.id}
-                    className="py-3 flex justify-between items-center"
+            {/* CATEGORÍAS / PRODUCTOS */}
+            {!selectedParentCategory && !selectedCategory ? (
+              /* ★ MODO INICIAL: Cards de categorías PADRE */
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">
+                  Categorías
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setSelectedCategory("all")}
+                    className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-gray-200 hover:border-gray-900 hover:bg-gray-50 transition-all duration-200 bg-white"
                   >
-                    <button
-                      onClick={() => addToCart(product)}
-                      className="text-left text-sm text-gray-800 hover:text-black"
-                    >
-                      {product.name}
-                    </button>
-
+                    <span className="text-3xl">🍽️</span>
                     <span className="text-sm font-medium text-gray-700">
-                      ${product.price}
+                      Todos los productos
                     </span>
-                  </div>
-                ))}
-            </div>
+                  </button>
+                  {rootCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedParentCategory(cat.id)}
+                      className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-gray-200 hover:border-gray-900 hover:bg-gray-50 transition-all duration-200 bg-white"
+                    >
+                      <span className="text-3xl">{cat.icon || "📂"}</span>
+                      <span className="text-sm font-medium text-gray-700 text-center">
+                        {cat.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* ★ MODO PRODUCTOS: Tabs de subcategorías + lista */
+              <div>
+                {/* Tabs de subcategorías */}
+                <div className="flex gap-1 overflow-x-auto pb-3 -mx-6 px-6 sticky top-0 bg-white z-10 border-b border-gray-100">
+                  <button
+                    onClick={() => {
+                      setSelectedCategory(null);
+                      setSelectedParentCategory(null);
+                    }}
+                    className="flex-shrink-0 px-2 py-2 text-xs text-gray-500 hover:text-gray-900"
+                  >
+                    ← Volver
+                  </button>
+                  <button
+                    onClick={() => setSelectedCategory("all")}
+                    className={`flex-shrink-0 px-4 py-2 text-xs rounded-full font-medium ${
+                      selectedCategory === "all"
+                        ? "bg-gray-900 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  {(selectedCategory === "all" || !selectedParentCategory
+                    ? categories
+                    : subCategories
+                  ).map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`flex-shrink-0 px-4 py-2 text-xs rounded-full font-medium ${
+                        selectedCategory === cat.id
+                          ? "bg-gray-900 text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Lista de productos */}
+                <div className="divide-y divide-gray-100 mt-3">
+                  {products
+                    .filter((p) => {
+                      if (selectedCategory === "all") return true;
+                      return p.category_id === selectedCategory;
+                    })
+                    .sort((a, b) => a.name?.localeCompare(b.name))
+                    .map((product) => (
+                      <button
+                        key={product.id}
+                        onClick={() => addToCart(product)}
+                        className="w-full py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded-lg transition-colors"
+                      >
+                        <span className="text-sm font-medium text-gray-800 text-left">
+                          {product.name}
+                        </span>
+                        <span className="text-sm font-semibold text-gray-700 flex-shrink-0 ml-3">
+                          ${product.price}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 
