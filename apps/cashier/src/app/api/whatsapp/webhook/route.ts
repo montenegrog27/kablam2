@@ -153,27 +153,67 @@ export async function POST(req: Request) {
       .eq("whatsapp_message_id", originalMessageId)
       .maybeSingle();
 
-    console.log("🔍 ORDER LOOKUP:", { originalMessageId, orderFound: !!order, orderStatus: order?.status });
+    // Fallback: buscar por teléfono y estado unconfirmed
+    const orderByPhone = !order ? await supabase
+      .from("orders")
+      .select("*")
+      .eq("customer_phone", phone.replace(/^549/, "").replace(/^54/, ""))
+      .eq("branch_id", branchId)
+      .eq("status", "unconfirmed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    : { data: null };
 
-    if (!order) {
-      console.log("⚠️ No order found for whatsapp_message_id:", originalMessageId);
+    const matchedOrder = order || orderByPhone?.data;
+
+    console.log("🔍 ORDER LOOKUP:", {
+      originalMessageId,
+      byMessageId: !!order,
+      byPhone: !!orderByPhone?.data,
+      orderFound: !!matchedOrder,
+      orderStatus: matchedOrder?.status,
+    });
+
+    if (!matchedOrder) {
+      console.log("⚠️ No order found for message ID or phone");
       return NextResponse.json({ ok: true });
     }
+
+    // Buscar la conversación para guardar mensaje
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("customer_id", matchedOrder.customer_id)
+      .eq("branch_id", branchId)
+      .maybeSingle();
 
     // CONFIRM ORDER
 
     if (payload === "confirmar_pedido") {
-      console.log("✅ CONFIRMING ORDER:", order.id);
+      console.log("✅ CONFIRMING ORDER:", matchedOrder.id);
       const { error: updateError } = await supabase
         .from("orders")
         .update({ status: "confirmed" })
-        .eq("id", order.id);
+        .eq("id", matchedOrder.id);
 
       if (updateError) console.error("❌ Error updating order:", updateError);
-      else console.log("✅ Order confirmed successfully:", order.id);
+      else console.log("✅ Order confirmed successfully:", matchedOrder.id);
 
-      const esDelivery = order.type === "delivery";
-      const esTransfer = order.payment_method === "transfer";
+      // Guardar mensaje en el chat: "✅ El cliente confirmó el pedido"
+      if (conv) {
+        await supabase.from("messages").insert({
+          tenant_id: tenantId,
+          branch_id: branchId,
+          conversation_id: conv.id,
+          sender_type: "customer",
+          message: "✅ El cliente confirmó el pedido",
+          media_type: "text",
+        });
+      }
+
+      const esDelivery = matchedOrder.type === "delivery";
+      const esTransfer = matchedOrder.payment_method === "transfer";
 
       let msg = "";
 
@@ -197,14 +237,26 @@ export async function POST(req: Request) {
     // CANCEL ORDER
 
     if (payload === "cancelar_pedido") {
-      console.log("❌ CANCELLING ORDER:", order.id);
+      console.log("❌ CANCELLING ORDER:", matchedOrder.id);
       const { error: cancelError } = await supabase
         .from("orders")
         .update({ status: "cancelled" })
-        .eq("id", order.id);
+        .eq("id", matchedOrder.id);
 
       if (cancelError) console.error("❌ Error cancelling order:", cancelError);
-      else console.log("✅ Order cancelled successfully:", order.id);
+      else console.log("✅ Order cancelled successfully:", matchedOrder.id);
+
+      // Guardar mensaje en el chat
+      if (conv) {
+        await supabase.from("messages").insert({
+          tenant_id: tenantId,
+          branch_id: branchId,
+          conversation_id: conv.id,
+          sender_type: "customer",
+          message: "❌ El cliente canceló el pedido",
+          media_type: "text",
+        });
+      }
 
       await sendText(
         number,
