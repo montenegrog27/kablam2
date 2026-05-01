@@ -22,6 +22,7 @@ export default function OrderCard({
   const [riders, setRiders] = useState<any[]>([]);
   const [showRiderSelect, setShowRiderSelect] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const paid = order.paid_amount || 0;
   const remaining = order.total - paid;
@@ -79,6 +80,15 @@ export default function OrderCard({
     if (onNotifyRider) await onNotifyRider(order, rider);
 
     setLoading(false);
+  };
+
+  const canCancel = ["unconfirmed", "confirmed", "preparing"].includes(order.status);
+
+  const handleCancel = async () => {
+    if (!confirm("¿Cancelar este pedido? Esta acción no se puede deshacer.")) return;
+    setCancelling(true);
+    await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
+    setCancelling(false);
   };
 
   return (
@@ -274,6 +284,25 @@ export default function OrderCard({
             "
           >
             Pagado
+          </button>
+        )}
+
+        {canCancel && (
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="
+              px-3 py-1.5
+              text-sm font-medium
+              rounded-lg
+              bg-red-500
+              text-white
+              hover:bg-red-600
+              disabled:opacity-50
+              transition
+            "
+          >
+            {cancelling ? "..." : "Cancelar"}
           </button>
         )}
 

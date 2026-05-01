@@ -288,7 +288,7 @@ export default function CheckoutForm({
                 <div className="relative">
                   <User
                     size={16}
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-900"
                   />
                   <input
                     placeholder="Ingresá tu nombre"
@@ -296,7 +296,7 @@ export default function CheckoutForm({
                     onChange={(e) =>
                       setCustomer({ ...customer, name: e.target.value })
                     }
-                    className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
                 </div>
               </div>
@@ -322,7 +322,7 @@ export default function CheckoutForm({
                         phone: e.target.value.replace(/\D/g, ""),
                       })
                     }
-                    className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
                 </div>
               </div>
@@ -346,7 +346,7 @@ export default function CheckoutForm({
                       onChange={(e) =>
                         setCustomer({ ...customer, address: e.target.value })
                       }
-                      className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     />
                   </div>
                 </div>
@@ -383,7 +383,7 @@ export default function CheckoutForm({
                     onChange={(e) =>
                       setCouponCode(e.target.value.toUpperCase())
                     }
-                    className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
                 </div>
                 <button
@@ -444,7 +444,7 @@ export default function CheckoutForm({
                 <select
                   value={selectedPaymentMethod}
                   onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition appearance-none bg-white"
+                  className="w-full border text-gray-900 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition appearance-none bg-white"
                 >
                   <option value="">Elegí una opción...</option>
                   {paymentMethods.map((pm) => (
@@ -646,12 +646,12 @@ export default function CheckoutForm({
 
             {/* Validación de datos */}
             {!isValid() && (
-              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="mt-4 p-3 bg-yellow-90 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-700" style={{ fontFamily }}>
                   Completá todos los datos requeridos para confirmar el pedido
                 </p>
                 <ul
-                  className="text-xs text-yellow-600 mt-1 list-disc list-inside"
+                  className="text-xs text-yellow-900 mt-1 list-disc list-inside"
                   style={{ fontFamily }}
                 >
                   {!customer.name && <li>Nombre completo</li>}
