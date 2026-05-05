@@ -191,6 +191,46 @@ const {
 
   if (type === "template") {
 
+    const hasParams = params && params.length > 0;
+    const hasButtons = templateName === "confirmacion_pedido_detallado";
+
+    const components: any[] = [];
+
+    if (hasParams) {
+      components.push({
+        type: "body",
+        parameters: params.map((p: string) => ({
+          type: "text",
+          text: p,
+        })),
+      });
+    }
+
+    if (hasButtons) {
+      components.push({
+        type: "button",
+        sub_type: "quick_reply",
+        index: "0",
+        parameters: [
+          {
+            type: "payload",
+            payload: "confirmar_pedido",
+          },
+        ],
+      });
+      components.push({
+        type: "button",
+        sub_type: "quick_reply",
+        index: "1",
+        parameters: [
+          {
+            type: "payload",
+            payload: "cancelar_pedido",
+          },
+        ],
+      });
+    }
+
     payload = {
       messaging_product: "whatsapp",
       to: customer.phone,
@@ -198,38 +238,8 @@ const {
       template: {
         name: templateName,
         language: { code: "es_AR" },
-    components: [
-  {
-    type: "body",
-    parameters: params.map((p: string) => ({
-      type: "text",
-      text: p
-    }))
-  },
-  {
-    type: "button",
-    sub_type: "quick_reply",
-    index: "0",
-    parameters: [
-      {
-        type: "payload",
-        payload: "confirmar_pedido"
-      }
-    ]
-  },
-  {
-    type: "button",
-    sub_type: "quick_reply",
-    index: "1",
-    parameters: [
-      {
-        type: "payload",
-        payload: "cancelar_pedido"
-      }
-    ]
-  }
-]
-      }
+        ...(components.length > 0 ? { components } : {}),
+      },
     };
 
   }

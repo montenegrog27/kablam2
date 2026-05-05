@@ -254,7 +254,6 @@ export default function OrdersBoard({
             orderId: order.id,
             type: "template",
             templateName: "aviso_ready_takeaway",
-            params: [`#${order.id.slice(0, 4)}`],
           }),
         });
       }

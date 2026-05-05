@@ -723,8 +723,8 @@ export default function OrderSidePanel({
         type: "template",
         templateName:
           orderType === "delivery"
-            ? "startordermanualdelivery_"
-            : "startordermanualtakeaway_",
+            ? "startOrderManualDelivery"
+            : "startOrderManualTakeaway",
         params: [`#${orderId.slice(0, 4)}`],
       }),
     });
