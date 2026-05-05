@@ -725,7 +725,6 @@ export default function OrderSidePanel({
           orderType === "delivery"
             ? "startOrderManualDelivery"
             : "startOrderManualTakeaway",
-        params: [`#${orderId.slice(0, 4)}`],
       }),
     });
 
