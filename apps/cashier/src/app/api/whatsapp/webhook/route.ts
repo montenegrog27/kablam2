@@ -376,7 +376,7 @@ export async function POST(req: Request) {
   });
 
   if (!customer) {
-    const { data } = await supabase
+    const { data, error: insertError } = await supabase
       .from("customers")
       .insert({
         tenant_id: tenantId,
@@ -385,6 +385,11 @@ export async function POST(req: Request) {
       })
       .select()
       .single();
+
+    if (insertError || !data) {
+      console.error("⚠️ Error creating customer:", insertError || "no data returned");
+      return NextResponse.json({ ok: true });
+    }
 
     customer = data;
   }
