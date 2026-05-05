@@ -25,23 +25,19 @@ function makeRequest(path) {
 }
 
 async function main() {
-  console.log("=== Query 1: Products with CHEESE ===");
   const q1 = await makeRequest(
     "/rest/v1/products?name=ilike.*CHEESE*&select=id,name,price&limit=5",
   );
   console.log(JSON.stringify(q1, null, 2));
 
-  console.log("\n=== Query 2: All combos with price ===");
   const q2 = await makeRequest("/rest/v1/combos?select=id,name,price&limit=20");
   console.log(JSON.stringify(q2, null, 2));
 
-  console.log("\n=== Query 3: combo_products (simple) ===");
   const q3 = await makeRequest(
     "/rest/v1/combo_products?select=combo_id,product_id&limit=10",
   );
   console.log(JSON.stringify(q3, null, 2));
 
-  console.log("\n=== Query 3b: combo_products with product name ===");
   const q3b = await makeRequest(
     "/rest/v1/combo_products?select=combo_id,combos(name),products(name)&limit=10",
   );

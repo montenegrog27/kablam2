@@ -155,7 +155,10 @@ export default function OrdersBoard({
   const getOrdersByStatus = (status: string) =>
     boardOrders.filter((o: any) => o.status === status);
 
-  const getNextStatus = (current: string) => {
+  const getNextStatus = (current: string, orderType?: string) => {
+    // Takeaway: ready → delivered (saltea "sent")
+    if (current === "ready" && orderType === "takeaway") return "delivered";
+    // Delivery: sent → delivered
     if (current === "sent") return "delivered";
 
     const index = STATUSES.indexOf(current);
@@ -213,7 +216,7 @@ export default function OrdersBoard({
     if (loading) return;
     setLoading(true);
 
-    const nextStatus = getNextStatus(order.status);
+    const nextStatus = getNextStatus(order.status, order.type);
 
     if (nextStatus === "delivered") {
       const { data: freshOrder } = await supabase
@@ -234,6 +237,7 @@ export default function OrdersBoard({
       .update({ status: nextStatus })
       .eq("id", order.id);
 
+    // Takeaway: preparing → ready → enviar aviso_ready_takeaway
     if (nextStatus === "ready" && order.type === "takeaway") {
       const { data: conversation } = await supabase
         .from("conversations")
@@ -242,15 +246,38 @@ export default function OrdersBoard({
         .single();
 
       if (conversation) {
-        const message = `¡Hola ${order.customer_name}! Tu pedido está listo para retirar. 🎉`;
         await fetch("/api/whatsapp/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             conversationId: conversation.id,
             orderId: order.id,
-            type: "text",
-            text: message,
+            type: "template",
+            templateName: "aviso_ready_takeaway",
+            params: [`#${order.id.slice(0, 4)}`],
+          }),
+        });
+      }
+    }
+
+    // Delivery: ready → sent → enviar aviso_ready_delivery
+    if (nextStatus === "sent" && order.type === "delivery") {
+      const { data: conversation } = await supabase
+        .from("conversations")
+        .select("*")
+        .eq("customer_id", order.customer_id)
+        .single();
+
+      if (conversation) {
+        await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            orderId: order.id,
+            type: "template",
+            templateName: "aviso_ready_delivery",
+            params: [`#${order.id.slice(0, 4)}`],
           }),
         });
       }

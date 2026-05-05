@@ -44,7 +44,6 @@ export default function ProfessionalMenu({
   const rootCategories = uniqueCategories.filter((c) => !c.parent_id);
 
   // Convertir combos a productos para mostrarlos en el menú
-  console.log("=== COMBOS RECIBIDOS ===", combos);
   const comboAsProducts: Product[] = (combos || []).map((combo) => {
     // El precio ya viene como numero del server
     const comboPrice = typeof combo.price === "number" ? combo.price : 0;
@@ -80,10 +79,8 @@ export default function ProfessionalMenu({
   });
 
   // Combinar productos normales + combos
-  console.log("=== PRODUCTOS NORMALES:", productos.length);
-  console.log("=== COMBOS COMO PRODUCTOS:", comboAsProducts.length);
+
   const allProductsInMenu = [...productos, ...comboAsProducts];
-  console.log("=== ALL PRODUCTS:", allProductsInMenu.length);
 
   // Agregar categorías de combos
   if (combos && combos.length > 0) {

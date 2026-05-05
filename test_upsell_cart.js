@@ -162,8 +162,6 @@ async function testCartSuggestions() {
     }
   }
 
-  console.log("\n=== SUGGESTIONS GENERATED ===");
-  console.log(`Total suggestions: ${suggestions.length}`);
   suggestions.forEach((s, i) => {
     const variant = s.product.product_variants?.[0];
     console.log(

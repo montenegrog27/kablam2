@@ -196,7 +196,7 @@ export default function OrderSidePanel({
     loadOrderForEdit();
     setMode(selectedOrder.mode || "view");
     setStep("build");
-  }, [selectedOrder, branchId]);
+  }, [selectedOrder, branchId, tenantId]);
 
   const resetForm = () => {
     setCart([]);
@@ -238,12 +238,12 @@ export default function OrderSidePanel({
   };
 
   const loadPaymentMethods = async () => {
-    if (!branchId) return;
+    if (!tenantId) return;
     const { data } = await supabase
       .from("payment_methods")
       .select("*")
+      .eq("tenant_id", tenantId)
       .eq("is_active", true)
-      .eq("branch_id", branchId)
       .order("name");
 
     setPaymentMethods(data || []);
@@ -517,7 +517,7 @@ export default function OrderSidePanel({
 
           customer_id: customer.id,
 
-          status: "unconfirmed",
+          status: "confirmed",
           type: orderType,
 
           customer_name: customerName,
@@ -709,17 +709,6 @@ export default function OrderSidePanel({
     }
 
     // ===============================
-    // ORDER TEXT
-    // ===============================
-
-    const orderText = cart
-      .map(
-        (item) =>
-          `${item.quantity}x ${item.variant.name} $${item.variant.price * item.quantity}`,
-      )
-      .join(" • ");
-
-    // ===============================
     // SEND WHATSAPP
     // ===============================
 
@@ -732,22 +721,15 @@ export default function OrderSidePanel({
         conversationId: conversation.id,
         orderId: orderId,
         type: "template",
-        templateName: "confirmacion_pedido_detallado",
-        params: [customerName, orderText, total.toString()],
+        templateName:
+          orderType === "delivery"
+            ? "startordermanualdelivery_"
+            : "startordermanualtakeaway_",
+        params: [`#${orderId.slice(0, 4)}`],
       }),
     });
 
-    const data: any = await res.json();
-
-    if (data?.messageId) {
-      await supabase
-        .from("orders")
-        .update({
-          whatsapp_message_id: data.messageId,
-        })
-        .eq("id", orderId);
-    }
-
+    await res.json();
     setSelectedOrder(null);
     resetForm();
   };
@@ -825,7 +807,10 @@ export default function OrderSidePanel({
                   {rootCategories.map((cat) => (
                     <button
                       key={cat.id}
-                      onClick={() => setSelectedParentCategory(cat.id)}
+                      onClick={() => {
+  setSelectedParentCategory(cat.id);
+  setSelectedCategory("all");
+}}
                       className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-gray-200 hover:border-gray-900 hover:bg-gray-50 transition-all duration-200 bg-white"
                     >
                       <span className="text-3xl">{cat.icon || "📂"}</span>
