@@ -136,7 +136,10 @@ export async function POST(req: Request) {
   // BUTTON CLICK (debe ir ANTES que rider)
   // ===============================
 
-  if (message.type === "interactive" && (message as any).interactive?.type === "button_reply") {
+  if (
+    (message.type === "interactive" && (message as any).interactive?.type === "button_reply") ||
+    message.type === "button"
+  ) {
     const payload = (message as any).interactive?.button_reply?.id || message.button?.payload;
     const originalMessageId = message.context?.id;
 
@@ -380,7 +383,6 @@ export async function POST(req: Request) {
       .from("customers")
       .insert({
         tenant_id: tenantId,
-        branch_id: branchId,
         phone: phoneNormalized,
       })
       .select()
