@@ -318,8 +318,6 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
                 </div>
               </div>);
             })}
-            {messages.length > 0 && !allLoaded && <button onClick={loadMore} className="w-full text-xs text-blue-600 hover:underline py-2">Cargar más</button>}
-            <div ref={bottomRef} />
           </div>
 
           <div className="px-3 py-2 bg-white border-t flex items-center gap-2">
