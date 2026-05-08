@@ -195,7 +195,7 @@ export default function OrderSidePanel({
 
     loadOrderForEdit();
     setMode(selectedOrder.mode || "view");
-    setStep("build");
+    setStep("checkout");
   }, [selectedOrder, branchId, tenantId]);
 
   const resetForm = () => {
@@ -457,7 +457,11 @@ export default function OrderSidePanel({
         ? 0
         : calculateShipping();
 
-    const phone = customerPhone.replace(/\D/g, "");
+    const phone = customerPhone
+      .replace(/\D/g, "")
+      .replace(/^549/, "")
+      .replace(/^54/, "")
+      .replace(/^9(\d{10})$/, "$1");
 
     // ===============================
     // CUSTOMER
@@ -475,14 +479,22 @@ export default function OrderSidePanel({
         .from("customers")
         .insert({
           tenant_id: tenantId,
-          branch_id: branchId,
           name: customerName,
           phone: phone,
+          address: orderType === "delivery" ? address : null,
         })
         .select()
         .single();
 
       customer = data;
+    } else {
+      // Actualizar nombre/dirección si cambió
+      const updates: any = {};
+      if (customerName && customerName !== customer.name) updates.name = customerName;
+      if (address && address !== customer.address) updates.address = address;
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("customers").update(updates).eq("id", customer.id);
+      }
     }
 
     if (!customer) {
@@ -547,6 +559,15 @@ export default function OrderSidePanel({
     if (!orderId) {
       console.error("orderId undefined");
       return;
+    }
+
+    // ===============================
+    // DELETE EXISTING ITEMS & PAYMENTS (si es edición)
+    // ===============================
+
+    if (selectedOrder) {
+      await supabase.from("order_items").delete().eq("order_id", orderId);
+      await supabase.from("order_payments").delete().eq("order_id", orderId);
     }
 
     // ===============================
@@ -747,8 +768,8 @@ export default function OrderSidePanel({
       <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
-            {step === "build" && "Construir pedido"}
-            {step === "checkout" && "Confirmar pedido"}
+            {step === "build" && (selectedOrder ? "Editar pedido" : "Construir pedido")}
+            {step === "checkout" && (selectedOrder ? "Guardar cambios" : "Confirmar pedido")}
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             {cart.length} productos agregados
@@ -756,12 +777,25 @@ export default function OrderSidePanel({
         </div>
 
         {step === "checkout" && (
-          <button
-            onClick={() => setStep("build")}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            ← Volver
-          </button>
+          <div className="flex gap-2">
+            {isEdit && selectedOrder && (
+              <button
+                onClick={() => setMode("view")}
+                className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+              >
+                Cancelar edición
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (isEdit) setMode("view");
+                setStep("build");
+              }}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              ← Volver
+            </button>
+          </div>
         )}
       </div>
 
@@ -892,11 +926,126 @@ export default function OrderSidePanel({
 
         {step === "checkout" && (
           <>
-            <input
+            {isView && (
+              /* ★ VISTA: Resumen del pedido */
+              <div className="space-y-5">
+                {/* Número de pedido y estado */}
+                {selectedOrder && (
+                  <div className="flex items-center justify-between bg-gradient-to-r from-gray-50 to-white rounded-lg p-4 border">
+                    <div>
+                      <span className="text-xs text-gray-500">Pedido</span>
+                      <p className="text-lg font-bold text-gray-900">#{selectedOrder.id.slice(0, 8)}</p>
+                    </div>
+                    <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                      {selectedOrder.status}
+                    </span>
+                  </div>
+                )}
+
+                {/* Items del pedido */}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <span className="w-1 h-4 rounded-full bg-gray-900" />
+                    Productos
+                  </h3>
+                  <div className="divide-y divide-gray-100 border rounded-xl overflow-hidden bg-white">
+                    {cart.map((item, i) => (
+                      <div key={i} className="flex justify-between items-center px-4 py-3 text-sm hover:bg-gray-50">
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 h-6 rounded-full bg-gray-100 text-xs flex items-center justify-center font-medium text-gray-600">
+                            {item.quantity}
+                          </span>
+                          <span className="text-gray-800 font-medium">{item.variant.name}</span>
+                        </div>
+                        <span className="font-semibold text-gray-900">
+                          ${(item.variant.price * item.quantity).toLocaleString("es-AR")}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center px-4 py-3 bg-gray-50 text-sm font-bold">
+                      <span>Subtotal</span>
+                      <span>${calculateTotal().toLocaleString("es-AR")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info del cliente */}
+                <div className="bg-white border rounded-xl overflow-hidden">
+                  <h3 className="text-sm font-semibold text-gray-800 px-4 pt-4 pb-2 flex items-center gap-2">
+                    <span className="w-1 h-4 rounded-full bg-gray-900" />
+                    Cliente
+                  </h3>
+                  <div className="px-4 pb-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Nombre</span>
+                      <span className="font-medium text-gray-900">{customerName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Teléfono</span>
+                      <span className="font-medium text-gray-900">{customerPhone}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Tipo</span>
+                      <span className={`font-medium capitalize ${orderType === "delivery" ? "text-blue-600" : "text-gray-900"}`}>
+                        {orderType === "delivery" ? "🚗 Delivery" : "🏪 Takeaway"}
+                      </span>
+                    </div>
+                    {orderType === "delivery" && address && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Dirección</span>
+                        <span className="font-medium text-gray-900 text-right max-w-[60%] truncate">{address}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Método de pago */}
+                <div className="bg-white border rounded-xl overflow-hidden">
+                  <h3 className="text-sm font-semibold text-gray-800 px-4 pt-4 pb-2 flex items-center gap-2">
+                    <span className="w-1 h-4 rounded-full bg-gray-900" />
+                    Pago
+                  </h3>
+                  <div className="px-4 pb-4 space-y-2 text-sm">
+                    {payments.map((p, i) => {
+                      const method = paymentMethods.find(pm => pm.id === p.payment_method_id);
+                      return (
+                        <div key={i} className="flex justify-between">
+                          <span className="text-gray-500">{method?.name || "Sin método"}</span>
+                          <span className="font-medium text-gray-900">${Number(p.amount || calculateTotal()).toLocaleString("es-AR")}</span>
+                        </div>
+                      );
+                    })}
+                    {manualDiscount && (
+                      <div className="flex justify-between text-red-600">
+                        <span>Descuento</span>
+                        <span>-{manualDiscount}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-base pt-2 border-t border-gray-200">
+                      <span>Total</span>
+                      <span>${calculateTotal().toLocaleString("es-AR")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botón Editar */}
+                <button
+                  onClick={() => setMode("edit")}
+                  className="w-full py-3 rounded-lg bg-gray-900 text-white hover:bg-black transition font-medium"
+                >
+                  Editar pedido
+                </button>
+              </div>
+            )}
+
+            {!isView && (
+              <>
+              <input
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Nombre del cliente"
-              className="w-full border border-gray-300 p-3 rounded-lg text-sm"
+              readOnly={!!selectedOrder}
+              className={`w-full border p-3 rounded-lg text-sm ${selectedOrder ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "border-gray-300"}`}
             />
 
             <input
@@ -1124,6 +1273,8 @@ export default function OrderSidePanel({
                 </div>
               )}
             </div>
+            </>
+          )}
           </>
         )}
       </div>
@@ -1193,7 +1344,7 @@ export default function OrderSidePanel({
           </button>
         )}
 
-        {step === "checkout" && (
+        {step === "checkout" && !isView && (
           <button
             onClick={handleSave}
             disabled={isCheckoutBlocked}
@@ -1203,7 +1354,7 @@ export default function OrderSidePanel({
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
-            Confirmar Pedido
+            {selectedOrder ? "Guardar Cambios" : "Confirmar Pedido"}
           </button>
         )}
         {isPhoneMissingForCoupon && (

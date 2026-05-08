@@ -9,6 +9,7 @@ function formatCurrency(value: number) {
 
 export default function OrderCard({
   order,
+  selected,
   unread = 0,
   onSelect,
   onNextStatus,
@@ -93,15 +94,12 @@ export default function OrderCard({
 
   return (
     <div
-      className="
+      className={`
       bg-white
-      border border-gray-200
-      rounded-xl
-      p-4
-      hover:shadow-sm
-      transition
-      space-y-3
-    "
+      border rounded-xl
+      p-4 hover:shadow-sm transition space-y-3
+      ${selected ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-200"}
+    `}
     >
       {/* TOP ROW */}
       <div className="flex justify-start gap-12 items-center">

@@ -121,6 +121,7 @@ export default function SalesTab({ session }: any) {
           activeConversationId={
             panelMode === "chat" ? selectedOrder?.conversation_id : null
           }
+          selectedOrderId={selectedOrder?.id}
           onSelect={(order: any) => {
             setPanelMode("order");
             setSelectedOrder(order);

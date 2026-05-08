@@ -31,6 +31,7 @@ const STATUS_META: any = {
 export default function OrdersBoard({
   orders,
   activeConversationId,
+  selectedOrderId,
   onSelect,
   onMessages,
   reloadOrders,
@@ -329,6 +330,7 @@ export default function OrdersBoard({
                     >
                       <OrderCard
                         order={order}
+                        selected={order.id === selectedOrderId}
                         unread={unread[order.conversation_id] || 0}
                         onSelect={onSelect}
                         onNextStatus={() => handleNextStatus(order)}

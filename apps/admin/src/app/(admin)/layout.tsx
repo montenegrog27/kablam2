@@ -67,6 +67,12 @@ export default function AdminLayout({
             Sucursales
           </Link>
           <Link
+            href="/customers"
+            className="px-3 py-2 rounded hover:bg-gray-800"
+          >
+            Clientes
+          </Link>
+          <Link
             href="/categories"
             className="px-3 py-2 rounded hover:bg-gray-800"
           >

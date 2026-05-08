@@ -44,7 +44,11 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Empty cart" });
     }
 
-    const phoneNormalized = customer.phone.replace(/\D/g, "");
+    const phoneNormalized = customer.phone
+      .replace(/\D/g, "")
+      .replace(/^549/, "")
+      .replace(/^54/, "")
+      .replace(/^9(\d{10})$/, "$1");
 
     /* =========================
        1. BRANCH
@@ -122,6 +126,7 @@ export async function POST(req: Request) {
           tenant_id: branch.tenant_id,
           name: customer.name,
           phone: phoneNormalized,
+          address: customer.address || null,
         })
         .select()
         .single();
@@ -130,6 +135,14 @@ export async function POST(req: Request) {
       console.log("🧪 CUSTOMER INSERT RESULT:", data);
 
       customerDB = data;
+    } else {
+      // Actualizar nombre/dirección si cambió
+      const updates: any = {};
+      if (customer.name && customer.name !== customerDB.name) updates.name = customer.name;
+      if (customer.address && customer.address !== customerDB.address) updates.address = customer.address;
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("customers").update(updates).eq("id", customerDB.id);
+      }
     }
 
     if (!customerDB) {

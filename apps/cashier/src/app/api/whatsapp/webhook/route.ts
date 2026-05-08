@@ -28,14 +28,42 @@ async function sendText(number: any, to: string, body: string) {
   });
 }
 
-async function downloadMedia(mediaId: string, token: string) {
-  const meta = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+async function downloadMedia(mediaId: string, token: string, fileName = "media") {
+  try {
+    console.log("📥 downloadMedia: starting for", mediaId);
+    const meta = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await meta.json();
+    console.log("📥 downloadMedia: Meta response:", JSON.stringify(data).slice(0, 500));
 
-  const data = await meta.json();
+    if (!data.url) {
+      console.error("📥 downloadMedia: no URL from Meta for", mediaId);
+      return null;
+    }
 
-  return data.url;
+    console.log("📥 downloadMedia: downloading from", data.url);
+    const res = await fetch(data.url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      console.error("📥 downloadMedia: failed to download from Meta URL", res.status);
+      return null;
+    }
+
+    const contentType = res.headers.get("content-type") || data.mime_type || "image/jpeg";
+    console.log("📥 downloadMedia: downloaded, content-type:", contentType, "size:", res.headers.get("content-length"));
+
+    const arrayBuffer = await res.arrayBuffer();
+    console.log("📥 downloadMedia: arrayBuffer size:", arrayBuffer.byteLength);
+
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
+    const result = `data:${contentType};base64,${base64}`;
+    console.log("📥 downloadMedia: success, data URL length:", result.length);
+    return result;
+  } catch (err) {
+    console.error("📥 downloadMedia error:", err);
+    return null;
+  }
 }
 
 // ===============================
@@ -294,67 +322,86 @@ export async function POST(req: Request) {
   // ===============================
 
   if (rider) {
-    // Get or create rider conversation
-    let { data: riderConv } = await supabase
+    // Solo tratar como rider si ya tiene una conversación de rider activa
+    // Si no, pasa como cliente (el rider puede ser cliente también)
+    const { data: riderConv } = await supabase
       .from("rider_conversations")
       .select("*")
       .eq("rider_id", rider.id)
       .eq("branch_id", branchId)
-      .single();
+      .gte("last_message_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .maybeSingle();
 
-    if (!riderConv) {
-      const { data } = await supabase
+    if (riderConv) {
+      // Parse message
+      let text = null;
+      let mediaType = "text";
+      let mediaUrl = null;
+
+      if (message.text) text = message.text.body;
+  if (message.image) {
+    mediaType = "image";
+    mediaUrl = await downloadMedia(message.image.id, number.access_token);
+  }
+
+  if (message.video) {
+    mediaType = "video";
+    mediaUrl = await downloadMedia(message.video.id, number.access_token);
+  }
+
+  if (message.document) {
+    mediaType = "document";
+    mediaUrl = await downloadMedia(message.document.id, number.access_token);
+  }
+
+  if (message.audio) {
+    mediaType = "audio";
+    mediaUrl = await downloadMedia(message.audio.id, number.access_token);
+  }
+
+  if (message.sticker) {
+    mediaType = "sticker";
+    mediaUrl = await downloadMedia(message.sticker.id, number.access_token);
+  }
+
+  if (message.location) {
+    const { latitude, longitude } = message.location;
+    text = `📍 https://maps.google.com/?q=${latitude},${longitude}`;
+    mediaType = "location"
+  }
+
+  if (message.contacts) {
+    const contact = message.contacts[0];
+    const name = contact.name?.formatted_name || contact.name?.first_name || "Contacto";
+    const phones = contact.phones?.map((p: any) => p.phone).join(", ") || "";
+    text = `👤 ${name}\n📞 ${phones}`;
+    mediaType = "contacts";
+  }
+
+      // Save message
+      await supabase.from("messages").insert({
+        tenant_id: tenantId,
+        branch_id: branchId,
+        conversation_id: riderConv.id,
+        sender_type: "rider",
+        rider_id: rider.id,
+        message: text,
+        media_type: mediaType,
+        media_url: mediaUrl,
+      });
+
+      // Update conversation
+      await supabase
         .from("rider_conversations")
-        .insert({
-          tenant_id: tenantId,
-          branch_id: branchId,
-          rider_id: rider.id,
-        })
-        .select()
-        .single();
+        .update({ last_message_at: new Date() })
+        .eq("id", riderConv.id);
 
-      riderConv = data;
+      console.log("✅ RIDER MESSAGE SAVED");
+      return NextResponse.json({ ok: true });
     }
 
-    // Parse message
-    let text = null;
-    let mediaType = "text";
-    let mediaUrl = null;
-
-    if (message.text) text = message.text.body;
-    if (message.image) {
-      mediaType = "image";
-      mediaUrl = await downloadMedia(message.image.id, number.access_token);
-    }
-    if (message.document) {
-      mediaType = "document";
-      mediaUrl = await downloadMedia(message.document.id, number.access_token);
-    }
-    if (message.audio) {
-      mediaType = "audio";
-      mediaUrl = await downloadMedia(message.audio.id, number.access_token);
-    }
-
-    // Save message
-    await supabase.from("messages").insert({
-      tenant_id: tenantId,
-      branch_id: branchId,
-      conversation_id: riderConv.id,
-      sender_type: "rider",
-      rider_id: rider.id,
-      message: text,
-      media_type: mediaType,
-      media_url: mediaUrl,
-    });
-
-    // Update conversation
-    await supabase
-      .from("rider_conversations")
-      .update({ last_message_at: new Date() })
-      .eq("id", riderConv.id);
-
-    console.log("✅ RIDER MESSAGE SAVED");
-    return NextResponse.json({ ok: true });
+    // No tiene conversación de rider activa → tratar como cliente
+    console.log("🏍️ Rider found but no active conversation, treating as customer");
   }
 
   // ===============================
@@ -379,11 +426,14 @@ export async function POST(req: Request) {
   });
 
   if (!customer) {
+    const profileName = value?.contacts?.[0]?.profile?.name || null;
+
     const { data, error: insertError } = await supabase
       .from("customers")
       .insert({
         tenant_id: tenantId,
         phone: phoneNormalized,
+        name: profileName,
       })
       .select()
       .single();
@@ -394,6 +444,13 @@ export async function POST(req: Request) {
     }
 
     customer = data;
+  } else {
+    // Actualizar nombre si viene del perfil de WhatsApp y no tenía nombre
+    const profileName = value?.contacts?.[0]?.profile?.name;
+    if (profileName && !customer.name) {
+      await supabase.from("customers").update({ name: profileName }).eq("id", customer.id);
+      customer.name = profileName;
+    }
   }
 
   // ===============================
@@ -435,27 +492,41 @@ export async function POST(req: Request) {
 
   if (message.image) {
     mediaType = "image";
-
     mediaUrl = await downloadMedia(message.image.id, number.access_token);
+  }
+
+  if (message.video) {
+    mediaType = "video";
+    mediaUrl = await downloadMedia(message.video.id, number.access_token);
   }
 
   if (message.document) {
     mediaType = "document";
-
     mediaUrl = await downloadMedia(message.document.id, number.access_token);
   }
 
   if (message.audio) {
     mediaType = "audio";
-
     mediaUrl = await downloadMedia(message.audio.id, number.access_token);
+  }
+
+  if (message.sticker) {
+    mediaType = "sticker";
+    mediaUrl = await downloadMedia(message.sticker.id, number.access_token);
   }
 
   if (message.location) {
     const { latitude, longitude } = message.location;
-
     text = `📍 https://maps.google.com/?q=${latitude},${longitude}`;
     mediaType = "location";
+  }
+
+  if (message.contacts) {
+    const contact = message.contacts[0];
+    const name = contact.name?.formatted_name || contact.name?.first_name || "Contacto";
+    const phones = contact.phones?.map((p: any) => p.phone).join(", ") || "";
+    text = `👤 ${name}\n📞 ${phones}`;
+    mediaType = "contacts";
   }
 
   // ===============================
