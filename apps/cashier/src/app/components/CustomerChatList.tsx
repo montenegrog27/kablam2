@@ -252,7 +252,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     if (t.startsWith("audio")) return msg.media_url ? <audio controls className="max-w-[220px] h-10" src={msg.media_url} /> : <span className="text-gray-500 text-sm">🎤 Mensaje de voz</span>;
     if (t === "location") return <a href={msg.message || "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline"><MapPin size={18} />Ver ubicación</a>;
     if (t === "contacts") return <div className="flex items-center gap-2 text-blue-600"><User size={18} /><span>{msg.message?.replace(/👤 /, "").split("\n")[0]}</span></div>;
-    if (t === "document") return msg.media_url ? <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline"><FileText size={18} /><span className="truncate max-w-[200px]">Documento</span></a> : <span className="text-gray-500 text-sm">📄 Documento</span>;
+    if (t === "document") return msg.media_url ? <a href={msg.media_url} download className="flex items-center gap-2 text-blue-600 hover:underline"><FileText size={18} /><span className="truncate max-w-[200px]">📄 Documento</span></a> : <span className="text-gray-500 text-sm">📄 Documento</span>;
     return null;
   };
 

@@ -55,6 +55,12 @@ async function downloadMedia(mediaId: string, token: string, fileName = "media")
     const arrayBuffer = await res.arrayBuffer();
     console.log("📥 downloadMedia: arrayBuffer size:", arrayBuffer.byteLength);
 
+    // Limit data URL to 8MB
+    if (arrayBuffer.byteLength > 8 * 1024 * 1024) {
+      console.error("📥 downloadMedia: file too large for data URL:", arrayBuffer.byteLength);
+      return null;
+    }
+
     const buffer = Buffer.from(arrayBuffer);
     const base64 = buffer.toString("base64");
     const result = `data:${contentType};base64,${base64}`;
