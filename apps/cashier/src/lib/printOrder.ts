@@ -7,13 +7,85 @@ type PrintJob = {
   branchId: string;
 };
 
+async function printToLocalAgent(job: PrintJob, logs: string[]): Promise<void> {
+  try {
+    // Cargar datos del pedido
+    const { data: order } = await supabase
+      .from("orders")
+      .select("*, order_items(*, products(*))")
+      .eq("id", job.orderId)
+      .single();
+
+    if (!order) {
+      logs.push(`⚠️ Pedido ${job.orderId} no encontrado`);
+      return;
+    }
+
+    const { data: branch } = await supabase
+      .from("branches")
+      .select("name")
+      .eq("id", job.branchId)
+      .single();
+
+    const branchName = branch?.name || "";
+    const escpos = job.type === "comanda"
+      ? buildComanda(order, order.order_items || [], branchName)
+      : buildTicket(order, order.order_items || [], branchName, order.total || 0, "Pago");
+
+    const base64 = btoa(String.fromCharCode(...escpos));
+
+    // Obtener impresoras configuradas para este tipo
+    const col = job.type === "comanda" ? "print_comandas" : "print_ticket";
+    const { data: printers } = await supabase
+      .from("printers")
+      .select("*")
+      .eq("branch_id", job.branchId)
+      .eq("type", "network")
+      .eq(col, true);
+
+    if (!printers?.length) {
+      logs.push(`ℹ️ No hay impresoras configuradas para ${job.type}`);
+      return;
+    }
+
+    for (const printer of printers) {
+      const agentUrl = printer.agent_url || "http://127.0.0.1:9102/";
+
+      // Enviar al agente local
+      logs.push(`📡 Enviando a agente local (${agentUrl})...`);
+      try {
+        const localRes = await fetch(`${agentUrl}print`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            data: base64,
+            printerIp: printer.ip_address,
+            printerPort: printer.port || 9100,
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (localRes.ok) {
+          logs.push(`✅ Impresión local completada para ${printer.name}`);
+        } else {
+          const err = await localRes.json();
+          logs.push(`❌ Error agente local: ${err.error}`);
+        }
+      } catch {
+        logs.push(`ℹ️ Agente local no disponible. Ejecutá: node print-agent.js`);
+      }
+    }
+  } catch (err: any) {
+    logs.push(`❌ Error en agente local: ${err.message}`);
+  }
+}
+
 export async function printOrder(job: PrintJob): Promise<string[]> {
   const logs: string[] = [];
 
   try {
     logs.push(`🖨️ Iniciando impresión ${job.type} para pedido ${job.orderId}`);
 
-    // Try network printers via API
+    // Try network printers via API (Vercel - for remote printers)
     logs.push(`📡 Enviando a API /api/print...`);
     const res = await fetch("/api/print", {
       method: "POST",
@@ -22,6 +94,15 @@ export async function printOrder(job: PrintJob): Promise<string[]> {
     });
     const result = await res.json();
     logs.push(`📡 API respondió: ${JSON.stringify(result)}`);
+
+    // Try local print agent (127.0.0.1:9102) - for local printers
+    const shouldBuildLocal = Array.isArray(result?.results) &&
+      result.results.some((r: any) => r.status === "error");
+
+    if (shouldBuildLocal || true) {
+      logs.push(`📡 Intentando agente local (127.0.0.1:9102)...`);
+      await printToLocalAgent(job, logs);
+    }
 
     // Try USB printers via WebUSB if available
     if ((navigator as any).usb) {
