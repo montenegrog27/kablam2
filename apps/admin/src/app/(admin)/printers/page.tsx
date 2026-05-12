@@ -171,11 +171,9 @@ export default function PrintersPage() {
     const logs: string[] = [];
     try {
       if (printer.type === "network" && printer.ip_address) {
-        logs.push(`📡 Enviando test a ${printer.ip_address}:${printer.port || 9100}...`);
-        setTestLogs(logs);
-        const res = await fetch(`/api/print`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "comanda", branchId: printer.branch_id, orderId: "test", printerIp: printer.ip_address, printerPort: printer.port || 9100 }) });
-        const data = await res.json();
-        logs.push(`📡 Respuesta: ${JSON.stringify(data)}`);
+        logs.push(`📡 Probalo desde el cashier con el botón 🖨️ Reimprimir.`);
+        logs.push(`🌐 IP: ${printer.ip_address}:${printer.port || 9100}`);
+        logs.push(`ℹ️ La API de impresión por red solo funciona desde el cashier.`);
       } else if (printer.type === "usb" && (navigator as any).usb) {
         const usb = (navigator as any).usb;
         logs.push(`🔌 Solicitando acceso a la impresora...`);
