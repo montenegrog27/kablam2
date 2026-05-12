@@ -20,16 +20,22 @@ export async function POST(req: Request) {
       items,
       paymentMethodId,
       paymentReference,
+      orderMode,
+      total,
+      shippingCost,
+      customerLat,
+      customerLng,
     }: {
       branchSlug: string;
-      customer: {
-        name: string;
-        phone: string;
-        address?: string;
-      };
+      customer: { name: string; phone: string; address?: string };
       items: OrderItemInput[];
       paymentMethodId?: string;
       paymentReference?: string;
+      orderMode?: string;
+      total?: number;
+      shippingCost?: number;
+      customerLat?: number;
+      customerLng?: number;
     } = body;
 
     /* =========================
@@ -106,7 +112,7 @@ export async function POST(req: Request) {
       };
     });
 
-    const total = subtotal;
+    const orderTotal = total ?? subtotal;
 
     /* =========================
        4. CUSTOMER
@@ -187,18 +193,18 @@ export async function POST(req: Request) {
         tenant_id: branch.tenant_id,
         branch_id: branch.id,
         customer_id: customerDB.id,
-        sales_channel: "customer", // 🔥 ESTA ES LA CLAVE
+        sales_channel: "customer",
         status: "unconfirmed",
-        type: "delivery",
+        type: orderMode === "takeaway" ? "takeaway" : "delivery",
 
         customer_name: customer.name,
         customer_phone: phoneNormalized,
         address: customer.address,
 
         subtotal,
-        total,
+        total: orderTotal,
 
-        shipping_cost: 0,
+        shipping_cost: shippingCost || 0,
         discount: 0,
         paid_amount: 0,
         is_paid: false,
@@ -209,6 +215,15 @@ export async function POST(req: Request) {
     console.log("💥 ORDER ERROR:", orderError);
     if (!order) {
       return Response.json({ success: false });
+    }
+
+    // Guardar coordenadas si se seleccionó punto en el mapa
+    if (customerLat && customerLng) {
+      await supabase.from("order_analytics").insert({
+        order_id: order.id,
+        customer_lat: customerLat,
+        customer_lng: customerLng,
+      });
     }
     /* =========================
        7. ORDER ITEMS
@@ -229,7 +244,7 @@ export async function POST(req: Request) {
       await supabase.from("order_payments").insert({
         order_id: order.id,
         payment_method_id: paymentMethodId,
-        amount: total,
+        amount: orderTotal,
         reference: paymentReference || null,
       });
     }
@@ -260,7 +275,7 @@ export async function POST(req: Request) {
             orderId: order.id,
             type: "template",
             templateName: "confirmacion_pedido_detallado",
-            params: [customer.name, orderText, total.toString()],
+            params: [customer.name, orderText, orderTotal.toString()],
           }),
         });
       }

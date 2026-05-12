@@ -71,15 +71,14 @@ export default function KDSTab() {
         .single();
 
       if (conversation) {
-        const message = `¡Hola ${order.customer_name}! Tu pedido está listo para retirar. 🎉`;
         await fetch("/api/whatsapp/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             conversationId: conversation.id,
             orderId: order.id,
-            type: "text",
-            text: message,
+            type: "template",
+            templateName: "aviso_ready_takeaway",
           }),
         });
       }

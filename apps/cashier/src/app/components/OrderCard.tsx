@@ -18,6 +18,7 @@ export default function OrderCard({
   onAssignRider,
   onNotifyRider,
   canChangeRider = true,
+  userRecord,
 }: any) {
   const [rider, setRider] = useState<any>(null);
   const [riders, setRiders] = useState<any[]>([]);
@@ -55,6 +56,7 @@ export default function OrderCard({
       .select("*")
       .eq("branch_id", order.branch_id)
       .eq("is_active", true)
+      .eq("is_working_today", true)
       .order("name");
     setRiders(data || []);
   };
@@ -85,12 +87,42 @@ export default function OrderCard({
 
   const canCancel = ["unconfirmed", "confirmed", "preparing"].includes(order.status);
 
+  const getButtonLabel = () => {
+    const isDelivery = order.type === "delivery";
+    switch (order.status) {
+      case "unconfirmed": return "Confirmar";
+      case "confirmed": return "Preparar";
+      case "preparing": return isDelivery ? "Enviar" : "Entregado";
+      case "ready": return isDelivery ? "Enviar" : "Entregado";
+      case "sent": return "Entregado";
+      default: return "Avanzar →";
+    }
+  };
+
+  const getButtonColor = () => {
+    switch (order.status) {
+      case "unconfirmed": return "bg-amber-500 hover:bg-amber-600";
+      case "confirmed": return "bg-blue-500 hover:bg-blue-600";
+      case "preparing": return "bg-orange-500 hover:bg-orange-600";
+      case "ready": return "bg-emerald-500 hover:bg-emerald-600";
+      case "sent": return "bg-green-600 hover:bg-green-700";
+      default: return "bg-gray-900 hover:bg-black";
+    }
+  };
+
   const handleCancel = async () => {
     if (!confirm("¿Cancelar este pedido? Esta acción no se puede deshacer.")) return;
     setCancelling(true);
     await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
     setCancelling(false);
   };
+
+  const handleDelete = async () => {
+    if (!confirm("¿Eliminar este pedido permanentemente? Esta acción no se puede deshacer.")) return;
+    await supabase.from("orders").delete().eq("id", order.id);
+  };
+
+  const canDelete = userRecord && ["owner", "admin"].includes(userRecord.role);
 
   return (
     <div
@@ -187,6 +219,7 @@ export default function OrderCard({
           Ver
         </button>
 
+        {onMessages && (
         <button
           onClick={() => onMessages(order)}
           className="
@@ -207,6 +240,7 @@ export default function OrderCard({
             </span>
           )}
         </button>
+        )}
 
         {/* RIDER BUTTONS */}
         {isDelivery && (
@@ -304,22 +338,30 @@ export default function OrderCard({
           </button>
         )}
 
+        {canDelete && (
+          <button
+            onClick={handleDelete}
+            className="px-3 py-1.5 text-sm font-medium rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition"
+          >
+            Eliminar
+          </button>
+        )}
+
         {order.status !== "delivered" && order.status !== "cancelled" && (
           <button
             onClick={onNextStatus}
             disabled={order.status === "sent" && !isFullyPaid}
-            className="
+            className={`
                 px-3 py-1.5
                 text-sm font-medium
                 rounded-lg
-                bg-gray-900
                 text-white
-                hover:bg-black
                 disabled:opacity-40
                 transition
-              "
+                ${getButtonColor()}
+              `}
           >
-            Avanzar →
+            {getButtonLabel()}
           </button>
         )}
       </div>

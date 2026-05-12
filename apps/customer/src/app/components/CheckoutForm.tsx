@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { CartItem, Branding } from "@/types/menu";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import UpsellSuggestions from "./UpsellSuggestions";
+import { Map as MapIcon, Navigation } from "lucide-react";
 import {
   User,
   Phone,
@@ -19,7 +20,23 @@ import {
   Plus,
   Minus,
   Trash2,
+  X,
 } from "lucide-react";
+
+function calculateDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calculateShippingCost(distanceKm: number, settings: any) {
+  if (!settings?.enabled) return 0;
+  if (settings.max_distance_km && distanceKm > settings.max_distance_km) return null;
+  if (settings.free_shipping_radius && distanceKm <= settings.free_shipping_radius) return 0;
+  return Math.ceil((settings.base_delivery_cost || 0) + distanceKm * (settings.price_per_km || 0));
+}
 
 type Props = {
   cart: CartItem[];
@@ -65,6 +82,21 @@ export default function CheckoutForm({
     phone: "",
     address: "",
   });
+
+  const [customerLat, setCustomerLat] = useState<number | null>(null);
+  const [customerLng, setCustomerLng] = useState<number | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [mapLat, setMapLat] = useState<number | null>(null);
+  const [mapLng, setMapLng] = useState<number | null>(null);
+  const [branchLat, setBranchLat] = useState<number | null>(null);
+  const [branchLng, setBranchLng] = useState<number | null>(null);
+  const [deliverySettings, setDeliverySettings] = useState<any>(null);
+  const [shippingCost, setShippingCost] = useState(0);
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<any>(null);
 
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
@@ -117,10 +149,112 @@ export default function CheckoutForm({
   }, [branchSlug]);
 
   useEffect(() => {
-    console.log("CHECKOUT: loadPaymentMethods called, branchSlug:", branchSlug);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPaymentMethods();
+    loadDeliveryData();
   }, [branchSlug, loadPaymentMethods]);
+
+  const loadDeliveryData = async () => {
+    const { data: branch } = await supabase.from("branches").select("id, lat, lng").eq("slug", branchSlug).single();
+    if (!branch) return;
+    setBranchLat(branch.lat ? Number(branch.lat) : null);
+    setBranchLng(branch.lng ? Number(branch.lng) : null);
+
+    const { data: settings } = await supabase.from("delivery_settings").select("*").eq("branch_id", branch.id).maybeSingle();
+    if (settings) setDeliverySettings(settings);
+
+    // Cargar direcciones guardadas
+    try {
+      const res = await fetch("/api/account/addresses");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.length > 0) {
+          setSavedAddresses(data);
+          // Auto-seleccionar dirección predeterminada
+          const def = data.find((a: any) => a.is_default) || data[0];
+          setSelectedAddressId(def.id);
+          setCustomer((c) => ({ ...c, address: def.address }));
+          if (def.latitude && def.longitude) {
+            setCustomerLat(Number(def.latitude));
+            setCustomerLng(Number(def.longitude));
+          }
+        }
+      }
+    } catch {}
+  };
+
+  // Calcular costo de envío cuando cambia la ubicación
+  useEffect(() => {
+    if (orderMode !== "delivery" || !customerLat || !customerLng || !branchLat || !branchLng || !deliverySettings) {
+      setShippingCost(0);
+      return;
+    }
+    const distance = calculateDistanceKm(branchLat, branchLng, customerLat, customerLng);
+    const cost = calculateShippingCost(distance, deliverySettings);
+    setShippingCost(cost ?? 0);
+  }, [customerLat, customerLng, branchLat, branchLng, deliverySettings, orderMode]);
+
+  // Google Maps Autocomplete
+  useEffect(() => {
+    if (orderMode !== "delivery" || !addressInputRef.current || !(window as any).google) return;
+    const input = addressInputRef.current;
+    const corrientesBounds = new (window as any).google.maps.LatLngBounds(
+      new (window as any).google.maps.LatLng(-27.55, -58.88),
+      new (window as any).google.maps.LatLng(-27.42, -58.75),
+    );
+    const autocomplete = new (window as any).google.maps.places.Autocomplete(input, {
+      componentRestrictions: { country: "ar" },
+      bounds: corrientesBounds,
+      strictBounds: true,
+    });
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (place.geometry) {
+        setCustomer({ ...customer, address: place.formatted_address || input.value });
+        setCustomerLat(place.geometry.location.lat());
+        setCustomerLng(place.geometry.location.lng());
+        setSelectedAddressId("__autocomplete__");
+      }
+    });
+  }, [orderMode]);
+
+  // Inicializar mapa en el modal
+  useEffect(() => {
+    if (!showMapModal || !mapRef.current || !(window as any).google) return;
+    const google = (window as any).google;
+    const center = mapLat && mapLng ? { lat: mapLat, lng: mapLng } : branchLat && branchLng
+      ? { lat: branchLat, lng: branchLng }
+      : { lat: -27.45, lng: -58.98 };
+
+    const map = new google.maps.Map(mapRef.current, {
+      center,
+      zoom: 14,
+      mapTypeId: "roadmap",
+    });
+
+    let marker: any = null;
+
+    if (mapLat && mapLng) {
+      marker = new google.maps.Marker({ position: { lat: mapLat, lng: mapLng }, map, draggable: true });
+      marker.addListener("dragend", () => {
+        setMapLat(marker.getPosition().lat());
+        setMapLng(marker.getPosition().lng());
+      });
+    }
+
+    map.addListener("click", (e: any) => {
+      const pos = e.latLng;
+      if (marker) marker.setMap(null);
+      marker = new google.maps.Marker({ position: pos, map, draggable: true });
+      marker.addListener("dragend", () => {
+        setMapLat(marker.getPosition().lat());
+        setMapLng(marker.getPosition().lng());
+      });
+      setMapLat(pos.lat());
+      setMapLng(pos.lng());
+    });
+
+    return () => { if (marker) marker.setMap(null); };
+  }, [showMapModal]);
 
   /* =========================
      CALCULOS
@@ -131,13 +265,9 @@ export default function CheckoutForm({
     [cart],
   );
 
-  const shipping = orderMode === "delivery" ? 500 : 0;
+  const shipping = orderMode === "delivery" ? shippingCost : 0;
 
   const total = Math.max(subtotal + shipping - discount, 0);
-
-  /* =========================
-     VALIDACIONES
-   ========================= */
 
   const selectedMethod = paymentMethods.find(
     (pm) => pm.id === selectedPaymentMethod,
@@ -146,6 +276,7 @@ export default function CheckoutForm({
   const isValid = () => {
     if (!customer.name || !customer.phone) return false;
     if (orderMode === "delivery" && !customer.address) return false;
+    if (orderMode === "delivery" && !customerLat && !mapLat && !customer.address) return false;
     if (!selectedPaymentMethod) return false;
     if (selectedMethod?.requires_reference && !paymentReference.trim())
       return false;
@@ -222,6 +353,9 @@ export default function CheckoutForm({
           quantity: item.quantity,
         })),
         total,
+        shippingCost,
+        customerLat,
+        customerLng,
         couponCode: appliedCoupon?.code || null,
         paymentMethodId: selectedPaymentMethod,
         paymentReference: selectedMethod?.requires_reference
@@ -329,25 +463,37 @@ export default function CheckoutForm({
 
               {orderMode === "delivery" && (
                 <div>
-                  <label
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                    style={{ fontFamily }}
-                  >
-                    Dirección de entrega
-                  </label>
-                  <div className="relative">
-                    <MapPin
-                      size={16}
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                    />
-                    <input
-                      placeholder="Calle, número, piso, departamento"
-                      value={customer.address}
-                      onChange={(e) =>
-                        setCustomer({ ...customer, address: e.target.value })
-                      }
-                      className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    />
+                  <label className="block text-sm font-medium text-gray-700 mb-1" style={{ fontFamily }}>Dirección de entrega</label>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        ref={addressInputRef}
+                        placeholder="Calle, número, ciudad..."
+                        value={customer.address}
+                        onChange={(e) => { setCustomer({ ...customer, address: e.target.value }); setSelectedAddressId(""); }}
+                        className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => { setShowMapModal(true); if (branchLat && branchLng) { setMapLat(branchLat); setMapLng(branchLng); } }}
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      <MapIcon size={16} /> Indicar en el mapa
+                    </button>
+
+                    {customerLat && customerLng && shippingCost > 0 && (
+                      <div className="text-sm text-gray-600 flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg">
+                        <Truck size={14} /> Envío: ${shippingCost.toLocaleString("es-AR")}
+                      </div>
+                    )}
+                    {customerLat && customerLng && shippingCost === 0 && deliverySettings?.free_shipping_radius && (
+                      <div className="text-sm text-green-600 flex items-center gap-2 bg-green-50 px-3 py-2 rounded-lg">
+                        <Truck size={14} /> Envío gratis
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -668,6 +814,43 @@ export default function CheckoutForm({
           </div>
         </div>
       </div>
+
+      {/* Modal Mapa */}
+      {showMapModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold text-gray-900">Seleccionar punto de entrega</h3>
+              <button onClick={() => setShowMapModal(false)} className="p-1 rounded-full hover:bg-gray-100"><X size={20} /></button>
+            </div>
+            <div className="p-4">
+              <div ref={mapRef} className="w-full h-[400px] rounded-xl border bg-gray-100 flex items-center justify-center">
+                {!(window as any).google ? (
+                  <p className="text-gray-400 text-sm">Cargando mapa...</p>
+                ) : (
+                  <p className="text-gray-400 text-sm">Hacé clic en el mapa para marcar tu ubicación</p>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-2 text-center">Hacé clic en cualquier parte del mapa para marcar el punto de entrega</p>
+            </div>
+            <div className="px-4 pb-4 flex gap-2">
+              <button onClick={() => setShowMapModal(false)} className="flex-1 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
+              <button
+                onClick={() => {
+                  if (mapLat && mapLng) {
+                    setCustomerLat(mapLat);
+                    setCustomerLng(mapLng);
+                    setCustomer((c) => ({ ...c, address: `📍 ${mapLat.toFixed(6)}, ${mapLng.toFixed(6)}` }));
+                    setShowMapModal(false);
+                  }
+                }}
+                disabled={!mapLat || !mapLng}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+              >Confirmar ubicación</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

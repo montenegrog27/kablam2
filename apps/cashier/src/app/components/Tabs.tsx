@@ -87,18 +87,24 @@
 "use client";
 
 import { useState } from "react";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import SalesTab from "./SalesTab";
 import DeliveredTab from "./DeliveredTab";
 import KDSTab from "./KDSTab";
 import CloseCash from "./CloseCash";
 import CustomerChatList from "./CustomerChatList";
 import { useBranch } from "../(cashier)/context/BranchContext";
-import { MapPin } from "lucide-react";
+import { MapPin, Settings, X, Check } from "lucide-react";
 
 export default function CashierTabs({ session }: any) {
   const [tab, setTab] = useState("orders");
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showBranchSelector, setShowBranchSelector] = useState(false);
+  const [waUnread, setWaUnread] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showRiderModal, setShowRiderModal] = useState(false);
+  const [riders, setRiders] = useState<any[]>([]);
+  const [savingRiders, setSavingRiders] = useState(false);
   const { currentBranch, allBranches, changeBranch } = useBranch();
 
   const tabs = [
@@ -108,6 +114,17 @@ export default function CashierTabs({ session }: any) {
     { id: "whatsapp", label: "WhatsApp" },
     { id: "arqueos", label: "Arqueos" },
   ];
+
+  const loadRiders = async () => {
+    if (!currentBranch?.id) return;
+    const { data } = await supabase.from("riders").select("*").eq("branch_id", currentBranch.id).eq("is_active", true).order("name");
+    setRiders(data || []);
+  };
+
+  const toggleRiderWorking = async (riderId: string, current: boolean) => {
+    setRiders((prev) => prev.map((r) => r.id === riderId ? { ...r, is_working_today: !current } : r));
+    await supabase.from("riders").update({ is_working_today: !current }).eq("id", riderId);
+  };
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-950 transition-colors">
@@ -147,11 +164,26 @@ export default function CashierTabs({ session }: any) {
           )}
         </div>
 
+        {/* SETTINGS */}
+        <div className="relative">
+          <button onClick={() => setShowSettings(!showSettings)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+            <Settings size={18} className="text-gray-600 dark:text-gray-400" />
+          </button>
+          {showSettings && (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border z-50 min-w-40 py-1">
+              <button onClick={() => { setShowSettings(false); loadRiders(); setShowRiderModal(true); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition">Riders</button>
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
           {tabs.map((t) => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                setTab(t.id);
+                if (t.id !== "whatsapp") setWaUnread(0);
+              }}
               className={`
                  px-4 py-2 text-sm rounded-lg transition-all duration-200
                  ${
@@ -162,11 +194,14 @@ export default function CashierTabs({ session }: any) {
                `}
             >
               {t.label}
+              {t.id === "whatsapp" && waUnread > 0 && (
+                <span className="ml-1.5 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] inline-flex items-center justify-center">
+                  {waUnread > 99 ? "99+" : waUnread}
+                </span>
+              )}
             </button>
           ))}
         </div>
-
-        {/* BOTÓN CIERRE */}
         <button
           onClick={() => setShowCloseModal(true)}
           className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-semibold transition"
@@ -188,9 +223,7 @@ export default function CashierTabs({ session }: any) {
             branchId={currentBranch?.id || ""}
             tenantId={currentBranch?.tenant_id || ""}
             onClose={() => setTab("board")}
-            onUnreadChange={(count) => {
-              // Podríamos actualizar el badge del tab si es necesario
-            }}
+            onUnreadChange={(count) => setWaUnread(count)}
           />
         )}
 
@@ -212,6 +245,33 @@ export default function CashierTabs({ session }: any) {
                 window.location.reload();
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* MODAL RIDERS */}
+      {showRiderModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-[500px] max-h-[80vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Riders trabajando hoy</h3>
+              <button onClick={() => setShowRiderModal(false)} className="p-1 rounded-full hover:bg-gray-100"><X size={20} /></button>
+            </div>
+            <div className="space-y-2">
+              {riders.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No hay riders registrados</p>
+              ) : riders.map((rider) => (
+                <div key={rider.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+                  <span className="text-sm font-medium text-gray-800">{rider.name} - {rider.phone}</span>
+                  <button
+                    onClick={() => toggleRiderWorking(rider.id, rider.is_working_today)}
+                    className={`w-10 h-6 rounded-full transition flex items-center ${rider.is_working_today ? "bg-green-500 justify-end" : "bg-gray-300 justify-start"}`}
+                  >
+                    <div className="w-5 h-5 rounded-full bg-white shadow mx-0.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

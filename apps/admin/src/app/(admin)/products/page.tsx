@@ -335,14 +335,24 @@ export default function ProductsPage() {
     setName("");
     setDescription("");
     setCategoryId(null);
-    setPrice("");
-    setCost("");
-    setAllowHalf(false);
-    setShowInMenu(true);
-    setIsSuggestable(false);
-    setIsFeatured(false);
-    setIsHero(false);
-    setImageFile(null);
+  };
+
+  const handleDeleteProduct = async (product: any) => {
+    if (!confirm(`¿Eliminar "${product.name}" permanentemente?`)) return;
+    const variantIds = (product.product_variants || []).map((v: any) => v.id);
+
+    await supabase.from("order_item_modifiers").delete().in("variant_id", variantIds);
+    await supabase.from("product_recipes").delete().in("variant_id", variantIds);
+    await supabase.from("product_ingredients_display").delete().eq("product_id", product.id);
+    await supabase.from("product_extras").delete().eq("product_id", product.id);
+    await supabase.from("modifier_group_products").delete().eq("product_id", product.id);
+    await supabase.from("product_day_parts").delete().eq("product_id", product.id);
+    await supabase.from("kitchen_products").delete().eq("product_id", product.id);
+    await supabase.from("product_variants").delete().eq("product_id", product.id);
+    await supabase.from("order_items").delete().eq("product_id", product.id);
+    await supabase.from("products").delete().eq("id", product.id);
+
+    window.location.reload();
   };
 
   const updateProduct = async (e: any) => {
@@ -1071,13 +1081,17 @@ export default function ProductsPage() {
                           className="text-gray-400 hover:text-gray-600 transition-colors"
                           title="Editar producto"
                         >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(product)}
+                          className="text-red-400 hover:text-red-600 transition-colors"
+                          title="Eliminar producto"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                           </svg>
                         </button>
                       </div>

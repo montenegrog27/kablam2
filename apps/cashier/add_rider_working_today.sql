@@ -1,0 +1,1 @@
+ALTER TABLE riders ADD COLUMN IF NOT EXISTS is_working_today BOOLEAN DEFAULT true;

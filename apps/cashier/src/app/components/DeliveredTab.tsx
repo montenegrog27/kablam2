@@ -28,9 +28,12 @@ export default function DeliveredTab({ session }: any) {
 }, []);
 
   const loadOrders = async () => {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data } = await supabase
       .from("orders")
       .select("*")
+      .in("status", ["delivered", "cancelled"])
+      .gte("created_at", since)
       .order("created_at", { ascending: false });
 
     setOrders(data || []);

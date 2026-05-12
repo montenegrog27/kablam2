@@ -32,6 +32,7 @@ export default function OrdersBoard({
   orders,
   activeConversationId,
   selectedOrderId,
+  userRecord,
   onSelect,
   onMessages,
   reloadOrders,
@@ -219,6 +220,47 @@ export default function OrdersBoard({
 
     const nextStatus = getNextStatus(order.status, order.type);
 
+    // Validación: Delivery ready → sent requiere rider asignado
+    if (order.status === "ready" && nextStatus === "sent" && order.type === "delivery") {
+      if (!order.rider_id) {
+        alert("Asigná un rider antes de enviar el pedido.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Validación: Delivery sent → delivered requiere pago completo si es efectivo
+    if (order.status === "sent" && nextStatus === "delivered") {
+      const { data: freshOrder } = await supabase
+        .from("orders")
+        .select("is_paid")
+        .eq("id", order.id)
+        .single();
+
+      // Buscar si hay un pago en efectivo
+      const { data: payments } = await supabase
+        .from("order_payments")
+        .select("payment_method_id")
+        .eq("order_id", order.id);
+
+      let isCash = false;
+      if (payments?.length) {
+        const { data: methods } = await supabase
+          .from("payment_methods")
+          .select("name")
+          .in("id", payments.map((p: any) => p.payment_method_id));
+        isCash = methods?.some((m: any) =>
+          m.name?.toLowerCase().includes("efectivo") || m.name?.toLowerCase() === "cash"
+        ) ?? false;
+      }
+
+      if (isCash && !freshOrder?.is_paid) {
+        alert("El pedido tiene pago en efectivo y no está marcado como pagado.");
+        setLoading(false);
+        return;
+      }
+    }
+
     if (nextStatus === "delivered") {
       const { data: freshOrder } = await supabase
         .from("orders")
@@ -279,6 +321,28 @@ export default function OrdersBoard({
             templateName: "aviso_ready_delivery",
           }),
         });
+      }
+
+      // Auto-notificar al rider
+      if (order.rider_id) {
+        const { data: rider } = await supabase
+          .from("riders")
+          .select("*")
+          .eq("id", order.rider_id)
+          .single();
+
+        if (rider) {
+          const mapUrl = order.address
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`
+            : "";
+          const message = `📦 Pedido #${order.id.slice(0, 4)}\n\n👤 Cliente: ${order.customer_name || "Cliente"} (${order.customer_phone || "Sin teléfono"})\n📍 Dirección: ${order.address || "No especificada"}\n🗺️ Mapa: ${mapUrl}\n📲 Mensaje al cliente: https://wa.me/${order.customer_phone?.replace(/\D/g, "")}?text=Hola!%20soy%20el%20repartidor%20y%20estoy%20afuera\n💰 Total a cobrar: $${order.total?.toLocaleString("es-AR") || 0}\n\n🚚 ¡A entregarlo!`;
+
+          await fetch("/api/whatsapp/send-direct", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: rider.phone, message }),
+          });
+        }
       }
     }
 
@@ -350,6 +414,7 @@ export default function OrdersBoard({
                           order.status !== "sent" &&
                           order.status !== "delivered"
                         }
+                        userRecord={userRecord}
                       />
                     </div>
                   );

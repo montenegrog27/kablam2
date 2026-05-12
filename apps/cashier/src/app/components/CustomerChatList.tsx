@@ -14,7 +14,7 @@ type Conversation = {
   last_message?: string;
   last_media_type?: string;
   unread_count: number;
-  customers: { id: string; name: string; phone: string };
+  customers: { id: string; name: string; phone: string; address?: string; tags?: string[] };
 };
 
 type Message = {
@@ -70,6 +70,14 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const [loadingMore, setLoadingMore] = useState(false);
   const [allLoaded, setAllLoaded] = useState(false);
   const [shouldScroll, setShouldScroll] = useState(true);
+  const [filter, setFilter] = useState<"all" | "without_orders" | "delivered">("all");
+  const [customerIdsWithoutOrders, setCustomerIdsWithoutOrders] = useState<Set<string>>(new Set());
+  const [customerIdsDelivered, setCustomerIdsDelivered] = useState<Set<string>>(new Set());
+  const [showCustomerInfo, setShowCustomerInfo] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const messagesRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +94,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     if (cachedConvs.current) { setConversations(cachedConvs.current); setLoading(false); }
     else loadConversations();
     loadUnreadCounts();
+    loadOrdersFilter();
   }, [branchId]);
 
   useEffect(() => {
@@ -98,10 +107,11 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
             setMessages((prev) => { const e = prev.find((m) => m.id === msg.id); return e ? prev : [...prev, msg]; });
           } else {
             setUnreadMap((p) => ({ ...p, [msg.conversation_id]: (p[msg.conversation_id] || 0) + 1 }));
-            setConversations((prev) => prev.map((c) => c.id === msg.conversation_id
-              ? { ...c, last_message: msg.message || getMediaLabel(msg.media_type), last_message_at: msg.created_at } : c)
-              .sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime()));
           }
+          // Siempre mover la conversación al tope (como WhatsApp)
+          setConversations((prev) => prev.map((c) => c.id === msg.conversation_id
+            ? { ...c, last_message: msg.message || getMediaLabel(msg.media_type), last_message_at: msg.created_at } : c)
+            .sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime()));
         }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [branchId, activeConv]);
@@ -136,10 +146,44 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   };
 
   const loadUnreadCounts = async () => {
-    const { data } = await supabase.from("messages").select("conversation_id").eq("branch_id", branchId).eq("sender_type", "customer");
+    // Obtener marcas de leído de localStorage
+    let readMap: Record<string, number> = {};
+    try { readMap = JSON.parse(localStorage.getItem("wa_read") || "{}"); } catch {}
+
+    const { data } = await supabase.from("messages").select("conversation_id, created_at").eq("branch_id", branchId).eq("sender_type", "customer");
     const counts: Record<string, number> = {};
-    data?.forEach((m: any) => { if (m.conversation_id) counts[m.conversation_id] = (counts[m.conversation_id] || 0) + 1; });
+    data?.forEach((m: any) => {
+      if (m.conversation_id) {
+        const lastRead = readMap[m.conversation_id];
+        if (!lastRead || new Date(m.created_at).getTime() > lastRead) {
+          counts[m.conversation_id] = (counts[m.conversation_id] || 0) + 1;
+        }
+      }
+    });
     setUnreadMap(counts);
+  };
+
+  const loadOrdersFilter = async () => {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("customer_id, status")
+      .eq("branch_id", branchId)
+      .gte("created_at", since);
+
+    const activeStatuses = ["unconfirmed", "confirmed", "preparing", "ready", "sent"];
+    const deliveredStatuses = ["delivered"];
+
+    const activeIds = new Set<string>();
+    const deliveredIds = new Set<string>();
+
+    orders?.forEach((o: any) => {
+      if (activeStatuses.includes(o.status)) activeIds.add(o.customer_id);
+      if (deliveredStatuses.includes(o.status)) deliveredIds.add(o.customer_id);
+    });
+
+    setCustomerIdsWithoutOrders(activeIds);
+    setCustomerIdsDelivered(deliveredIds);
   };
 
   const loadMessages = async (convId: string, page = 0) => {
@@ -168,7 +212,15 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     });
   };
 
-  const markAsRead = (convId: string) => setUnreadMap((p) => ({ ...p, [convId]: 0 }));
+  const markAsRead = (convId: string) => {
+    setUnreadMap((p) => ({ ...p, [convId]: 0 }));
+    // Persistir en localStorage
+    try {
+      const read = JSON.parse(localStorage.getItem("wa_read") || "{}");
+      read[convId] = Date.now();
+      localStorage.setItem("wa_read", JSON.stringify(read));
+    } catch {}
+  };
 
   const uploadFile = async (file: File): Promise<string | null> => {
     const ext = file.name.split(".").pop();
@@ -250,13 +302,23 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     if (t.startsWith("image")) return msg.media_url ? <img src={msg.media_url} alt="" className="rounded-lg max-w-full max-h-64 object-cover cursor-pointer" onClick={() => setLightbox(msg.media_url ?? null)} /> : <span className="text-gray-500 text-sm">📷 Imagen</span>;
     if (t.startsWith("video")) return msg.media_url ? <video controls className="rounded-lg max-w-full max-h-64" src={msg.media_url} /> : <span className="text-gray-500 text-sm">🎥 Video</span>;
     if (t.startsWith("audio")) return msg.media_url ? <audio controls className="max-w-[220px] h-10" src={msg.media_url} /> : <span className="text-gray-500 text-sm">🎤 Mensaje de voz</span>;
-    if (t === "location") return <a href={msg.message || "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline"><MapPin size={18} />Ver ubicación</a>;
+    if (t === "location") {
+      const url = msg.message?.match(/https?:\/\/[^\s]+/)?.[0] || "#";
+      return <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline"><MapPin size={18} />Ver ubicación</a>;
+    }
     if (t === "contacts") return <div className="flex items-center gap-2 text-blue-600"><User size={18} /><span>{msg.message?.replace(/👤 /, "").split("\n")[0]}</span></div>;
     if (t === "document") return msg.media_url ? <a href={msg.media_url} download className="flex items-center gap-2 text-blue-600 hover:underline"><FileText size={18} /><span className="truncate max-w-[200px]">📄 Documento</span></a> : <span className="text-gray-500 text-sm">📄 Documento</span>;
     return null;
   };
 
   if (loading) return <div className="h-full flex items-center justify-center bg-gray-50"><div className="text-gray-400 animate-pulse">Cargando...</div></div>;
+
+  const filteredConversations = conversations.filter((conv) => {
+    if (filter === "all") return true;
+    if (filter === "without_orders") return !customerIdsWithoutOrders.has(conv.customer_id);
+    if (filter === "delivered") return customerIdsDelivered.has(conv.customer_id);
+    return true;
+  });
 
   return (
     <div className="h-full flex bg-white">
@@ -265,36 +327,131 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
           <h2 className="font-semibold text-gray-900">WhatsApp</h2>
           <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100"><X size={18} /></button>
         </div>
-        <div className="px-3 py-2"><input placeholder="Buscar chat..." className="w-full bg-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500" /></div>
+        <div className="px-3 py-2 space-y-2">
+          <input placeholder="Buscar chat..." className="w-full bg-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+          <div className="flex gap-2 text-xs">
+            <button onClick={() => setFilter("all")} className={`px-3 py-1.5 rounded-full font-medium transition ${filter === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Todos</button>
+            <button onClick={() => setFilter("without_orders")} className={`px-3 py-1.5 rounded-full font-medium transition ${filter === "without_orders" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Sin pedidos</button>
+            <button onClick={() => setFilter("delivered")} className={`px-3 py-1.5 rounded-full font-medium transition ${filter === "delivered" ? "bg-green-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Entregados</button>
+          </div>
+        </div>
         <div className="flex-1 overflow-y-auto">
-          {conversations.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm"><MessageSquare size={36} className="mx-auto mb-2 opacity-50" /><p>No hay conversaciones</p></div>
-          ) : conversations.map((conv) => (
-            <button key={conv.id} onClick={() => setActiveConv(conv)} className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition border-b border-gray-50 ${activeConv?.id === conv.id ? "bg-green-50" : ""}`}>
-              <div className="relative flex-shrink-0">
-                <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center"><span className="text-gray-500 font-medium text-sm">{conv.customers.name?.[0]?.toUpperCase() || "?"}</span></div>
-                {unreadMap[conv.id] > 0 && <div className="absolute -top-0.5 -right-0.5 bg-green-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center font-medium">{unreadMap[conv.id]}</div>}
-              </div>
-              <div className="flex-1 text-left min-w-0">
-                <div className="flex justify-between items-start">
-                  <span className="font-medium text-sm truncate">{conv.customers.name || conv.customers.phone}</span>
-                  <span className="text-[11px] text-gray-400 ml-2">{conv.last_message_at ? fmtTime(conv.last_message_at) : ""}</span>
+          {filteredConversations.length === 0 ? (
+            <div className="p-8 text-center text-gray-400 text-sm"><MessageSquare size={36} className="mx-auto mb-2 opacity-50" /><p>{filter === "all" ? "No hay conversaciones" : filter === "without_orders" ? "Todos los números tienen pedidos activos" : "No hay entregas recientes"}</p></div>
+          ) : filteredConversations.map((conv) => (
+            <div key={conv.id} className="group relative">
+              <button onClick={() => setActiveConv(conv)} className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition border-b border-gray-50 ${activeConv?.id === conv.id ? "bg-green-50" : ""}`}>
+                <div className="relative flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center"><span className="text-gray-500 font-medium text-sm">{conv.customers.name?.[0]?.toUpperCase() || "?"}</span></div>
+                  {unreadMap[conv.id] > 0 && <div className="absolute -top-0.5 -right-0.5 bg-green-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center font-medium">{unreadMap[conv.id]}</div>}
                 </div>
-                <p className="text-xs text-gray-500 truncate">{conv.last_media_type && conv.last_media_type !== "text" ? getMediaLabel(conv.last_media_type) : conv.last_message || "Sin mensajes"}</p>
-              </div>
-            </button>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="font-medium text-sm truncate">{conv.customers.name || conv.customers.phone}</span>
+                      {(conv.customers.tags || []).slice(0, 2).map((tag) => (
+                        <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded-full whitespace-nowrap">{tag}</span>
+                      ))}
+                    </div>
+                    <span className="text-[11px] text-gray-400 ml-2">{conv.last_message_at ? fmtTime(conv.last_message_at) : ""}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 truncate">{conv.last_media_type && conv.last_media_type !== "text" ? getMediaLabel(conv.last_media_type) : conv.last_message || "Sin mensajes"}</p>
+                </div>
+              </button>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (!confirm(`¿Eliminar chat con ${conv.customers.name || conv.customers.phone}?`)) return;
+                  await supabase.from("conversations").delete().eq("id", conv.id);
+                  setConversations((prev) => prev.filter((c) => c.id !== conv.id));
+                  if (activeConv?.id === conv.id) setActiveConv(null);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-red-500 text-white items-center justify-center hover:bg-red-600 transition opacity-0 group-hover:opacity-100 hidden sm:flex"
+                title="Eliminar chat"
+              ><X size={14} /></button>
+            </div>
           ))}
         </div>
       </div>
 
       {activeConv ? (
         <div className="flex-1 flex flex-col bg-gray-100 min-w-0">
+          {/* Chat Header - click to see customer info */}
           <div className="px-4 py-3 bg-white border-b flex items-center gap-3">
             <button onClick={() => setActiveConv(null)} className="lg:hidden p-1 rounded-lg hover:bg-gray-100"><ChevronLeft size={20} /></button>
-            <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center"><span className="text-gray-600 font-medium text-sm">{activeConv.customers.name?.[0]?.toUpperCase() || "?"}</span></div>
-            <div className="flex-1 min-w-0"><p className="font-medium text-sm truncate">{activeConv.customers.name || "Sin nombre"}</p><p className="text-[11px] text-gray-500">{activeConv.customers.phone}</p></div>
+            <button onClick={async () => {
+              const { data: fullCustomer } = await supabase.from("customers").select("*").eq("id", activeConv.customers.id).single();
+              if (fullCustomer) {
+                setEditName(fullCustomer.name || "");
+                setEditAddress(fullCustomer.address || "");
+                setEditTags(fullCustomer.tags || []);
+                if (!fullCustomer.address) {
+                  const { data: lastOrder } = await supabase.from("orders").select("address").eq("customer_id", activeConv.customers.id).eq("type", "delivery").not("address", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
+                  if (lastOrder?.address) setEditAddress(lastOrder.address);
+                }
+              } else {
+                setEditName(activeConv.customers.name || "");
+                setEditAddress("");
+                setEditTags([]);
+              }
+              setShowCustomerInfo(true);
+            }} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+              <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0"><span className="text-gray-600 font-medium text-sm">{activeConv.customers.name?.[0]?.toUpperCase() || "?"}</span></div>
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{activeConv.customers.name || "Sin nombre"}</p>
+                <p className="text-[11px] text-gray-500">{activeConv.customers.phone}</p>
+              </div>
+            </button>
             <a href={`tel:${activeConv.customers.phone}`} className="p-2 rounded-full hover:bg-gray-100"><Phone size={18} className="text-gray-600" /></a>
           </div>
+
+          {/* Customer Info Panel */}
+          {showCustomerInfo && (
+            <div className="border-b bg-white px-4 py-4 space-y-3 animate-in slide-in-from-top">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm text-gray-900">Datos del cliente</h3>
+                <button onClick={() => setShowCustomerInfo(false)} className="text-xs text-gray-500 hover:text-gray-700">Cerrar</button>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-gray-500">Nombre</label>
+                  <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Teléfono</label>
+                  <p className="text-sm text-gray-800 px-3 py-2">{activeConv.customers.phone}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Dirección</label>
+                  <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Sin dirección" className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Etiquetas</label>
+                  <div className="flex flex-wrap gap-1 mb-1">
+                    {editTags.map((tag, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
+                        {tag}
+                        <button onClick={() => setEditTags((prev) => prev.filter((_, j) => j !== i))} className="hover:text-blue-900">&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && tagInput.trim()) { setEditTags((prev) => [...prev, tagInput.trim()]); setTagInput(""); } }} placeholder="Agregar etiqueta..." className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                    <button onClick={() => { if (tagInput.trim()) { setEditTags((prev) => [...prev, tagInput.trim()]); setTagInput(""); } }} className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200">+</button>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    await supabase.from("customers").update({ name: editName, address: editAddress || null, tags: editTags }).eq("id", activeConv.customers.id);
+                    setShowCustomerInfo(false);
+                    setConversations((prev) => prev.map((c) => c.id === activeConv.id ? { ...c, customers: { ...c.customers, name: editName, tags: editTags } } : c));
+                    setActiveConv((prev) => prev ? { ...prev, customers: { ...prev.customers, name: editName, tags: editTags } } : null);
+                  }}
+                  className="w-full py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition"
+                >Guardar</button>
+              </div>
+            </div>
+          )}
 
           <div ref={messagesRef} className="flex-1 overflow-y-auto p-3 md:p-4 space-y-1" style={{ backgroundColor: "#e5ddd5", backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5 L35 15 L30 25 L25 15 Z' fill='%23ffffff' opacity='0.4'/%3E%3C/svg%3E\")" }}>
             {!allLoaded && messages.length >= 6 && ( <div className="flex justify-center py-2"><button onClick={loadMore} disabled={loadingMore} className="text-xs text-blue-600 hover:underline disabled:text-gray-400">{loadingMore ? "Cargando..." : "Cargar mensajes anteriores"}</button></div> )}
