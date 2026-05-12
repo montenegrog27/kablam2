@@ -168,29 +168,37 @@ export default function PrintersPage() {
 
   const testPrinter = async (printer: any) => {
     setTesting(printer.id);
-    setTestLogs([]);
     const logs: string[] = [];
     try {
       if (printer.type === "network" && printer.ip_address) {
         logs.push(`📡 Enviando test a ${printer.ip_address}:${printer.port || 9100}...`);
+        setTestLogs(logs);
         const res = await fetch(`/api/print`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "comanda", branchId: printer.branch_id, orderId: "test", printerIp: printer.ip_address, printerPort: printer.port || 9100 }) });
         const data = await res.json();
         logs.push(`📡 Respuesta: ${JSON.stringify(data)}`);
       } else if (printer.type === "usb" && (navigator as any).usb) {
         const usb = (navigator as any).usb;
-        const devices = await usb.getDevices();
-        const match = devices.find((d: any) => d.vendorId === printer.usb_vendor_id && d.productId === printer.usb_product_id);
-        if (!match) { logs.push(`⚠️ Impresora no autorizada. Conectala y autorizala desde el cashier.`); }
-        else {
-          logs.push(`🔌 Conectando a ${match.productName}...`);
-          await match.open(); await match.selectConfiguration(1); await match.claimInterface(0);
+        logs.push(`🔌 Solicitando acceso a la impresora...`);
+        setTestLogs([...logs]);
+        try {
+          const device = await usb.requestDevice({
+            filters: [{ vendorId: printer.usb_vendor_id, productId: printer.usb_product_id }]
+          });
+          logs.push(`🔌 Conectando a ${device.productName}...`);
+          setTestLogs([...logs]);
+          await device.open();
+          await device.selectConfiguration(1);
+          await device.claimInterface(0);
           const enc = new TextEncoder();
           const testData = enc.encode('\x1b\x40\x1b\x61\x01TEST DE IMPRESION\x0a\x1b\x61\x00Si ves esto, la impresora funciona!\x0a\x0aKablam POS\x0a\x1b\x64\x05\x1d\x56\x00');
-          const iface = match.configurations[0].interfaces[0];
+          const iface = device.configurations[0].interfaces[0];
           const endpoint = iface.alternate.endpoints.find((ep: any) => ep.direction === "out");
-          if (endpoint) { await match.transferOut(endpoint.endpointNumber, testData); logs.push(`✅ Test enviado correctamente!`); }
+          if (endpoint) { await device.transferOut(endpoint.endpointNumber, testData); logs.push(`✅ Test enviado correctamente!`); }
           else { logs.push(`⚠️ No se encontró endpoint de salida`); }
-          await match.close();
+          await device.close();
+        } catch (err: any) {
+          if (err.name === "NotFoundError") logs.push(`⚠️ Usuario canceló la selección`);
+          else logs.push(`❌ Error: ${err.message}`);
         }
       } else { logs.push(`⚠️ Tipo de impresora no soportado para test desde admin`); }
     } catch (err: any) { logs.push(`❌ Error: ${err.message}`); }
