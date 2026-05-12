@@ -31,7 +31,7 @@ async function supabaseRequest(path, method = "GET", body = null) {
   const url = `${API_BASE.replace("/api", "")}${path}`;
   const headers = {
     "Content-Type": "application/json",
-    "apikey": process.env.SUPABASE_ANON_KEY || "",
+    "apikey": SUPABASE_ANON_KEY,
     "Authorization": authToken ? `Bearer ${authToken}` : "",
   };
 
@@ -44,10 +44,6 @@ async function supabaseRequest(path, method = "GET", body = null) {
 }
 
 async function login(credentials) {
-  // Login via Supabase Auth REST API
-  const SUPABASE_URL = process.env.SUPABASE_URL || "https://zvfmgrcvlnpvvyvybuxc.supabase.co";
-  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2Zm1ncmN2bG5wdnZ5dnlieXV4YyIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzM5NDM3NjI2LCJleHAiOjIwNTUwMTM2MjZ9.2PJh5QbYwbREEMLHM2nYUNpg0Z3P-A5gA5ZmvAzRQCQ";
-
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: {
@@ -72,9 +68,9 @@ async function login(credentials) {
 
 async function loadUserData() {
   try {
-    const res = await fetch(`${process.env.SUPABASE_URL || "https://zvfmgrcvlnpvvyvybuxc.supabase.co"}/rest/v1/users?select=*,tenants(*)`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?select=*,tenants(*)`, {
       headers: {
-        "apikey": process.env.SUPABASE_ANON_KEY || "",
+        "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${authToken}`,
       },
     });
@@ -94,9 +90,9 @@ async function loadUserData() {
 async function loadPrinters() {
   if (!tenantId || !branchId) return;
   try {
-    const res = await fetch(`${process.env.SUPABASE_URL || "https://zvfmgrcvlnpvvyvybuxc.supabase.co"}/rest/v1/printers?branch_id=eq.${branchId}&select=*`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/printers?branch_id=eq.${branchId}&select=*`, {
       headers: {
-        "apikey": process.env.SUPABASE_ANON_KEY || "",
+        "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${authToken}`,
       },
     });
