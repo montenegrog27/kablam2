@@ -286,6 +286,11 @@ export default function OrdersBoard({
       printComandasAndTicket(order.id, order.branch_id);
     }
 
+    // Imprimir comanda al pasar a "en preparación"
+    if (nextStatus === "preparing") {
+      printComandasAndTicket(order.id, order.branch_id);
+    }
+
     // Takeaway: preparing → ready → enviar aviso_ready_takeaway
     if (nextStatus === "ready" && order.type === "takeaway") {
       const { data: conversation } = await supabase

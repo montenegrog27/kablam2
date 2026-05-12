@@ -26,6 +26,11 @@ export default function PrintersPage() {
   const [printComandas, setPrintComandas] = useState(false);
   const [printTicket, setPrintTicket] = useState(false);
   const [port, setPort] = useState("9100");
+  const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
+  const [ticketHeader, setTicketHeader] = useState("");
+  const [ticketFooter, setTicketFooter] = useState("");
+  const [comandaHeader, setComandaHeader] = useState("");
+  const [comandaFooter, setComandaFooter] = useState("");
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [printerCats, setPrinterCats] = useState<Record<string, string[]>>({});
 
@@ -336,25 +341,17 @@ export default function PrintersPage() {
                     <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-400" title="Asignar categorías">
                       📂
                     </button>
-                    {/* Category assignment dropdown */}
                     <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border z-10 p-3 min-w-[200px] hidden group-hover:block">
                       <p className="text-xs font-medium text-gray-700 mb-2">Comandas de:</p>
                       <div className="space-y-1 max-h-40 overflow-y-auto">
                         {allCategories.map((cat) => (
                           <label key={cat.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
-                            <input
-                              type="checkbox"
-                              className="h-3.5 w-3.5"
-                              checked={assignedCats.includes(cat.id)}
+                            <input type="checkbox" className="h-3.5 w-3.5" checked={assignedCats.includes(cat.id)}
                               onChange={async () => {
-                                if (assignedCats.includes(cat.id)) {
-                                  await supabase.from("printer_categories").delete().eq("printer_id", printer.id).eq("category_id", cat.id);
-                                } else {
-                                  await supabase.from("printer_categories").insert({ printer_id: printer.id, category_id: cat.id, tenant_id: tenantId });
-                                }
+                                if (assignedCats.includes(cat.id)) { await supabase.from("printer_categories").delete().eq("printer_id", printer.id).eq("category_id", cat.id); }
+                                else { await supabase.from("printer_categories").insert({ printer_id: printer.id, category_id: cat.id, tenant_id: tenantId }); }
                                 loadData();
-                              }}
-                            />
+                              }} />
                             {cat.name}
                           </label>
                         ))}
@@ -362,6 +359,15 @@ export default function PrintersPage() {
                     </div>
                   </div>
                 )}
+                <button onClick={() => {
+                  setEditingTemplate(editingTemplate === printer.id ? null : printer.id);
+                  setTicketHeader(printer.ticket_header || "");
+                  setTicketFooter(printer.ticket_footer || "");
+                  setComandaHeader(printer.comanda_header || "");
+                  setComandaFooter(printer.comanda_footer || "");
+                }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Personalizar">
+                  ✏️
+                </button>
                 {!printer.is_default && (
                   <button onClick={() => setDefault(printer)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-yellow-500" title="Predeterminada">
                     <Star size={16} />
@@ -372,9 +378,42 @@ export default function PrintersPage() {
                 </button>
               </div>
             </div>
+            {editingTemplate === printer.id ? (
+              <div className="mt-4 p-4 bg-gray-50 rounded-xl border space-y-3">
+                <h4 className="text-sm font-semibold text-gray-700">Personalizar contenido</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500">Encabezado comanda</label>
+                    <textarea value={comandaHeader} onChange={(e) => setComandaHeader(e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej: SOLO COCINA" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500">Pie comanda</label>
+                    <textarea value={comandaFooter} onChange={(e) => setComandaFooter(e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej: Gracias!" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500">Encabezado ticket</label>
+                    <textarea value={ticketHeader} onChange={(e) => setTicketHeader(e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej: Gracias por tu compra!" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500">Pie ticket</label>
+                    <textarea value={ticketFooter} onChange={(e) => setTicketFooter(e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej: Te esperamos pronto!" />
+                  </div>
+                </div>
+                <button onClick={async () => {
+                  await supabase.from("printers").update({
+                    ticket_header: ticketHeader,
+                    ticket_footer: ticketFooter,
+                    comanda_header: comandaHeader,
+                    comanda_footer: comandaFooter,
+                  }).eq("id", printer.id);
+                  setEditingTemplate(null);
+                  loadData();
+                }} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-black">Guardar</button>
+              </div>
+            ) : null}
           </div>
           );
-        })}
+          })}
       </div>
     </div>
   );

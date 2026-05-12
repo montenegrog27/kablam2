@@ -81,9 +81,15 @@ export async function POST(req: NextRequest) {
             );
           }
 
-          dataToPrint = buildComanda(order, itemsToPrint, branchName);
+          dataToPrint = buildComanda(order, itemsToPrint, branchName, {
+            comanda_header: printer.comanda_header,
+            comanda_footer: printer.comanda_footer,
+          });
         } else {
-          dataToPrint = buildTicket(order, order.order_items || [], branchName, order.total || 0, "Pago");
+          dataToPrint = buildTicket(order, order.order_items || [], branchName, order.total || 0, "Pago", {
+            ticket_header: printer.ticket_header,
+            ticket_footer: printer.ticket_footer,
+          });
         }
 
         // Enviar a impresora de red vía TCP

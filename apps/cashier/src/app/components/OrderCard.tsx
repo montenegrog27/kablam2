@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
+import { printComandasAndTicket } from "@/lib/printOrder";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-AR").format(value || 0);
@@ -318,6 +319,16 @@ export default function OrderCard({
             Pagado
           </button>
         )}
+
+        {order.status === "confirmed" || order.status === "preparing" || order.status === "ready" || order.status === "sent" ? (
+          <button
+            onClick={() => printComandasAndTicket(order.id, order.branch_id)}
+            className="px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition"
+            title="Reimprimir"
+          >
+            🖨️
+          </button>
+        ) : null}
 
         {canCancel && (
           <button
