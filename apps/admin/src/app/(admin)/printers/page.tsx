@@ -106,10 +106,16 @@ export default function PrintersPage() {
   const addDetectedPrinter = async (device: any) => {
     if (!tenantId || !branchId) return;
 
+    // Sanitizar nombre: eliminar caracteres no ASCII y comillas
+    const cleanName = device.name
+      .replace(/[^\x20-\x7E]/g, "")
+      .trim()
+      .substring(0, 100) || "Impresora USB";
+
     const { error } = await supabase.from("printers").insert({
       tenant_id: tenantId,
       branch_id: branchId,
-      name: device.name,
+      name: cleanName,
       type: "usb",
       usb_vendor_id: device.vendorId,
       usb_product_id: device.productId,
