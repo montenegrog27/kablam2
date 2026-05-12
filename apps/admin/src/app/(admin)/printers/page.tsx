@@ -16,6 +16,8 @@ export default function PrintersPage() {
   const [detectedDevices, setDetectedDevices] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [usbError, setUsbError] = useState("");
+  const [usbComanda, setUsbComanda] = useState(false);
+  const [usbTicket, setUsbTicket] = useState(false);
 
   const [name, setName] = useState("");
   const [type, setType] = useState("network");
@@ -142,12 +144,16 @@ export default function PrintersPage() {
       type: "usb",
       usb_vendor_id: device.vendorId,
       usb_product_id: device.productId,
+      print_comandas: usbComanda,
+      print_ticket: usbTicket,
       is_default: printers.length === 0,
     });
 
     if (error) {
       alert("Error al agregar impresora: " + error.message);
     } else {
+      setUsbComanda(false);
+      setUsbTicket(false);
       loadData();
     }
   };
@@ -222,7 +228,17 @@ export default function PrintersPage() {
         )}
 
         {detectedDevices.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-3">
+            <div className="flex gap-4 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={usbComanda} onChange={(e) => setUsbComanda(e.target.checked)} className="h-4 w-4" />
+                Imprimir comandas
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={usbTicket} onChange={(e) => setUsbTicket(e.target.checked)} className="h-4 w-4" />
+                Imprimir ticket
+              </label>
+            </div>
             {detectedDevices.map((dev, i) => (
               <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg p-3 border">
                 <div className="flex items-center gap-3">
