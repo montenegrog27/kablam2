@@ -180,26 +180,42 @@ export default function PrintersPage() {
         const usb = (navigator as any).usb;
         logs.push(`🔌 Solicitando acceso a la impresora...`);
         setTestLogs([...logs]);
+
+        // Pedir autorización primero
+        let device: any;
         try {
-          const device = await usb.requestDevice({
+          device = await usb.requestDevice({
             filters: [{ vendorId: printer.usb_vendor_id, productId: printer.usb_product_id }]
           });
-          logs.push(`🔌 Conectando a ${device.productName}...`);
-          setTestLogs([...logs]);
+        } catch (err: any) {
+          logs.push(err.name === "NotFoundError" ? `⚠️ Usuario canceló la selección` : `❌ Error: ${err.message}`);
+          setTestLogs(logs);
+          setTesting(null);
+          return;
+        }
+
+        logs.push(`🔌 Abriendo conexión con ${device.productName}...`);
+        setTestLogs([...logs]);
+
+        // Sin awaits entre requestDevice y open
+        try {
           await device.open();
           await device.selectConfiguration(1);
           await device.claimInterface(0);
-          const enc = new TextEncoder();
-          const testData = enc.encode('\x1b\x40\x1b\x61\x01TEST DE IMPRESION\x0a\x1b\x61\x00Si ves esto, la impresora funciona!\x0a\x0aKablam POS\x0a\x1b\x64\x05\x1d\x56\x00');
-          const iface = device.configurations[0].interfaces[0];
-          const endpoint = iface.alternate.endpoints.find((ep: any) => ep.direction === "out");
-          if (endpoint) { await device.transferOut(endpoint.endpointNumber, testData); logs.push(`✅ Test enviado correctamente!`); }
-          else { logs.push(`⚠️ No se encontró endpoint de salida`); }
-          await device.close();
         } catch (err: any) {
-          if (err.name === "NotFoundError") logs.push(`⚠️ Usuario canceló la selección`);
-          else logs.push(`❌ Error: ${err.message}`);
+          logs.push(`❌ Error al abrir: ${err.message}. Probá con el botón Probar desde el cashier.`);
+          setTestLogs(logs);
+          setTesting(null);
+          return;
         }
+
+        const enc = new TextEncoder();
+        const testData = enc.encode('\x1b\x40\x1b\x61\x01TEST DE IMPRESION\x0a\x1b\x61\x00Si ves esto, la impresora funciona!\x0a\x0aKablam POS\x0a\x1b\x64\x05\x1d\x56\x00');
+        const iface = device.configurations[0].interfaces[0];
+        const endpoint = iface.alternate.endpoints.find((ep: any) => ep.direction === "out");
+        if (endpoint) { await device.transferOut(endpoint.endpointNumber, testData); logs.push(`✅ Test enviado correctamente!`); }
+        else { logs.push(`⚠️ No se encontró endpoint de salida`); }
+        try { await device.close(); } catch {}
       } else { logs.push(`⚠️ Tipo de impresora no soportado para test desde admin`); }
     } catch (err: any) { logs.push(`❌ Error: ${err.message}`); }
     setTestLogs(logs);

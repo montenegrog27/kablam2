@@ -57,13 +57,22 @@ async function printUSBOrder(job: PrintJob, logs: string[]): Promise<void> {
   for (const printer of printers) {
     logs.push(`🔍 Buscando impresora USB: ${printer.name} (VID:${printer.usb_vendor_id} PID:${printer.usb_product_id})`);
 
-    const match = devices.find(
+    let match = devices.find(
       (d: any) => d.vendorId === printer.usb_vendor_id && d.productId === printer.usb_product_id
     );
 
     if (!match) {
-      logs.push(`⚠️ Impresora ${printer.name} no encontrada (no autorizada o no conectada)`);
-      continue;
+      // Intentar pedir autorización (solo funciona si hay un gesto de usuario activo)
+      try {
+        logs.push(`🔌 Solicitando autorización USB...`);
+        match = await usb.requestDevice({
+          filters: [{ vendorId: printer.usb_vendor_id, productId: printer.usb_product_id }]
+        });
+        logs.push(`✅ Impresora ${printer.name} autorizada!`);
+      } catch (err: any) {
+        logs.push(`⚠️ Impresora ${printer.name} no autorizada. Usá el botón Probar en Admin > Impresoras.`);
+        continue;
+      }
     }
 
     const shouldPrintComanda = job.type === "comanda" && printer.print_comandas;
