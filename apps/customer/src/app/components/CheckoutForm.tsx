@@ -379,7 +379,7 @@ export default function CheckoutForm({
   ========================= */
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <button
@@ -430,7 +430,7 @@ export default function CheckoutForm({
                     onChange={(e) =>
                       setCustomer((prev) => ({ ...prev, name: e.target.value }))
                     }
-                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-base md:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
                 </div>
               </div>
@@ -456,7 +456,7 @@ export default function CheckoutForm({
                         phone: e.target.value.replace(/\D/g, ""),
                       }))
                     }
-                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-base md:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
                 </div>
               </div>
@@ -472,7 +472,7 @@ export default function CheckoutForm({
                         placeholder="Calle, número, ciudad..."
                         value={customer.address}
                         onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); setSelectedAddressId(""); }}
-                        className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500"
+                        className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-base md:text-sm focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
 
@@ -529,7 +529,7 @@ export default function CheckoutForm({
                     onChange={(e) =>
                       setCouponCode(e.target.value.toUpperCase())
                     }
-                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-base md:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
                 </div>
                 <button
@@ -590,7 +590,7 @@ export default function CheckoutForm({
                 <select
                   value={selectedPaymentMethod}
                   onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                  className="w-full border text-gray-900 border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition appearance-none bg-white"
+                  className="w-full border text-gray-900 border-gray-300 rounded-lg px-4 py-3 text-base md:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition appearance-none bg-white"
                 >
                   <option value="">Elegí una opción...</option>
                   {paymentMethods.map((pm) => (
@@ -614,7 +614,7 @@ export default function CheckoutForm({
                     placeholder="Número de operación o comprobante"
                     value={paymentReference}
                     onChange={(e) => setPaymentReference(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base md:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
                   <p className="text-xs text-gray-500 mt-2">
                     Ingresá el número de operación que te dio la plataforma de
