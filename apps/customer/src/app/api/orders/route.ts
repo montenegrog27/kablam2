@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 type OrderItemInput = {
   variantId: string;
   quantity: number;
+  extras?: Array<{ id: string; name: string; price: number }>;
+  removedIngredients?: Array<{ id: string; name: string }>;
 };
 
 export async function POST(req: Request) {
@@ -99,6 +101,11 @@ export async function POST(req: Request) {
         throw new Error(`Variant not found: ${item.variantId}`);
       }
 
+      // Build extras array from selected modifiers + removed ingredients
+      const extrasArr: Array<{ type: string; name: string; price?: number }> = [];
+      (item.extras || []).forEach((e) => extrasArr.push({ type: "extra", name: e.name, price: e.price }));
+      (item.removedIngredients || []).forEach((r) => extrasArr.push({ type: "sin", name: r.name }));
+
       const itemTotal = variant.price * item.quantity;
 
       subtotal += itemTotal;
@@ -109,6 +116,7 @@ export async function POST(req: Request) {
         quantity: item.quantity,
         unit_price: variant.price,
         total: itemTotal,
+        extras: extrasArr,
       };
     });
 

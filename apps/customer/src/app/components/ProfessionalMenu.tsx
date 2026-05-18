@@ -29,6 +29,8 @@ export default function ProfessionalMenu({
     null,
   );
   const [scrolled, setScrolled] = useState(false);
+  const [flashSales, setFlashSales] = useState<any[]>([]);
+  const [now, setNow] = useState(Date.now());
   const tabsRef = useRef<HTMLDivElement>(null);
 
   const brandColor = branding?.brand_color || "#FF6B35";
@@ -106,6 +108,22 @@ export default function ProfessionalMenu({
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Fetch flash sales
+  useEffect(() => {
+    const slug = window.location.pathname.split("/")[1];
+    if (!slug) return;
+    fetch(`/api/flash-sales?branchSlug=${slug}`)
+      .then((r) => r.json())
+      .then((data) => setFlashSales(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  // Countdown ticker
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Set first category as active
   useEffect(() => {
     if (rootCategories.length > 0 && !activeTab) {
@@ -113,12 +131,16 @@ export default function ProfessionalMenu({
     }
   }, [rootCategories, activeTab]);
 
-  const currentSubcategories = uniqueCategories.filter(
+  const currentSubcategories = activeTab === "combos" ? [] : uniqueCategories.filter(
     (c) => c.parent_id === activeTab,
   );
 
-  // Filter products + combos by category - use Set for deduplication
+  const comboItems = allProductsInMenu.filter((p) => p.id.includes("-variant"));
+  const normalItems = allProductsInMenu.filter((p) => !p.id.includes("-variant"));
+
+  // Filter products per category
   const filteredProducts = allProductsInMenu.filter((p) => {
+    if (activeTab === "combos") return p.id.includes("-variant");
     const productCats = p.categories || [];
     if (activeSubcategory) {
       return productCats.some((c) => c.id === activeSubcategory);
@@ -168,6 +190,38 @@ export default function ProfessionalMenu({
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("es-AR").format(price);
+  };
+
+  // Flash sales: build lookup by category id
+  const saleCategoryIds = new Set<string>();
+  const saleByCategory: Record<string, any> = {};
+  flashSales.forEach((sale) => {
+    (sale.flash_sale_categories || []).forEach((sc: any) => {
+      saleCategoryIds.add(sc.category_id);
+      saleByCategory[sc.category_id] = sale;
+    });
+  });
+
+  const isProductOnSale = (product: Product) =>
+    (product.categories || []).some((c) => saleCategoryIds.has(c.id));
+
+  const getProductSale = (product: Product) => {
+    const cat = (product.categories || []).find((c) => saleCategoryIds.has(c.id));
+    return cat ? saleByCategory[cat.id] : null;
+  };
+
+  const formatCountdown = (endAt: string) => {
+    const diff = Math.max(0, Math.floor((new Date(endAt).getTime() - now) / 1000));
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    const s = diff % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }; 
+
+  const getProductSaleBadge = (product: Product): string | null => {
+    const s = getProductSale(product);
+    if (!s) return null;
+    return s.display_type === "label" ? s.display_label : `-${s.discount_percentage}%`;
   };
 
   const scrollToTab = (tabId: string) => {
@@ -225,6 +279,30 @@ export default function ProfessionalMenu({
         </div>
       )}
 
+      {/* Flash Sales Banner */}
+      {flashSales.map((sale) => {
+        const catIds = new Set((sale.flash_sale_categories || []).map((sc: any) => sc.category_id));
+        const catNames = uniqueCategories.filter((c) => catIds.has(c.id)).map((c) => c.name);
+        return (
+          <div key={sale.id} className="bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-3">
+            <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <span>🔥</span>
+                <span>
+                  {sale.display_type === "label" ? sale.display_label : `${sale.discount_percentage}% OFF`}
+                  {" en "}
+                  <strong>{catNames.join(", ") || "varios productos"}</strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 font-mono text-sm font-bold tabular-nums">
+                <span className="text-red-200 text-xs">Termina en</span>
+                <span className="bg-red-800/40 px-2 py-0.5 rounded">{formatCountdown(sale.end_at)}</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
       {/* Category Tabs */}
       <div
         ref={tabsRef}
@@ -235,6 +313,22 @@ export default function ProfessionalMenu({
       >
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex gap-2 overflow-x-auto py-4 scrollbar-hide">
+            {combos && combos.length > 0 && (
+              <button
+                onClick={() => scrollToTab("combos")}
+                className={`px-5 py-2.5 rounded-full font-semibold whitespace-nowrap transition-all ${
+                  activeTab === "combos"
+                    ? "text-white shadow-md"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+                style={{
+                  fontFamily,
+                  ...(activeTab === "combos" ? { backgroundColor: brandColor } : {}),
+                }}
+              >
+                🎁 Combos
+              </button>
+            )}
             {rootCategories.map((cat) => (
               <button
                 key={cat.id}
@@ -289,7 +383,7 @@ export default function ProfessionalMenu({
         </div>
       </div>
 
-      {/* Featured Products Grid */}
+      {/* Featured Products Grid / Carousel */}
       {featuredProducts.length > 0 && !activeSubcategory && (
         <div className="max-w-6xl mx-auto px-4 py-6">
           <h3
@@ -302,7 +396,25 @@ export default function ProfessionalMenu({
             />
             Destacados
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {/* Mobile: horizontal scroll carousel */}
+          <div className="flex md:hidden gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4 pb-2">
+            {featuredProducts.map((product) => (
+              <div key={product.id} className="snap-start flex-shrink-0 w-[65vw] max-w-[280px]">
+                <FeaturedCard
+                  product={product}
+                  onAgregar={onAgregar}
+                  brandColor={brandColor}
+                  fontFamily={fontFamily}
+                  getPrice={getPrice}
+                  getImage={getImage}
+                  formatPrice={formatPrice}
+                  saleBadge={getProductSaleBadge(product)}
+                />
+              </div>
+            ))}
+          </div>
+          {/* Desktop: grid */}
+          <div className="hidden md:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {featuredProducts.map((product) => (
               <FeaturedCard
                 key={product.id}
@@ -313,6 +425,7 @@ export default function ProfessionalMenu({
                 getPrice={getPrice}
                 getImage={getImage}
                 formatPrice={formatPrice}
+                saleBadge={getProductSaleBadge(product)}
               />
             ))}
           </div>
@@ -329,33 +442,35 @@ export default function ProfessionalMenu({
             className="w-1 h-6 rounded-full"
             style={{ backgroundColor: brandColor }}
           />
-          {activeSubcategory
+          {activeTab === "combos" ? "🎁 Combos" : activeSubcategory
             ? currentSubcategories.find((c) => c.id === activeSubcategory)?.name
             : rootCategories.find((c) => c.id === activeTab)?.name}
         </h3>
 
-        {/* Products as horizontal list */}
-        <div className="space-y-3">
-          {normalProducts.map((product) => (
-            <NormalProductCard
-              key={product.id}
-              product={product}
-              onAgregar={onAgregar}
-              brandColor={brandColor}
-              fontFamily={fontFamily}
-              getPrice={getPrice}
-              getImage={getImage}
-              formatPrice={formatPrice}
-            />
-          ))}
+        {/* Products grouped by subcategory when "Todos" */}
+        <div className="space-y-8">
+          {(() => {
+            if (normalProducts.length === 0 && featuredProducts.length === 0) {
+              return <div className="text-center py-16 text-gray-400"><div className="text-6xl mb-4">🍔</div><p>No hay productos en esta categoría</p></div>;
+            }
+            if (!activeSubcategory && activeTab !== "combos" && currentSubcategories.length > 0) {
+              return currentSubcategories.map((sub) => {
+                const subProducts = uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === sub.id));
+                if (subProducts.length === 0) return null;
+                return (
+                  <div key={sub.id}>
+                    <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
+                      <span className="w-1 h-5 rounded-full" style={{ backgroundColor: brandColor }} />
+                      {sub.name}
+                    </h4>
+                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={onAgregar} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                  </div>
+                );
+              });
+            }
+            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={onAgregar} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />));
+          })()}
         </div>
-
-        {normalProducts.length === 0 && featuredProducts.length === 0 && (
-          <div className="text-center py-16 text-gray-400">
-            <div className="text-6xl mb-4">🍔</div>
-            <p>No hay productos en esta categoría</p>
-          </div>
-        )}
       </div>
 
       {/* Footer */}
@@ -405,6 +520,7 @@ function FeaturedCard({
   getPrice,
   getImage,
   formatPrice,
+  saleBadge,
 }: {
   product: Product;
   onAgregar: (product: Product) => void;
@@ -413,6 +529,7 @@ function FeaturedCard({
   getPrice: (p: Product) => number;
   getImage: (p: Product) => string | undefined;
   formatPrice: (p: number) => string;
+  saleBadge?: string | null;
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -452,6 +569,12 @@ function FeaturedCard({
         >
           ⭐ Destacado
         </div>
+
+        {saleBadge && (
+          <div className="absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-bold text-white bg-red-500 shadow-lg">
+            🔥 {saleBadge}
+          </div>
+        )}
 
         {/* Quick Add Button */}
         <button
@@ -494,6 +617,7 @@ function NormalProductCard({
   getPrice,
   getImage,
   formatPrice,
+  saleBadge,
 }: {
   product: Product;
   onAgregar: (product: Product) => void;
@@ -502,17 +626,17 @@ function NormalProductCard({
   getPrice: (p: Product) => number;
   getImage: (p: Product) => string | undefined;
   formatPrice: (p: number) => string;
+  saleBadge?: string | null;
 }) {
   const image = getImage(product);
 
   return (
     <div
-      className="group flex items-center gap-4 bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-100"
-      style={{ fontFamily }}
+      className="relative grid grid-cols-12 gap-2 bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-100 overflow-visible"
       onClick={() => onAgregar(product)}
     >
-      {/* Image - Left */}
-      <div className="w-20 h-20 md:w-24 md:h-24 flex-shrink-0 rounded-lg overflow-hidden">
+      {/* Image - 2 cols */}
+      <div className="col-span-2 aspect-square rounded-lg overflow-hidden relative">
         {image ? (
           <img
             src={image}
@@ -524,47 +648,49 @@ function NormalProductCard({
             className="w-full h-full flex items-center justify-center"
             style={{ backgroundColor: `${brandColor}20` }}
           >
-            <span className="text-3xl" style={{ color: brandColor }}>
+            <span className="text-2xl" style={{ color: brandColor }}>
               🍔
             </span>
           </div>
         )}
+        {saleBadge && (
+          <div className="absolute top-0 left-0 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-br-lg">
+            {saleBadge}
+          </div>
+        )}
       </div>
 
-      {/* Info - Center */}
-      <div className="flex-1 min-w-0">
-        <h4 className="font-bold text-gray-900 mb-1 truncate">
+      {/* Info - 8 cols */}
+      <div className="col-span-8 flex flex-col justify-center min-w-0">
+        <h4 className="font-bold text-gray-900 text-sm leading-tight truncate" style={{ fontFamily }}>
           {product.name}
         </h4>
-        <p className="text-sm text-gray-500 line-clamp-2 md:line-clamp-1">
+        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
           {product.description || "\u00A0"}
         </p>
       </div>
 
-      {/* Price and Button - Right */}
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <div className="text-right">
-          <span
-            className="text-lg md:text-xl font-bold block"
-            style={{ color: brandColor }}
-          >
-            ${formatPrice(getPrice(product))}
-          </span>
-          <span className="text-xs text-gray-400 hidden md:inline">
-            1 porción
-          </span>
-        </div>
-        <button
-          className="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform flex-shrink-0"
-          style={{ backgroundColor: brandColor }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onAgregar(product);
-          }}
+      {/* Price - 2 cols */}
+      <div className="col-span-2 flex flex-col items-end justify-center">
+        <span
+          className="text-sm font-bold whitespace-nowrap"
+          style={{ color: brandColor }}
         >
-          <span className="text-lg md:text-xl">+</span>
-        </button>
+          ${formatPrice(getPrice(product))}
+        </span>
       </div>
+
+      {/* + button overlapping bottom-right */}
+      <button
+        className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform z-10"
+        style={{ backgroundColor: brandColor }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onAgregar(product);
+        }}
+      >
+        <span className="text-base leading-none">+</span>
+      </button>
     </div>
   );
 }

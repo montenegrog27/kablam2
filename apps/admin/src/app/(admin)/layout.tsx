@@ -2,190 +2,132 @@
 
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import {
+  LayoutDashboard, Store, Users, Tags, Package, Variable,
+  ChefHat, Box, ShoppingBag, ShoppingCart, TicketPercent,
+  Bike, Clock, CookingPot, Printer, Truck, CreditCard, Kanban,
+  UserCog, Award, Zap, Settings, LogOut, ChevronDown, Menu,
+} from "lucide-react";
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [tenant, setTenant] = useState<any>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     async function loadUser() {
       const { data: userData } = await supabase.auth.getUser();
       const user = userData?.user;
-
-      if (!user) {
-        router.push("/login");
-        return;
-      }
+      if (!user) { router.push("/login"); return; }
 
       const { data: userRecord } = await supabase
-        .from("users")
-        .select("*, tenants(*)")
-        .eq("id", user.id)
-        .single();
-
-      if (!userRecord) {
-        router.push("/dashboard");
-        return;
-      }
+        .from("users").select("*, tenants(*)").eq("id", user.id).single();
+      if (!userRecord) { router.push("/dashboard"); return; }
 
       setTenant(userRecord.tenants);
       setLoading(false);
     }
-
     loadUser();
   }, []);
 
-  if (loading) return <div className="p-10">Cargando...</div>;
+  const toggle = (key: string) => setOpenMenus((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const navItems = [
+    { section: "Gestión", items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/branches", label: "Sucursales", icon: Store },
+      { href: "/customers", label: "Clientes", icon: Users },
+      { href: "/categories", label: "Categorías", icon: Tags },
+      { href: "/products", label: "Productos", icon: Package },
+      { href: "/variant-types", label: "Tipos de Variante", icon: Variable },
+    ]},
+    { section: "Ingredientes", items: [
+      { href: "/ingredients", label: "Ingredientes", icon: ChefHat },
+      { href: "/product-ingredients", label: "Ingredientes x Producto", icon: Box },
+      { href: "/combos", label: "Combos", icon: ShoppingBag },
+      { href: "/product-extras", label: "Extras x Producto", icon: ShoppingCart },
+      { href: "/upsells", label: "Sugerencias Checkout", icon: ShoppingBag },
+    ]},
+    { section: "Operaciones", items: [
+      { href: "/loyalty", label: "Fidelización", icon: Award },
+      { href: "/coupons", label: "Cupones", icon: TicketPercent },
+      { href: "/riders", label: "Repartidores", icon: Bike },
+      { href: "/day-parts", label: "Turnos", icon: Clock },
+      { href: "/kitchens", label: "Cocinas", icon: CookingPot },
+      { href: "/printers", label: "Impresoras", icon: Printer },
+      { href: "/flash-sales", label: "Ofertas Flash", icon: Zap },
+      { href: "/kds-config", label: "KDS Config", icon: Kanban },
+    ]},
+    { section: "Configuración", items: [
+      { href: "/delivery-settings", label: "Delivery", icon: Truck },
+      { href: "/payment-methods", label: "Métodos de Pago", icon: CreditCard },
+      { href: "/users", label: "Usuarios", icon: UserCog },
+      { href: "/settings", label: "Configuración", icon: Settings },
+    ]},
+  ];
+
+  if (loading) return <div className="h-screen flex items-center justify-center bg-gray-950 text-gray-400">Cargando...</div>;
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-64 bg-black text-white flex flex-col p-6 overflow-y-auto">
-        <h2 className="text-xl font-bold mb-6">{tenant?.name || "Kablam"}</h2>
+    <div className="h-screen flex bg-gray-950 text-white">
+      {/* Sidebar */}
+      <aside className={`${collapsed ? "w-16" : "w-64"} bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-200 overflow-hidden flex-shrink-0`}>
+        {/* Header */}
+        <div className="h-14 flex items-center gap-3 px-4 border-b border-gray-800 flex-shrink-0">
+          {!collapsed && <span className="font-bold text-lg truncate">{tenant?.name || "Kablam"}</span>}
+          <button onClick={() => setCollapsed(!collapsed)} className="p-1.5 rounded-lg hover:bg-gray-800 transition ml-auto">
+            <Menu size={18} />
+          </button>
+        </div>
 
-        <nav className="flex flex-col gap-1">
-          <Link
-            href="/dashboard"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Dashboard
-          </Link>
-
-          <div className="mt-3 mb-1 px-3 text-xs text-gray-500 uppercase">
-            Gestión
-          </div>
-          <Link
-            href="/branches"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Sucursales
-          </Link>
-          <Link
-            href="/customers"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Clientes
-          </Link>
-          <Link
-            href="/categories"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Categorías
-          </Link>
-          <Link
-            href="/products"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Productos
-          </Link>
-          <Link
-            href="/variant-types"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Tipos de Variante
-          </Link>
-
-          <div className="mt-3 mb-1 px-3 text-xs text-gray-500 uppercase">
-            Ingredientes
-          </div>
-          <Link
-            href="/ingredients"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Ingredientes
-          </Link>
-          <Link
-            href="/product-ingredients"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Ingredientes x Producto
-          </Link>
-          <Link href="/combos" className="px-3 py-2 rounded hover:bg-gray-800">
-            Combos
-          </Link>
-          <Link
-            href="/product-extras"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Extras x Producto
-          </Link>
-          <Link href="/upsells" className="px-3 py-2 rounded hover:bg-gray-800">
-            Sugerencias Checkout
-          </Link>
-
-          <div className="mt-3 mb-1 px-3 text-xs text-gray-500 uppercase">
-            Operaciones
-          </div>
-          <Link href="/coupons" className="px-3 py-2 rounded hover:bg-gray-800">
-            Cupones
-          </Link>
-          <Link href="/riders" className="px-3 py-2 rounded hover:bg-gray-800">
-            Repartidores
-          </Link>
-          <Link
-            href="/day-parts"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Turnos
-          </Link>
-          <Link
-            href="/kitchens"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Cocinas
-          </Link>
-          <Link
-            href="/printers"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Impresoras
-          </Link>
-
-          <div className="mt-3 mb-1 px-3 text-xs text-gray-500 uppercase">
-            Configuración
-          </div>
-          <Link
-            href="/delivery-settings"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Delivery
-          </Link>
-          <Link
-            href="/payment-methods"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Métodos de Pago
-          </Link>
-          <Link href="/users" className="px-3 py-2 rounded hover:bg-gray-800">
-            Usuarios
-          </Link>
-          <Link
-            href="/settings"
-            className="px-3 py-2 rounded hover:bg-gray-800"
-          >
-            Configuración
-          </Link>
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+          {navItems.map((section) => (
+            <div key={section.section}>
+              {!collapsed && (
+                <div className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                  {section.section}
+                </div>
+              )}
+              {section.items.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <Link key={item.href} href={item.href}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                      active
+                        ? "bg-white/10 text-white font-medium"
+                        : "text-gray-400 hover:text-white hover:bg-white/5"
+                    }`}
+                    title={collapsed ? item.label : ""}
+                  >
+                    <item.icon size={18} className="flex-shrink-0" />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        <button
-          className="mt-6 bg-red-500 px-3 py-2 rounded hover:bg-red-600"
-          onClick={async () => {
-            await supabase.auth.signOut();
-            router.push("/login");
-          }}
-        >
-          Cerrar sesión
-        </button>
+        {/* Logout */}
+        <div className="p-2 border-t border-gray-800">
+          <button onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }}
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-red-400 hover:bg-white/5 transition"
+          >
+            <LogOut size={18} />
+            {!collapsed && <span>Cerrar sesión</span>}
+          </button>
+        </div>
       </aside>
 
-      <main className="flex-1 bg-gray-900 p-10 overflow-y-auto">
-        {children}
+      {/* Main */}
+      <main className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="p-6 max-w-7xl mx-auto">{children}</div>
       </main>
     </div>
   );

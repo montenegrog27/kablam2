@@ -25,6 +25,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.97.0",
-    "lucide-react": "^0.575.0"
+    "lucide-react": "^0.575.0",
+    "usb": "^2.17.0"
   }
 }

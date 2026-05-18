@@ -269,7 +269,7 @@ export default function PrintersPage() {
       <h1 className="text-2xl font-bold mb-6">Impresoras</h1>
 
       {/* Detección USB */}
-      <div className="bg-white border rounded-xl p-6 mb-6">
+      <div className="bg-gray-900 border rounded-xl p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-semibold text-gray-900">Detección USB</h2>
@@ -323,7 +323,7 @@ export default function PrintersPage() {
       </div>
 
       {/* Formulario manual */}
-      <form onSubmit={handleCreate} className="bg-white border rounded-xl p-6 mb-6 space-y-4">
+      <form onSubmit={handleCreate} className="bg-gray-900 border rounded-xl p-6 mb-6 space-y-4">
         <h2 className="font-semibold text-gray-900">Agregar manualmente</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <input className="border p-2 rounded text-sm" placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
@@ -369,7 +369,7 @@ export default function PrintersPage() {
           const catNames = assignedCats.map((cid) => allCategories.find((c) => c.id === cid)?.name).filter(Boolean);
 
           return (
-          <div key={printer.id} className={`bg-white border rounded-xl p-4 ${printer.is_default ? "ring-2 ring-blue-400" : ""}`}>
+          <div key={printer.id} className={`bg-gray-900 border rounded-xl p-4 ${printer.is_default ? "ring-2 ring-blue-400" : ""}`}>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <Printer size={20} className={printer.is_default ? "text-blue-600" : "text-gray-500"} />
@@ -398,7 +398,7 @@ export default function PrintersPage() {
                     <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-400" title="Asignar categorías">
                       📂
                     </button>
-                    <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border z-10 p-3 min-w-[200px] hidden group-hover:block">
+                    <div className="absolute right-0 top-full mt-1 bg-gray-900 rounded-xl shadow-xl border z-10 p-3 min-w-[200px] hidden group-hover:block">
                       <p className="text-xs font-medium text-gray-700 mb-2">Comandas de:</p>
                       <div className="space-y-1 max-h-40 overflow-y-auto">
                         {allCategories.map((cat) => (

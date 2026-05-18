@@ -40,7 +40,6 @@ async function printToLocalAgent(job: PrintJob, logs: string[]): Promise<void> {
       .from("printers")
       .select("*")
       .eq("branch_id", job.branchId)
-      .eq("type", "network")
       .eq(col, true);
 
     if (!printers?.length) {

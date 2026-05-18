@@ -104,11 +104,10 @@ export default function CheckoutPage() {
           address,
         },
         items: cart.map((item) => ({
-          items: cart.map((item) => ({
-            variantId: item.variantId,
-            quantity: item.quantity,
-          })),
+          variantId: item.variantId,
           quantity: item.quantity,
+          extras: item.extras || [],
+          removedIngredients: item.removedIngredients || [],
         })),
         total,
       }),

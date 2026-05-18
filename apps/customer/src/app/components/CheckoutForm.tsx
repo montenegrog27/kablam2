@@ -209,7 +209,7 @@ export default function CheckoutForm({
     autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
       if (place.geometry) {
-        setCustomer({ ...customer, address: place.formatted_address || input.value });
+        setCustomer((prev) => ({ ...prev, address: place.formatted_address || input.value }));
         setCustomerLat(place.geometry.location.lat());
         setCustomerLng(place.geometry.location.lng());
         setSelectedAddressId("__autocomplete__");
@@ -428,7 +428,7 @@ export default function CheckoutForm({
                     placeholder="Ingresá tu nombre"
                     value={customer.name}
                     onChange={(e) =>
-                      setCustomer({ ...customer, name: e.target.value })
+                      setCustomer((prev) => ({ ...prev, name: e.target.value }))
                     }
                     className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
@@ -451,10 +451,10 @@ export default function CheckoutForm({
                     placeholder="11 1234 5678"
                     value={customer.phone}
                     onChange={(e) =>
-                      setCustomer({
-                        ...customer,
+                      setCustomer((prev) => ({
+                        ...prev,
                         phone: e.target.value.replace(/\D/g, ""),
-                      })
+                      }))
                     }
                     className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
@@ -471,7 +471,7 @@ export default function CheckoutForm({
                         ref={addressInputRef}
                         placeholder="Calle, número, ciudad..."
                         value={customer.address}
-                        onChange={(e) => { setCustomer({ ...customer, address: e.target.value }); setSelectedAddressId(""); }}
+                        onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); setSelectedAddressId(""); }}
                         className="w-full border text-gray-900 border-gray-300 rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500"
                       />
                     </div>

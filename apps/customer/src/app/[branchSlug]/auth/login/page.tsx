@@ -1,253 +1,130 @@
 "use client";
 
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import NavbarDelivery from "@/app/components/NavbarDelivery";
-import { Phone, Loader2, ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import type { Branding } from "@/types/menu";
+import { Phone, ArrowRight, Loader, CheckCircle } from "lucide-react";
 
-export default function LoginPage({
-  params,
-}: {
-  params: Promise<{ branchSlug: string }>;
-}) {
-  const resolvedParams = React.use(params);
-  const { branchSlug } = resolvedParams;
-  const router = useRouter();
-
+export default function LoginPage() {
   const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
+  const [branchSlug, setBranchSlug] = useState("");
+  const [step, setStep] = useState<"form" | "sent" | "error">("form");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    setBranchSlug(window.location.pathname.split("/")[1]);
+  }, []);
+
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
+    if (phone.replace(/\D/g, "").length < 8) {
+      setError("Ingresá un número válido");
+      return;
+    }
     setLoading(true);
     setError("");
-    setSuccess(false);
 
     try {
-      const response = await fetch("/api/auth/request-login", {
+      const res = await fetch("/api/auth/request-login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          branchSlug,
-          phone,
-          name: name || undefined,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.replace(/\D/g, ""), branchSlug }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Error al enviar WhatsApp");
+      const data = await res.json();
+      if (data.success) {
+        setStep("sent");
+      } else {
+        setError(data.error || "Error al enviar");
       }
-
-      setSuccess(true);
-      // Redirigir a página de verificación o mostrar instrucciones
-      setTimeout(() => {
-        router.push(
-          `/${branchSlug}/auth/verify?phone=${encodeURIComponent(phone)}`,
-        );
-      }, 2000);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
-    } finally {
-      setLoading(false);
+    } catch {
+      setError("Error de conexión");
     }
+    setLoading(false);
   };
-
-  const formatPhone = (value: string) => {
-    // Solo números
-    const numbers = value.replace(/\D/g, "");
-
-    // Formato: 11 1234 5678
-    if (numbers.length <= 2) {
-      return numbers;
-    } else if (numbers.length <= 6) {
-      return `${numbers.slice(0, 2)} ${numbers.slice(2)}`;
-    } else if (numbers.length <= 10) {
-      return `${numbers.slice(0, 2)} ${numbers.slice(2, 6)} ${numbers.slice(6)}`;
-    } else {
-      return `${numbers.slice(0, 2)} ${numbers.slice(2, 6)} ${numbers.slice(6, 10)}`;
-    }
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhone(e.target.value);
-    setPhone(formatted);
-  };
-
-  // Obtener branding desde localStorage o contexto (simplificado)
-  // En un caso real, deberíamos obtenerlo del servidor o contexto
-  const [branding] = useState<Branding | undefined>(undefined);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <NavbarDelivery
-        onCartClick={() => {}}
-        totalItems={0}
-        branding={branding}
-        branchSlug={branchSlug}
-      />
-
-      <div className="max-w-md mx-auto px-4 py-8">
-        {/* Botón volver */}
-        <Link
-          href={`/${branchSlug}/order`}
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
-        >
-          <ArrowLeft size={16} />
-          Volver al menú
-        </Link>
-
-        {/* Card de login */}
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Phone className="w-8 h-8 text-blue-600" />
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {step === "sent" ? (
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 text-center border border-orange-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle size={32} className="text-green-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              Ingresar con WhatsApp
-            </h1>
-            <p className="text-gray-600">
-              Te enviaremos un enlace seguro por WhatsApp para acceder a tu
-              cuenta
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">✅ Mensaje enviado</h1>
+            <p className="text-gray-600 mb-6">
+              Te enviamos un mensaje por WhatsApp a <strong>{phone}</strong>.
+              Tocá el botón <strong>"Ingresar"</strong> para entrar automáticamente.
             </p>
-          </div>
-
-          {success ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-6 h-6 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M5 13l4 4L19 7"
-                  ></path>
-                </svg>
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                ¡WhatsApp enviado!
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Revisa tu WhatsApp para completar el acceso. Te redirigiremos en
-                un momento...
-              </p>
-              <div className="text-sm text-gray-500">
-                Si no recibes el mensaje, verifica que el número{" "}
-                <strong>{phone}</strong> sea correcto.
-              </div>
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm text-orange-700 mb-6">
+              ⏳ El link expira en 5 minutos
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <button
+              onClick={() => setStep("form")}
+              className="text-sm text-gray-500 hover:text-gray-700 underline"
+            >
+              Quiero usar otro número
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-orange-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Phone size={28} className="text-orange-600" />
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900">Ingresá</h1>
+              <p className="text-gray-500 mt-1">
+                Te enviaremos un link mágico por WhatsApp
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Número de teléfono
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tu número de WhatsApp
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500">+54</span>
-                  </div>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
+                    +54
+                  </span>
                   <input
                     type="tel"
+                    placeholder="379 409 4455"
                     value={phone}
-                    onChange={handlePhoneChange}
-                    placeholder="11 1234 5678"
-                    className="pl-14 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    required
-                    disabled={loading}
-                    maxLength={13} // 2 + espacio + 4 + espacio + 4 = 12 caracteres
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                    className="w-full border border-gray-300 rounded-xl pl-12 pr-4 py-3.5 text-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition outline-none"
+                    autoFocus
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Ejemplo: 11 1234 5678 (sin 0 ni 15)
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tu nombre (opcional)
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Juan Pérez"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                  disabled={loading}
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  Nos ayudará a personalizar tu experiencia
-                </p>
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">
                   {error}
                 </div>
               )}
 
               <button
                 type="submit"
-                disabled={loading || phone.length < 10}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                style={{
-                  backgroundColor: branding?.primary_color,
-                }}
+                disabled={loading}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3.5 rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Enviando WhatsApp...
-                  </>
+                  <Loader size={20} className="animate-spin" />
                 ) : (
                   <>
-                    <Phone className="w-5 h-5" />
-                    Enviar enlace por WhatsApp
+                    Enviar link <ArrowRight size={18} />
                   </>
                 )}
               </button>
-
-              <div className="text-center text-sm text-gray-500 pt-4 border-t">
-                <p>
-                  Al continuar, aceptas nuestros{" "}
-                  <a href="#" className="text-blue-600 hover:underline">
-                    Términos de servicio
-                  </a>{" "}
-                  y{" "}
-                  <a href="#" className="text-blue-600 hover:underline">
-                    Política de privacidad
-                  </a>
-                </p>
-              </div>
             </form>
-          )}
 
-          {/* Modo desarrollo: mostrar enlace directo */}
-          {process.env.NODE_ENV === "development" && !success && (
-            <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800 font-medium mb-2">
-                🔧 Modo desarrollo
-              </p>
-              <p className="text-xs text-yellow-700">
-                En desarrollo, el enlace de verificación aparecerá en la
-                respuesta de la API.
-              </p>
-            </div>
-          )}
-        </div>
+            <p className="text-xs text-gray-400 text-center mt-6">
+              Al ingresar aceptás recibir mensajes de WhatsApp de Mordisco
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

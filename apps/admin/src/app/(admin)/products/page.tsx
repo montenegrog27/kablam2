@@ -23,6 +23,7 @@ export default function ProductsPage() {
   const [showInMenu, setShowInMenu] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
   const [isHero, setIsHero] = useState(false);
+  const [isPreparable, setIsPreparable] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [dayParts, setDayParts] = useState<any[]>([]);
   const [modifierGroups, setModifierGroups] = useState<any[]>([]);
@@ -192,6 +193,7 @@ export default function ProductsPage() {
         show_in_menu: showInMenu,
         is_featured: isFeatured,
         is_hero: isHero,
+        is_preparable: isPreparable,
       })
       .select()
       .single();
@@ -235,6 +237,7 @@ export default function ProductsPage() {
     setPrice("");
     setCost("");
     setAllowHalf(false);
+    setIsPreparable(true);
     setImageFile(null);
 
     const { data: prods } = await supabase
@@ -320,6 +323,7 @@ export default function ProductsPage() {
     setIsSuggestable(product.is_suggestable);
     setIsFeatured(product.is_featured);
     setIsHero(product.is_hero);
+    setIsPreparable(product.is_preparable !== false);
 
     // Obtener la variante principal (primera o default)
     const mainVariant = product.product_variants?.[0];
@@ -392,6 +396,7 @@ export default function ProductsPage() {
         show_in_menu: showInMenu,
         is_featured: isFeatured,
         is_hero: isHero,
+        is_preparable: isPreparable,
       })
       .eq("id", editingProduct.id);
 
@@ -789,6 +794,18 @@ export default function ProductsPage() {
                       />
                       <span className="text-sm text-gray-700">
                         Hero (portada de categoría)
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                        checked={isPreparable}
+                        onChange={(e) => setIsPreparable(e.target.checked)}
+                      />
+                      <span className="text-sm text-gray-700">
+                        Preparable (aparece en KDS)
                       </span>
                     </label>
                   </div>

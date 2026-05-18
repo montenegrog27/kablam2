@@ -3,7 +3,6 @@
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import OrderCard from "./OrderCard";
 import { useState, useEffect } from "react";
-import { printComandasAndTicket } from "@/lib/printOrder";
 
 const STATUSES = ["unconfirmed", "confirmed", "preparing", "ready", "sent"];
 const STATUS_META: any = {
@@ -276,20 +275,14 @@ export default function OrdersBoard({
       }
     }
 
+    const updates: Record<string, any> = { status: nextStatus };
+    if (nextStatus === "confirmed") updates.confirmed_at = new Date().toISOString();
+    if (nextStatus === "preparing") updates.preparing_at = new Date().toISOString();
+
     await supabase
       .from("orders")
-      .update({ status: nextStatus })
+      .update(updates)
       .eq("id", order.id);
-
-    // Imprimir comandas/ticket al confirmar pedido
-    if (nextStatus === "confirmed") {
-      printComandasAndTicket(order.id, order.branch_id);
-    }
-
-    // Imprimir comanda al pasar a "en preparación"
-    if (nextStatus === "preparing") {
-      printComandasAndTicket(order.id, order.branch_id);
-    }
 
     // Takeaway: preparing → ready → enviar aviso_ready_takeaway
     if (nextStatus === "ready" && order.type === "takeaway") {
