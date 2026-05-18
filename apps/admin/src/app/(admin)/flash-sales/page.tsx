@@ -70,7 +70,7 @@ export default function FlashSalesPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Descuentos por Tiempo Limitado</h1>
       <p className="text-sm text-gray-500 mb-6">Creá ofertas flash aplicables a categorías o subcategorías</p>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6 space-y-4">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1">% Descuento</label>

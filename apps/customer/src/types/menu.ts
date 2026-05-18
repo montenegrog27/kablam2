@@ -2,6 +2,7 @@ export type Category = {
   id: string;
   name: string;
   parent_id?: string | null;
+  position?: number;
 };
 
 export type ProductVariant = {

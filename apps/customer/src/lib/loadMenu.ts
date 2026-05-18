@@ -18,6 +18,7 @@ export type ProductRow = {
     id: string;
     name: string;
     parent_id: string | null;
+    position?: number;
   } | null;
   product_variants: Array<{
     id: string;
@@ -91,12 +92,13 @@ export async function loadMenu(
        allow_half,
        is_hero,
        is_featured,
-       is_suggestable,
-       show_in_menu,
+        is_suggestable,
+        show_in_menu,
       categories(
         id,
         name,
-        parent_id
+        parent_id,
+        position
       ),
       product_variants(
         id,
@@ -180,6 +182,7 @@ export async function loadMenu(
               id: p.categories.id,
               name: p.categories.name,
               parent_id: p.categories.parent_id,
+              position: p.categories.position ?? 0,
             },
           ]
         : [],

@@ -25,9 +25,7 @@ export default function ProfessionalMenu({
   branding,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
-  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(
-    null,
-  );
+  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [flashSales, setFlashSales] = useState<any[]>([]);
   const [now, setNow] = useState(Date.now());
@@ -40,9 +38,9 @@ export default function ProfessionalMenu({
 
   // Get unique categories from products
   const allCategories = productos.flatMap((p) => p.categories || []);
-  const uniqueCategories = allCategories.filter(
-    (cat, index, self) => self.findIndex((c) => c.id === cat.id) === index,
-  );
+  const uniqueCategories = allCategories
+    .filter((cat, index, self) => self.findIndex((c) => c.id === cat.id) === index)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const rootCategories = uniqueCategories.filter((c) => !c.parent_id);
 
   // Convertir combos a productos para mostrarlos en el menú
@@ -124,14 +122,14 @@ export default function ProfessionalMenu({
     return () => clearInterval(interval);
   }, []);
 
-  // Set first category as active
+  // Todos is the default tab (null = show all categories)
   useEffect(() => {
-    if (rootCategories.length > 0 && !activeTab) {
-      setActiveTab(rootCategories[0].id); // eslint-disable-line react-hooks/set-state-in-effect
+    if (rootCategories.length > 0 && activeTab === undefined) {
+      setActiveTab(null); // null = "Todos"
     }
   }, [rootCategories, activeTab]);
 
-  const currentSubcategories = activeTab === "combos" ? [] : uniqueCategories.filter(
+  const currentSubcategories = !activeTab || activeTab === "combos" ? [] : uniqueCategories.filter(
     (c) => c.parent_id === activeTab,
   );
 
@@ -141,10 +139,8 @@ export default function ProfessionalMenu({
   // Filter products per category
   const filteredProducts = allProductsInMenu.filter((p) => {
     if (activeTab === "combos") return p.id.includes("-variant");
+    if (activeTab === null) return !p.id.includes("-variant"); // Todos: show all except combos
     const productCats = p.categories || [];
-    if (activeSubcategory) {
-      return productCats.some((c) => c.id === activeSubcategory);
-    }
     return productCats.some(
       (c) => c.id === activeTab || c.parent_id === activeTab,
     );
@@ -224,10 +220,29 @@ export default function ProfessionalMenu({
     return s.display_type === "label" ? s.display_label : `-${s.discount_percentage}%`;
   };
 
-  const scrollToTab = (tabId: string) => {
+  const scrollToTab = (tabId: string | null) => {
     setActiveTab(tabId);
     setActiveSubcategory(null);
     tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const scrollToSubcategory = (subId: string) => {
+    setActiveSubcategory(subId);
+    setTimeout(() => {
+      const el = document.getElementById(`sub-${subId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        // Not in view yet (e.g. Todos tab), switch to parent category
+        const subCat = uniqueCategories.find((c) => c.id === subId);
+        if (subCat?.parent_id) {
+          setActiveTab(subCat.parent_id);
+          setTimeout(() => {
+            document.getElementById(`sub-${subId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 200);
+        }
+      }
+    }, 100);
   };
 
   return (
@@ -312,11 +327,26 @@ export default function ProfessionalMenu({
         style={{ backgroundColor: "white" }}
       >
         <div className="max-w-6xl mx-auto px-4">
-          <div className="flex gap-2 overflow-x-auto py-4 scrollbar-hide">
+          <div className="flex gap-2 overflow-x-auto py-4 snap-x snap-mandatory scrollbar-hide -mx-4 px-4">
+            {/* Todos tab */}
+            <button
+              onClick={() => scrollToTab(null)}
+              className={`snap-start flex-shrink-0 px-5 py-2.5 rounded-full font-semibold whitespace-nowrap transition-all ${
+                activeTab === null
+                  ? "text-white shadow-md"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+              style={{
+                fontFamily,
+                ...(activeTab === null ? { backgroundColor: brandColor } : {}),
+              }}
+            >
+              Todos
+            </button>
             {combos && combos.length > 0 && (
               <button
                 onClick={() => scrollToTab("combos")}
-                className={`px-5 py-2.5 rounded-full font-semibold whitespace-nowrap transition-all ${
+                className={`snap-start flex-shrink-0 px-5 py-2.5 rounded-full font-semibold whitespace-nowrap transition-all ${
                   activeTab === "combos"
                     ? "text-white shadow-md"
                     : "text-gray-600 hover:bg-gray-100"
@@ -333,7 +363,7 @@ export default function ProfessionalMenu({
               <button
                 key={cat.id}
                 onClick={() => scrollToTab(cat.id)}
-                className={`px-5 py-2.5 rounded-full font-semibold whitespace-nowrap transition-all ${
+                className={`snap-start flex-shrink-0 px-5 py-2.5 rounded-full font-semibold whitespace-nowrap transition-all ${
                   activeTab === cat.id
                     ? "text-white shadow-md"
                     : "text-gray-600 hover:bg-gray-100"
@@ -350,12 +380,12 @@ export default function ProfessionalMenu({
             ))}
           </div>
 
-          {/* Subcategories */}
-          {currentSubcategories.length > 0 && (
-            <div className="flex gap-2 pb-3 overflow-x-auto">
+          {/* Subcategories - only show when a specific root category is active */}
+          {activeTab && activeTab !== "combos" && currentSubcategories.length > 0 && (
+            <div className="flex gap-2 pb-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4">
               <button
                 onClick={() => setActiveSubcategory(null)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                className={`snap-start flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                   !activeSubcategory
                     ? "bg-gray-900 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -367,8 +397,8 @@ export default function ProfessionalMenu({
               {currentSubcategories.map((sub) => (
                 <button
                   key={sub.id}
-                  onClick={() => setActiveSubcategory(sub.id)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  onClick={() => scrollToSubcategory(sub.id)}
+                  className={`snap-start flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                     activeSubcategory === sub.id
                       ? "bg-gray-900 text-white"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -434,31 +464,50 @@ export default function ProfessionalMenu({
 
       {/* All Products - Full Width Horizontal List */}
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <h3
-          className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"
-          style={{ fontFamily }}
-        >
-          <span
-            className="w-1 h-6 rounded-full"
-            style={{ backgroundColor: brandColor }}
-          />
-          {activeTab === "combos" ? "🎁 Combos" : activeSubcategory
-            ? currentSubcategories.find((c) => c.id === activeSubcategory)?.name
-            : rootCategories.find((c) => c.id === activeTab)?.name}
-        </h3>
 
-        {/* Products grouped by subcategory when "Todos" */}
+
         <div className="space-y-8">
           {(() => {
             if (normalProducts.length === 0 && featuredProducts.length === 0) {
               return <div className="text-center py-16 text-gray-400"><div className="text-6xl mb-4">🍔</div><p>No hay productos en esta categoría</p></div>;
             }
+
+            // "Todos" tab: iterate all root categories
+            if (activeTab === null) {
+              return rootCategories.map((rootCat) => {
+                const rootProducts = uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === rootCat.id || c.parent_id === rootCat.id));
+                if (rootProducts.length === 0) return null;
+                const subs = uniqueCategories.filter((c) => c.parent_id === rootCat.id);
+                return (
+                  <div key={rootCat.id}>
+                    <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
+                      <span className="w-1 h-5 rounded-full" style={{ backgroundColor: brandColor }} />
+                      {rootCat.name}
+                    </h4>
+                    {subs.length > 0 ? subs.map((sub) => {
+                      const subProducts = rootProducts.filter((p) => (p.categories || []).some((c) => c.id === sub.id));
+                      if (subProducts.length === 0) return null;
+                      return (
+                        <div key={sub.id} id={`sub-${sub.id}`} className="mb-4 ml-4">
+                          <h5 className="text-sm font-semibold text-gray-500 mb-2">{sub.name}</h5>
+                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={onAgregar} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                        </div>
+                      );
+                    }) : (
+                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={onAgregar} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                    )}
+                  </div>
+                );
+              });
+            }
+
+            // Specific category: show subcategory groups
             if (!activeSubcategory && activeTab !== "combos" && currentSubcategories.length > 0) {
               return currentSubcategories.map((sub) => {
                 const subProducts = uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === sub.id));
                 if (subProducts.length === 0) return null;
                 return (
-                  <div key={sub.id}>
+                  <div key={sub.id} id={`sub-${sub.id}`}>
                     <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
                       <span className="w-1 h-5 rounded-full" style={{ backgroundColor: brandColor }} />
                       {sub.name}
