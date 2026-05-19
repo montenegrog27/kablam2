@@ -14,7 +14,7 @@ export default function SuccessPage() {
         <div className="text-5xl">🎉</div>
 
         {/* TITULO */}
-        <h1 className="text-2xl font-bold">
+        <h1 className="text-2xl font-bold text-gray-900">
           ¡Pedido confirmado!
         </h1>
 
