@@ -63,7 +63,7 @@ export default function DeliverySettingsPage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-6 space-y-4 bg-gray-800">
       <h1 className="text-2xl font-bold">Configuración Delivery</h1>
 
       <label className="flex gap-2 items-center">

@@ -32,7 +32,7 @@ export function calculateShippingCost({
   }
 
 return Math.ceil(
-  settings.base_delivery_cost +
-  distanceKm * settings.price_per_km
-);
+  (settings.base_delivery_cost +
+  distanceKm * settings.price_per_km) / 100
+) * 100;
 }

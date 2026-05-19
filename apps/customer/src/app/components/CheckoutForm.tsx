@@ -35,7 +35,7 @@ function calculateShippingCost(distanceKm: number, settings: any) {
   if (!settings?.enabled) return 0;
   if (settings.max_distance_km && distanceKm > settings.max_distance_km) return null;
   if (settings.free_shipping_radius && distanceKm <= settings.free_shipping_radius) return 0;
-  return Math.ceil((settings.base_delivery_cost || 0) + distanceKm * (settings.price_per_km || 0));
+  return Math.ceil(((settings.base_delivery_cost || 0) + distanceKm * (settings.price_per_km || 0)) / 100) * 100;
 }
 
 type Props = {
