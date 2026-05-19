@@ -448,7 +448,7 @@ export default function CheckoutForm({
                     className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
                   />
                   <input
-                    placeholder="11 1234 5678"
+                    placeholder="379412345678"
                     value={customer.phone}
                     onChange={(e) =>
                       setCustomer((prev) => ({
