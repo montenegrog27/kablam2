@@ -708,7 +708,7 @@ export default function CheckoutForm({
                 <span className="text-gray-600" style={{ fontFamily }}>
                   Subtotal
                 </span>
-                <span className="font-medium">${subtotal}</span>
+                <span className="font-medium text-gray-600">${subtotal}</span>
               </div>
 
               {orderMode === "delivery" && (
@@ -720,7 +720,7 @@ export default function CheckoutForm({
                     <Truck size={14} />
                     Envío
                   </span>
-                  <span className="font-medium">${shipping}</span>
+                  <span className="font-medium text-gray-600">${shipping}</span>
                 </div>
               )}
 
