@@ -167,12 +167,19 @@ export default function OrderCard({
               ? "Pago completo"
               : `Debe $${formatCurrency(remaining)}`}
           </div>
+
+          {isDelivery && order.shipping_cost > 0 && (
+            <div className="text-lg text-gray-400">
+              🚗 Envío: ${formatCurrency(order.shipping_cost)}
+            </div>
+          )}
         </div>
 
         <div className="text-right">
           <div className="text-lg font-semibold text-gray-900">
             ${formatCurrency(order.total)}
           </div>
+
         </div>
       </div>
 

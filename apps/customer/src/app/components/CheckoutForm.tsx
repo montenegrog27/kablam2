@@ -379,7 +379,7 @@ export default function CheckoutForm({
   ========================= */
 
   return (
-    <div className="w-full space-y-6 pb-8">
+    <div className="w-full max-w-full space-y-6 pb-8 overflow-x-hidden [&_input]:!text-[16px] [&_select]:!text-[16px] [&_textarea]:!text-[16px]">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <button
