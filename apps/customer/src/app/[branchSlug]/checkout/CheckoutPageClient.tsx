@@ -44,7 +44,7 @@ export default function CheckoutPageClient({ branchSlug, branding }: Props) {
   return (
     <>
       <FontLoader branding={branding} />
-      <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      <div className="min-h-screen bg-gray-100 p-4 md:p-6">
         <div className="max-w-6xl mx-auto">
           {!orderMode ? (
             <OrderModeSelector
