@@ -9,7 +9,7 @@ import {
   ChefHat, Box, ShoppingBag, ShoppingCart, TicketPercent,
   Bike, Clock, CookingPot, Printer, Truck, CreditCard, Kanban,
   UserCog, Award, Zap, Settings, LogOut, ChevronDown, Menu,
-  DollarSign, TrendingUp, Receipt, FileText, Truck as TruckIcon, BarChart3,
+  DollarSign, TrendingUp, Receipt, FileText, Truck as TruckIcon, BarChart3, Star,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -49,12 +49,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     ]},
     { section: "Ingredientes", items: [
       { href: "/ingredients", label: "Ingredientes", icon: ChefHat },
+      { href: "/packaging", label: "Packaging", icon: Box },
+      { href: "/recipes", label: "Recetas", icon: Package },
       { href: "/product-ingredients", label: "Ingredientes x Producto", icon: Box },
       { href: "/combos", label: "Combos", icon: ShoppingBag },
       { href: "/product-extras", label: "Extras x Producto", icon: ShoppingCart },
       { href: "/upsells", label: "Sugerencias Checkout", icon: ShoppingBag },
     ]},
     { section: "Operaciones", items: [
+      { href: "/featured-order", label: "Orden Destacados", icon: Star },
       { href: "/loyalty", label: "Fidelización", icon: Award },
       { href: "/coupons", label: "Cupones", icon: TicketPercent },
       { href: "/riders", label: "Repartidores", icon: Bike },

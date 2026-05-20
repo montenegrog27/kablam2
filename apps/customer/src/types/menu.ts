@@ -70,6 +70,7 @@ export type Product = {
   id: string;
   name: string;
   description?: string;
+  featured_order?: number;
   allow_half?: boolean;
   is_hero?: boolean;
   is_featured?: boolean;
@@ -108,6 +109,7 @@ export type Combo = {
   name: string;
   description?: string;
   price: number;
+  image_url?: string;
   category_id?: string;
   categories?: Category[];
   combo_products: Array<{

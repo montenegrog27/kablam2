@@ -85,10 +85,11 @@ CREATE TABLE IF NOT EXISTS purchase_items (
 );
 
 -- ============================
--- 3. STOCK COLUMNS
+-- 3. STOCK COLUMNS & MISC
 -- ============================
 
 ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS stock DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE combos ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- ============================
 -- 4. RLS

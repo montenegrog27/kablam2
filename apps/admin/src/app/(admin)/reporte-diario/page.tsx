@@ -157,6 +157,24 @@ export default function ReporteDiarioPage() {
         <div className="text-center py-20 text-gray-500">No hay datos para esta fecha</div>
       ) : (
         <>
+          {/* === ALERTAS === */}
+          {r.alerts && r.alerts.length > 0 && (
+            <div className="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-700 flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-100">🔔 Alertas del día</span>
+                <span className="text-xs text-gray-500">({r.alerts.length})</span>
+              </div>
+              <div className="divide-y divide-gray-800">
+                {r.alerts.map((alert: string, i: number) => (
+                  <div key={i} className="px-5 py-2.5 text-sm flex items-center gap-2">
+                    <span className="text-base">{alert.split(" ")[0]}</span>
+                    <span className="text-gray-300">{alert.replace(/^[^\s]+\s/, "")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* === RESUMEN EJECUTIVO === */}
           <div className="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
@@ -373,6 +391,93 @@ export default function ReporteDiarioPage() {
               <div className="w-full mt-3 h-3 bg-gray-900 rounded-full overflow-hidden max-w-xs mx-auto">
                 <div className={`h-full rounded-full ${r.resumen_ejecutivo.margen_neto >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
                   style={{ width: `${Math.min(Math.abs(r.resumen_ejecutivo.margen_neto), 100)}%` }} />
+              </div>
+            </div>
+          </Section>
+
+          {/* === FINANZAS === */}
+          <Section title="Finanzas" icon={DollarSign}>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <KPICard label="CMV Total" value={`$${r.finanzas.cmv_total.toLocaleString("es-AR")}`} icon={BarChart3} color="text-orange-400" />
+              <KPICard label="Delivery" value={`$${r.finanzas.delivery_costs.toLocaleString("es-AR")}`} icon={Truck} color="text-purple-400" />
+              <KPICard label="Marketing" value={`$${r.finanzas.marketing_costs.toLocaleString("es-AR")}`} icon={TrendingUp} color="text-blue-400" />
+              <KPICard label="Salarios" value={`$${r.finanzas.salary_costs.toLocaleString("es-AR")}`} icon={DollarSign} color="text-amber-400" />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <KPICard label="Costos Fijos" value={`$${r.finanzas.fixed_costs.toLocaleString("es-AR")}`} icon={DollarSign} color="text-gray-400" />
+              <KPICard label="Otros Costos" value={`$${r.finanzas.other_costs.toLocaleString("es-AR")}`} icon={DollarSign} color="text-gray-400" />
+              <KPICard label="Utilidad Neta Real" value={`$${r.finanzas.net_profit_real.toLocaleString("es-AR")}`} icon={Award} color={r.finanzas.net_profit_real >= 0 ? "text-emerald-400" : "text-red-400"} />
+              <KPICard label="Margen Neto Real" value={`${r.finanzas.net_margin_real}%`} icon={Percent} color={r.finanzas.net_margin_real >= 10 ? "text-emerald-400" : "text-red-400"} />
+            </div>
+
+            {/* Cost breakdown bar */}
+            <div className="bg-gray-800 rounded-xl p-4">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Distribución de Costos</h3>
+              {(() => {
+                const total = r.finanzas.cmv_total + r.finanzas.delivery_costs + r.finanzas.marketing_costs + r.finanzas.salary_costs + r.finanzas.fixed_costs + r.finanzas.other_costs;
+                if (total === 0) return <p className="text-gray-600 text-xs text-center py-4">Sin datos de costos</p>;
+                const segments = [
+                  { label: "CMV", value: r.finanzas.cmv_total, color: "bg-orange-500" },
+                  { label: "Delivery", value: r.finanzas.delivery_costs, color: "bg-purple-500" },
+                  { label: "Marketing", value: r.finanzas.marketing_costs, color: "bg-blue-500" },
+                  { label: "Salarios", value: r.finanzas.salary_costs, color: "bg-amber-500" },
+                  { label: "Fijos", value: r.finanzas.fixed_costs, color: "bg-gray-500" },
+                  { label: "Otros", value: r.finanzas.other_costs, color: "bg-slate-500" },
+                ].filter((s) => s.value > 0);
+                return (
+                  <div>
+                    <div className="w-full h-4 bg-gray-900 rounded-full overflow-hidden flex">
+                      {segments.map((s) => (
+                        <div key={s.label} className={s.color} style={{ width: `${(s.value / total) * 100}%` }} title={`${s.label}: ${((s.value / total) * 100).toFixed(1)}%`} />
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-3 mt-3">
+                      {segments.map((s) => (
+                        <span key={s.label} className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <span className={`w-2 h-2 rounded-full ${s.color.replace("bg-", "bg-").replace("-500", "-500")}`} />
+                          {s.label} ({((s.value / total) * 100).toFixed(0)}%)
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </Section>
+
+          {/* === CASHFLOW === */}
+          <Section title="Cashflow" icon={DollarSign}>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <KPICard label="Ingresos (Cash In)" value={`$${r.cashflow.cash_in.toLocaleString("es-AR")}`} icon={TrendingUp} color="text-emerald-400" />
+              <KPICard label="Egresos (Cash Out)" value={`-$${r.cashflow.cash_out.toLocaleString("es-AR")}`} icon={TrendingDown} color="text-red-400" />
+              <KPICard label="Saldo del día" value={`$${r.cashflow.current_cash.toLocaleString("es-AR")}`} icon={DollarSign} color={r.cashflow.current_cash >= 0 ? "text-emerald-400" : "text-red-400"} />
+              <KPICard label="Proyectado 7d" value={`$${r.cashflow.projected_7d.toLocaleString("es-AR")}`} icon={Calendar} color="text-blue-400" />
+            </div>
+            <div className="bg-gray-800 rounded-xl p-5 text-center border border-gray-700">
+              <p className="text-xs text-gray-500 mb-2">FLUJO DE CAJA DEL DÍA</p>
+              <div className="flex items-center justify-center gap-8 text-sm">
+                <div>
+                  <p className="text-gray-400">Entrada</p>
+                  <p className="text-xl font-bold text-emerald-400 tabular-nums">+${r.cashflow.cash_in.toLocaleString("es-AR")}</p>
+                </div>
+                <div className="text-2xl text-gray-600">→</div>
+                <div>
+                  <p className="text-gray-400">Salida</p>
+                  <p className="text-xl font-bold text-red-400 tabular-nums">-${r.cashflow.cash_out.toLocaleString("es-AR")}</p>
+                </div>
+                <div className="text-2xl text-gray-600">=</div>
+                <div>
+                  <p className="text-gray-400">Saldo</p>
+                  <p className={`text-xl font-bold tabular-nums ${r.cashflow.current_cash >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {r.cashflow.current_cash >= 0 ? "+" : ""}${r.cashflow.current_cash.toLocaleString("es-AR")}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-700">
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>Venta promedio diaria (7d): <strong className="text-gray-300">${r.cashflow.avg_daily_sales.toLocaleString("es-AR")}</strong></span>
+                  <span>Proyectado 7 días: <strong className="text-blue-400">${r.cashflow.projected_7d.toLocaleString("es-AR")}</strong></span>
+                </div>
               </div>
             </div>
           </Section>

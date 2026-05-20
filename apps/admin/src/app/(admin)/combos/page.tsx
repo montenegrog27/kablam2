@@ -21,6 +21,8 @@ export default function CombosPage() {
   const [selectedProducts, setSelectedProducts] = useState<
     Record<string, number>
   >({});
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -103,6 +105,8 @@ export default function CombosPage() {
     setPrice("");
     setCategoryId("");
     setSelectedProducts({});
+    setImageFile(null);
+    setImagePreview(null);
     setEditingCombo(null);
     setShowForm(false);
   };
@@ -112,6 +116,8 @@ export default function CombosPage() {
     setDescription(combo.description || "");
     setPrice(String(combo.price));
     setCategoryId(combo.category_id || "");
+    setImagePreview(combo.image_url || null);
+    setImageFile(null);
     const sel: Record<string, number> = {};
     combo.combo_products?.forEach((cp: any) => {
       sel[cp.product_id] = cp.quantity;
@@ -136,6 +142,22 @@ export default function CombosPage() {
       return;
     }
 
+    // Upload image if selected
+    let imageUrl = imagePreview && !imageFile ? imagePreview : null;
+    if (imageFile) {
+      const fileExt = imageFile.name.split(".").pop();
+      const fileName = `combo-${crypto.randomUUID()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, imageFile);
+      if (!uploadError) {
+        const { data: pubUrl } = supabase.storage
+          .from("product-images")
+          .getPublicUrl(fileName);
+        imageUrl = pubUrl.publicUrl;
+      }
+    }
+
     if (editingCombo) {
       const { error } = await supabase
         .from("combos")
@@ -144,6 +166,7 @@ export default function CombosPage() {
           description,
           price: Number(price),
           category_id: categoryId || null,
+          image_url: imageUrl,
         })
         .eq("id", editingCombo.id);
 
@@ -173,6 +196,7 @@ export default function CombosPage() {
           name,
           description,
           price: Number(price),
+          image_url: imageUrl,
         })
         .select()
         .single();
@@ -310,6 +334,25 @@ export default function CombosPage() {
           </div>
 
           <div>
+            <label className="block text-xs text-gray-400 mb-1">Imagen</label>
+            <div className="flex items-center gap-4">
+              {imagePreview && (
+                <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-700 flex-shrink-0 bg-gray-800">
+                  <img src={imagePreview} alt="" className="w-full h-full object-cover" />
+                </div>
+              )}
+              <input type="file" accept="image/*" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) { setImageFile(file); setImagePreview(URL.createObjectURL(file)); }
+              }} className="text-sm text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600" />
+              {imagePreview && (
+                <button type="button" onClick={() => { setImageFile(null); setImagePreview(null); }}
+                  className="text-xs text-red-400 hover:text-red-300">Quitar</button>
+              )}
+            </div>
+          </div>
+
+          <div>
             <label className="block text-xs text-gray-400 mb-1">
               Categoría del menú
             </label>
@@ -409,8 +452,15 @@ export default function CombosPage() {
               key={combo.id}
               className={`bg-gray-800 rounded-lg p-5 ${!combo.is_active ? "opacity-50" : ""}`}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div>
+              <div className="flex gap-4">
+                {combo.image_url && (
+                  <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-900">
+                    <img src={combo.image_url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
                   <h3 className="font-semibold text-white text-lg">
                     {combo.name}
                   </h3>
@@ -440,6 +490,8 @@ export default function CombosPage() {
                     )}
                   </div>
                 </div>
+              </div>
+              </div>
               </div>
 
               {/* Productos del combo */}

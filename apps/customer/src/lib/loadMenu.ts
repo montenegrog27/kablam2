@@ -14,6 +14,7 @@ export type ProductRow = {
   is_featured?: boolean;
   is_suggestable?: boolean;
   show_in_menu?: boolean;
+  featured_order?: number;
   categories: {
     id: string;
     name: string;
@@ -94,6 +95,7 @@ export async function loadMenu(
        is_featured,
         is_suggestable,
         show_in_menu,
+        featured_order,
       categories(
         id,
         name,
@@ -146,7 +148,8 @@ export async function loadMenu(
     )
     .eq("branch_id", branch.id)
     .eq("is_active", true)
-    .eq("show_in_menu", true);
+    .eq("show_in_menu", true)
+    .order("name");
 
   if (error) {
     console.error("Error loading menu:", error);
@@ -174,6 +177,7 @@ export async function loadMenu(
       allow_half: p.allow_half || false,
       is_hero: p.is_hero || false,
       is_featured: p.is_featured || false,
+      featured_order: p.featured_order || 0,
       is_suggestable: p.is_suggestable || false,
       show_in_menu: p.show_in_menu !== undefined ? p.show_in_menu : true,
       categories: p.categories
@@ -261,6 +265,7 @@ export type ComboRow = {
   branch_id: string;
   category_id: string | null;
   price: number;
+  image_url: string | null;
   categories: {
     id: string;
     name: string;
@@ -308,6 +313,7 @@ export async function loadCombos(
       branch_id,
       category_id,
       price,
+      image_url,
       categories(
         id,
         name,
@@ -347,6 +353,7 @@ export async function loadCombos(
       name: c.name,
       description: c.description || undefined,
       price: Number(c.price) || 0,
+      image_url: c.image_url || undefined,
       category_id: c.category_id || undefined,
       categories: c.categories
         ? [

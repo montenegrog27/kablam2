@@ -45,20 +45,17 @@ export default function ProfessionalMenu({
 
   // Convertir combos a productos para mostrarlos en el menú
   const comboAsProducts: Product[] = (combos || []).map((combo) => {
-    // El precio ya viene como numero del server
     const comboPrice = typeof combo.price === "number" ? combo.price : 0;
 
-    // SIMPLE: crear una variant única con el precio del combo
     const variants: ProductVariant[] = [
       {
         id: combo.id + "-variant",
         name: "Combo",
         price: comboPrice,
         is_default: true,
+        image_url: combo.image_url,
       },
     ];
-
-    console.log("  Created product:", combo.name, "variant:", variants[0]);
 
     const product: Product = {
       id: combo.id,
@@ -129,16 +126,13 @@ export default function ProfessionalMenu({
     }
   }, [rootCategories, activeTab]);
 
-  const currentSubcategories = !activeTab || activeTab === "combos" ? [] : uniqueCategories.filter(
+  const currentSubcategories = !activeTab ? [] : uniqueCategories.filter(
     (c) => c.parent_id === activeTab,
   );
 
-  const comboItems = allProductsInMenu.filter((p) => p.id.includes("-variant"));
-  const normalItems = allProductsInMenu.filter((p) => !p.id.includes("-variant"));
-
   // Filter products per category
+
   const filteredProducts = allProductsInMenu.filter((p) => {
-    if (activeTab === "combos") return p.id.includes("-variant");
     if (activeTab === null) return !p.id.includes("-variant"); // Todos: show all except combos
     const productCats = p.categories || [];
     return productCats.some(
@@ -154,9 +148,9 @@ export default function ProfessionalMenu({
 
   // Get featured products - buscar SIEMPRE desde todos los productos, no solo los filtrados
   const heroProduct = allProductsInMenu.find((p) => p.is_hero);
-  const featuredProducts = uniqueProducts.filter(
-    (p) => p.is_featured && !p.is_hero,
-  );
+  const featuredProducts = uniqueProducts
+    .filter((p) => p.is_featured && !p.is_hero)
+    .sort((a, b) => ((a as any).featured_order || 999) - ((b as any).featured_order || 999));
   const normalProducts = uniqueProducts.filter(
     (p) => !p.is_featured && !p.is_hero,
   );
@@ -343,22 +337,6 @@ export default function ProfessionalMenu({
             >
               Todos
             </button>
-            {combos && combos.length > 0 && (
-              <button
-                onClick={() => scrollToTab("combos")}
-                className={`snap-start flex-shrink-0 px-5 py-2.5 rounded-full font-semibold whitespace-nowrap transition-all ${
-                  activeTab === "combos"
-                    ? "text-white shadow-md"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-                style={{
-                  fontFamily,
-                  ...(activeTab === "combos" ? { backgroundColor: brandColor } : {}),
-                }}
-              >
-                🎁 Combos
-              </button>
-            )}
             {rootCategories.map((cat) => (
               <button
                 key={cat.id}
@@ -381,7 +359,7 @@ export default function ProfessionalMenu({
           </div>
 
           {/* Subcategories - only show when a specific root category is active */}
-          {activeTab && activeTab !== "combos" && currentSubcategories.length > 0 && (
+          {activeTab && currentSubcategories.length > 0 && (
             <div className="flex gap-2 pb-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4">
               <button
                 onClick={() => setActiveSubcategory(null)}
@@ -502,7 +480,7 @@ export default function ProfessionalMenu({
             }
 
             // Specific category: show subcategory groups
-            if (!activeSubcategory && activeTab !== "combos" && currentSubcategories.length > 0) {
+            if (!activeSubcategory && currentSubcategories.length > 0) {
               return currentSubcategories.map((sub) => {
                 const subProducts = uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === sub.id));
                 if (subProducts.length === 0) return null;
