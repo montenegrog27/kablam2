@@ -141,7 +141,7 @@ export default function KitchensPage() {
         className="bg-black p-6 rounded shadow mb-8 space-y-4"
       >
         <input
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           placeholder="Nombre cocina"
           value={name}
           onChange={(e) => setName(e.target.value)}

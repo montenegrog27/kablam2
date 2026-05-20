@@ -71,13 +71,13 @@ export default function VariantTypesPage() {
         className="bg-black p-6 rounded shadow mb-8 space-y-4"
       >
         <input
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           placeholder="Ej: Simple, Doble, Grande"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
-        <button className="bg-white text-black px-4 py-2 rounded">
+        <button className="bg-gray-900 text-white px-4 py-2 rounded">
           Crear
         </button>
       </form>

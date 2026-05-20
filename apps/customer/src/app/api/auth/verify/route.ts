@@ -2,6 +2,18 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createCustomerSession } from "@/lib/customer-session";
 
+function getSafeReturnTo(value: string | null, branchSlug: string) {
+  if (!value || !value.startsWith("/")) {
+    return `/${branchSlug}/account/profile`;
+  }
+
+  if (value.startsWith("//") || !value.startsWith(`/${branchSlug}/`)) {
+    return `/${branchSlug}/account/profile`;
+  }
+
+  return value;
+}
+
 export async function POST(req: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -92,6 +104,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
+    const returnToParam = url.searchParams.get("returnTo");
 
     if (!token) {
       return NextResponse.json({ error: "Token requerido" }, { status: 400 });
@@ -128,7 +141,7 @@ export async function GET(req: Request) {
 
     // 4. Redirigir a perfil o página principal
     return NextResponse.redirect(
-      new URL(`/${branch.slug}/account/profile`, req.url),
+      new URL(getSafeReturnTo(returnToParam, branch.slug), req.url),
     );
   } catch (error: unknown) {
     console.error("Error en verify GET:", error);

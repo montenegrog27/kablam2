@@ -84,7 +84,7 @@ export default function CustomersPage() {
 
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      unconfirmed: "bg-gray-100 text-gray-600",
+      unconfirmed: "bg-gray-100 text-gray-400",
       confirmed: "bg-amber-100 text-amber-700",
       preparing: "bg-blue-100 text-blue-700",
       ready: "bg-emerald-100 text-emerald-700",
@@ -107,14 +107,14 @@ export default function CustomersPage() {
   );
 
   if (loading) {
-    return <div className="p-6 text-gray-500">Cargando...</div>;
+    return <div className="p-6 text-gray-400">Cargando...</div>;
   }
 
   return (
     <div className="flex h-screen">
       {/* Lista de clientes */}
       <div className="w-96 border-r overflow-y-auto flex-shrink-0">
-        <div className="p-4 border-b sticky top-0 bg-white z-10">
+        <div className="p-4 border-b sticky top-0 bg-gray-900 z-10">
           <h1 className="text-xl font-bold mb-3">Clientes</h1>
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -138,14 +138,14 @@ export default function CustomersPage() {
               <button
                 key={c.id}
                 onClick={() => selectCustomer(c)}
-                className={`w-full text-left p-4 hover:bg-gray-50 transition ${
+                className={`w-full text-left p-4 hover:bg-gray-800 transition ${
                   selected?.id === c.id ? "bg-blue-50" : ""
                 }`}
               >
                 <div className="font-medium text-sm truncate">
                   {c.name || "Sin nombre"}
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">{c.phone}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{c.phone}</div>
                 {c.address && (
                   <div className="text-xs text-gray-400 truncate mt-0.5">
                     {c.address}
@@ -169,13 +169,13 @@ export default function CustomersPage() {
         ) : (
           <div>
             {/* Header */}
-            <div className="p-6 border-b bg-white">
+            <div className="p-6 border-b bg-gray-900">
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-xl font-bold">{selected.name || "Sin nombre"}</h2>
-                  <p className="text-sm text-gray-500 mt-1">{selected.phone}</p>
+                  <p className="text-sm text-gray-400 mt-1">{selected.phone}</p>
                   {selected.address && (
-                    <p className="text-sm text-gray-500">{selected.address}</p>
+                    <p className="text-sm text-gray-400">{selected.address}</p>
                   )}
                   <p className="text-xs text-gray-400 mt-1">
                     Cliente desde {new Date(selected.created_at).toLocaleDateString("es-AR")}
@@ -183,7 +183,7 @@ export default function CustomersPage() {
                 </div>
                 <button
                   onClick={() => setSelected(null)}
-                  className="p-2 rounded-full hover:bg-gray-100"
+                  className="p-2 rounded-full hover:bg-gray-800"
                 >
                   <X size={18} />
                 </button>
@@ -196,7 +196,7 @@ export default function CustomersPage() {
                   className={`pb-2 text-sm font-medium border-b-2 transition ${
                     tab === "orders"
                       ? "border-black text-black"
-                      : "border-transparent text-gray-500 hover:text-gray-700"
+                      : "border-transparent text-gray-400 hover:text-gray-300"
                   }`}
                 >
                   Pedidos ({orders.length})
@@ -206,7 +206,7 @@ export default function CustomersPage() {
                   className={`pb-2 text-sm font-medium border-b-2 transition ${
                     tab === "messages"
                       ? "border-black text-black"
-                      : "border-transparent text-gray-500 hover:text-gray-700"
+                      : "border-transparent text-gray-400 hover:text-gray-300"
                   }`}
                 >
                   Conversación ({messages.length})
@@ -233,12 +233,12 @@ export default function CustomersPage() {
                         </span>
                         {statusBadge(order.status)}
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-400">
                         {order.type === "delivery" ? "Delivery" : "Takeaway"} • $
                         {order.total?.toLocaleString("es-AR")}
                       </div>
                       {order.address && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-gray-400">
                           {order.address}
                         </div>
                       )}

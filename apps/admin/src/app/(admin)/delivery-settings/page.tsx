@@ -81,7 +81,7 @@ export default function DeliverySettingsPage() {
         placeholder="Costo base"
         value={baseCost}
         onChange={(e) => setBaseCost(Number(e.target.value))}
-        className="border p-2 w-full"
+        className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
       />
           <div>  precio por km </div>
 
@@ -90,7 +90,7 @@ export default function DeliverySettingsPage() {
         placeholder="Precio por km"
         value={pricePerKm}
         onChange={(e) => setPricePerKm(Number(e.target.value))}
-        className="border p-2 w-full"
+        className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
       />
     <div>  Radio envío gratis </div>
 
@@ -99,7 +99,7 @@ export default function DeliverySettingsPage() {
         placeholder="Radio envío gratis (km)"
         value={freeRadius}
         onChange={(e) => setFreeRadius(Number(e.target.value))}
-        className="border p-2 w-full"
+        className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
       />
     <div>  Distancia máxima </div>
 
@@ -108,7 +108,7 @@ export default function DeliverySettingsPage() {
         placeholder="Distancia máxima (km)"
         value={maxDistance}
         onChange={(e) => setMaxDistance(Number(e.target.value))}
-        className="border p-2 w-full"
+        className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
       />
 
       <button

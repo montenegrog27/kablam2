@@ -89,14 +89,14 @@ export default function PaymentMethodsPage() {
         className="bg-black p-6 rounded shadow mb-8 space-y-4"
       >
         <input
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           placeholder="Nombre (Ej: Efectivo)"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
         <select
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           value={type}
           onChange={(e) => setType(e.target.value)}
         >
@@ -129,7 +129,7 @@ export default function PaymentMethodsPage() {
           Requiere referencia (comprobante)
         </label>
 
-        <button className="bg-white text-black px-4 py-2 rounded">
+        <button className="bg-gray-900 text-white px-4 py-2 rounded">
           Crear Medio de Pago
         </button>
       </form>

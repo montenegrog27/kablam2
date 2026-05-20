@@ -172,7 +172,7 @@ export default function ProductIngredientsPage() {
           placeholder="Buscar producto..."
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
-          className="border p-3 w-full rounded-lg bg-white text-black"
+          className="border p-3 w-full rounded-lg bg-gray-900 text-white"
         />
       </div>
 
@@ -184,7 +184,7 @@ export default function ProductIngredientsPage() {
           </h3>
 
           {products.length === 0 ? (
-            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-500">
+            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-400">
               No hay productos que coincidan con la búsqueda
             </div>
           ) : (
@@ -222,7 +222,7 @@ export default function ProductIngredientsPage() {
                 </h3>
 
                 {productIngredients.length === 0 && (
-                  <p className="text-gray-500 text-sm py-4 text-center bg-gray-900 rounded">
+                  <p className="text-gray-400 text-sm py-4 text-center bg-gray-900 rounded">
                     Sin ingredientes asignados
                   </p>
                 )}
@@ -253,7 +253,7 @@ export default function ProductIngredientsPage() {
                           className={`p-1.5 rounded text-xs ${
                             pi.is_essential
                               ? "bg-red-500/20 text-red-400"
-                              : "bg-gray-700 text-gray-500"
+                              : "bg-gray-700 text-gray-400"
                           }`}
                         >
                           ⛔
@@ -267,7 +267,7 @@ export default function ProductIngredientsPage() {
                           className={`p-1.5 rounded text-xs ${
                             pi.is_visible
                               ? "bg-green-500/20 text-green-400"
-                              : "bg-gray-700 text-gray-500"
+                              : "bg-gray-700 text-gray-400"
                           }`}
                         >
                           👁
@@ -304,7 +304,7 @@ export default function ProductIngredientsPage() {
                   ))}
 
                   {unassignedIngredients.length === 0 && (
-                    <p className="text-gray-500 text-sm py-4 text-center">
+                    <p className="text-gray-400 text-sm py-4 text-center">
                       Todos los ingredientes están asignados
                     </p>
                   )}
@@ -312,13 +312,13 @@ export default function ProductIngredientsPage() {
               </div>
 
               {/* Legend */}
-              <div className="mt-4 pt-4 border-t border-gray-700 flex gap-4 text-xs text-gray-500">
+              <div className="mt-4 pt-4 border-t border-gray-700 flex gap-4 text-xs text-gray-400">
                 <span>⛔ Esencial = No se puede quitar</span>
                 <span>👁 Visible en pedido</span>
               </div>
             </div>
           ) : (
-            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-500 sticky top-6">
+            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-400 sticky top-6">
               <div className="text-4xl mb-3">👈</div>
               <p>Seleccioná un producto para configurar sus ingredientes</p>
             </div>

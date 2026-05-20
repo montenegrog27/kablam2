@@ -153,7 +153,7 @@ export default function ProductExtrasPage() {
             setSearch(e.target.value);
             loadInitialData();
           }}
-          className="border p-3 w-full rounded-lg bg-white text-black"
+          className="border p-3 w-full rounded-lg bg-gray-900 text-white"
         />
       </div>
 
@@ -165,7 +165,7 @@ export default function ProductExtrasPage() {
           </h3>
 
           {products.length === 0 ? (
-            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-500">
+            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-400">
               No hay productos
             </div>
           ) : (
@@ -231,7 +231,7 @@ export default function ProductExtrasPage() {
                 </h3>
 
                 {extras.length === 0 && (
-                  <p className="text-gray-500 text-sm py-4 text-center bg-gray-900 rounded">
+                  <p className="text-gray-400 text-sm py-4 text-center bg-gray-900 rounded">
                     No hay extras configurados
                   </p>
                 )}
@@ -253,7 +253,7 @@ export default function ProductExtrasPage() {
                               extra.ingredients?.cost_per_unit}
                           </span>
                           {extra.ingredients?.sale_price && (
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-400">
                               (costo: ${extra.ingredients?.cost_per_unit})
                             </span>
                           )}
@@ -271,7 +271,7 @@ export default function ProductExtrasPage() {
               </div>
 
               {/* Info */}
-              <div className="mt-4 pt-4 border-t border-gray-700 text-xs text-gray-500">
+              <div className="mt-4 pt-4 border-t border-gray-700 text-xs text-gray-400">
                 <p>
                   El precio se toma del campo <strong>"Precio venta"</strong>{" "}
                   del ingrediente.
@@ -282,7 +282,7 @@ export default function ProductExtrasPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-500 sticky top-6">
+            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-400 sticky top-6">
               <div className="text-4xl mb-3">👈</div>
               <p>Seleccioná un producto para configurar sus extras</p>
             </div>

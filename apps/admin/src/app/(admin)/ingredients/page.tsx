@@ -188,7 +188,7 @@ export default function IngredientsPage() {
           </div>
         </div>
 
-        <p className="text-xs text-gray-500 mt-2 mb-4">
+        <p className="text-xs text-gray-400 mt-2 mb-4">
           Costo = para stock. Precio venta = lo que paga el cliente al agregarlo
           como extra.
         </p>
@@ -296,7 +296,7 @@ export default function IngredientsPage() {
         ))}
 
         {ingredients.length === 0 && (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-gray-400">
             No hay ingredientes creados
           </div>
         )}

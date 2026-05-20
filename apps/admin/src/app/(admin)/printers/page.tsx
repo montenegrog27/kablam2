@@ -272,8 +272,8 @@ export default function PrintersPage() {
       <div className="bg-gray-900 border rounded-xl p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-semibold text-gray-900">Detección USB</h2>
-            <p className="text-sm text-gray-500">Conectá la impresora por USB y escaneá</p>
+            <h2 className="font-semibold text-gray-100">Detección USB</h2>
+            <p className="text-sm text-gray-400">Conectá la impresora por USB y escaneá</p>
           </div>
           <button
             onClick={scanUSB}
@@ -302,12 +302,12 @@ export default function PrintersPage() {
               </label>
             </div>
             {detectedDevices.map((dev, i) => (
-              <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg p-3 border">
+              <div key={i} className="flex items-center justify-between bg-gray-800 rounded-lg p-3 border">
                 <div className="flex items-center gap-3">
-                  <Printer size={20} className="text-gray-600" />
+                  <Printer size={20} className="text-gray-400" />
                   <div>
-                    <p className="font-medium text-sm text-gray-900">{dev.name}</p>
-                    <p className="text-xs text-gray-500">{dev.manufacturer} — VID:{dev.vendorId} PID:{dev.productId}</p>
+                    <p className="font-medium text-sm text-gray-100">{dev.name}</p>
+                    <p className="text-xs text-gray-400">{dev.manufacturer} — VID:{dev.vendorId} PID:{dev.productId}</p>
                   </div>
                 </div>
                 <button
@@ -324,7 +324,7 @@ export default function PrintersPage() {
 
       {/* Formulario manual */}
       <form onSubmit={handleCreate} className="bg-gray-900 border rounded-xl p-6 mb-6 space-y-4">
-        <h2 className="font-semibold text-gray-900">Agregar manualmente</h2>
+        <h2 className="font-semibold text-gray-100">Agregar manualmente</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <input className="border p-2 rounded text-sm" placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
           <select className="border p-2 rounded text-sm" value={type} onChange={(e) => { setType(e.target.value); if (e.target.value !== "network") { setIp(""); } }}>
@@ -372,13 +372,13 @@ export default function PrintersPage() {
           <div key={printer.id} className={`bg-gray-900 border rounded-xl p-4 ${printer.is_default ? "ring-2 ring-blue-400" : ""}`}>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <Printer size={20} className={printer.is_default ? "text-blue-600" : "text-gray-500"} />
+                <Printer size={20} className={printer.is_default ? "text-blue-600" : "text-gray-400"} />
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900">{printer.name}</span>
+                    <span className="font-medium text-gray-100">{printer.name}</span>
                     {printer.is_default && <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">Predeterminada</span>}
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-400">
                     Tipo: {printer.type}
                     {printer.ip_address && <> — IP: {printer.ip_address}:{printer.port || 9100}</>}
                     {printer.usb_vendor_id && <> — VID: {printer.usb_vendor_id}</>}
@@ -395,14 +395,14 @@ export default function PrintersPage() {
               <div className="flex items-center gap-2">
                 {printer.print_comandas && (
                   <div className="relative group">
-                    <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-400" title="Asignar categorías">
+                    <button className="p-2 rounded-lg hover:bg-gray-800 text-gray-400" title="Asignar categorías">
                       📂
                     </button>
                     <div className="absolute right-0 top-full mt-1 bg-gray-900 rounded-xl shadow-xl border z-10 p-3 min-w-[200px] hidden group-hover:block">
-                      <p className="text-xs font-medium text-gray-700 mb-2">Comandas de:</p>
+                      <p className="text-xs font-medium text-gray-300 mb-2">Comandas de:</p>
                       <div className="space-y-1 max-h-40 overflow-y-auto">
                         {allCategories.map((cat) => (
-                          <label key={cat.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                          <label key={cat.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-800 px-1 py-0.5 rounded">
                             <input type="checkbox" className="h-3.5 w-3.5" checked={assignedCats.includes(cat.id)}
                               onChange={async () => {
                                 if (assignedCats.includes(cat.id)) { await supabase.from("printer_categories").delete().eq("printer_id", printer.id).eq("category_id", cat.id); }
@@ -416,7 +416,7 @@ export default function PrintersPage() {
                     </div>
                   </div>
                 )}
-                <button onClick={() => testPrinter(printer)} disabled={testing === printer.id} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-green-600" title="Probar impresora">
+                <button onClick={() => testPrinter(printer)} disabled={testing === printer.id} className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-green-600" title="Probar impresora">
                   {testing === printer.id ? "⏳" : "▶️"}
                 </button>
                 <button onClick={() => {
@@ -425,37 +425,37 @@ export default function PrintersPage() {
                   setTicketFooter(printer.ticket_footer || "");
                   setComandaHeader(printer.comanda_header || "");
                   setComandaFooter(printer.comanda_footer || "");
-                }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600" title="Personalizar">
+                }} className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-blue-600" title="Personalizar">
                   ✏️
                 </button>
                 {!printer.is_default && (
-                  <button onClick={() => setDefault(printer)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-yellow-500" title="Predeterminada">
+                  <button onClick={() => setDefault(printer)} className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-yellow-500" title="Predeterminada">
                     <Star size={16} />
                   </button>
                 )}
-                <button onClick={() => handleDelete(printer.id)} className="p-2 rounded-lg hover:bg-gray-100 text-red-500">
+                <button onClick={() => handleDelete(printer.id)} className="p-2 rounded-lg hover:bg-gray-800 text-red-500">
                   <Trash2 size={16} />
                 </button>
               </div>
             </div>
             {editingTemplate === printer.id ? (
-              <div className="mt-4 p-4 bg-gray-50 rounded-xl border space-y-3">
-                <h4 className="text-sm font-semibold text-gray-700">Personalizar contenido</h4>
+              <div className="mt-4 p-4 bg-gray-800 rounded-xl border space-y-3">
+                <h4 className="text-sm font-semibold text-gray-300">Personalizar contenido</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500">Encabezado comanda</label>
+                    <label className="text-xs text-gray-400">Encabezado comanda</label>
                     <textarea value={comandaHeader} onChange={(e) => setComandaHeader(e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej: SOLO COCINA" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500">Pie comanda</label>
+                    <label className="text-xs text-gray-400">Pie comanda</label>
                     <textarea value={comandaFooter} onChange={(e) => setComandaFooter(e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej: Gracias!" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500">Encabezado ticket</label>
+                    <label className="text-xs text-gray-400">Encabezado ticket</label>
                     <textarea value={ticketHeader} onChange={(e) => setTicketHeader(e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej: Gracias por tu compra!" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500">Pie ticket</label>
+                    <label className="text-xs text-gray-400">Pie ticket</label>
                     <textarea value={ticketFooter} onChange={(e) => setTicketFooter(e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej: Te esperamos pronto!" />
                   </div>
                 </div>

@@ -5,13 +5,24 @@ import jwt from "jsonwebtoken";
 const JWT_SECRET = process.env.JWT_SECRET || "kablam-secret-change-in-production";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3002";
+
+function getSafeReturnTo(value: unknown, branchSlug: string) {
+  if (typeof value !== "string" || !value.startsWith("/")) {
+    return `/${branchSlug}/account/profile`;
+  }
+
+  if (value.startsWith("//") || !value.startsWith(`/${branchSlug}/`)) {
+    return `/${branchSlug}/account/profile`;
+  }
+
+  return value;
+}
 
 export async function POST(req: NextRequest) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    const { phone, branchSlug } = await req.json();
+    const { phone, branchSlug, returnTo } = await req.json();
 
     if (!phone || !branchSlug) {
       return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
@@ -52,8 +63,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Generar token mágico (5 min de expiración)
+    const safeReturnTo = getSafeReturnTo(returnTo, branchSlug);
     const magicToken = jwt.sign(
-      { phone: phoneNormalized, customerId: customer.id, branchId: branch.id, tenantId: branch.tenant_id, type: "magic_link" },
+      {
+        phone: phoneNormalized,
+        customerId: customer.id,
+        branchId: branch.id,
+        tenantId: branch.tenant_id,
+        branchSlug,
+        returnTo: safeReturnTo,
+        type: "magic_link",
+      },
       JWT_SECRET,
       { expiresIn: "5m" }
     );
@@ -111,8 +131,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: "Mensaje enviado" });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Error en request-login:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Error interno" },
+      { status: 500 },
+    );
   }
 }

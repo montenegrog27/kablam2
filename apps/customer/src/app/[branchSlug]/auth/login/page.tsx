@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Phone, ArrowRight, Loader, CheckCircle } from "lucide-react";
 
 export default function LoginPage() {
@@ -10,37 +10,81 @@ export default function LoginPage() {
   const [step, setStep] = useState<"form" | "sent" | "error">("form");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnTo =
+    searchParams.get("returnTo") ||
+    `/${branchSlug || "sucursal"}/account/profile`;
 
   useEffect(() => {
-    setBranchSlug(window.location.pathname.split("/")[1]);
-  }, []);
+    setBranchSlug(pathname.split("/")[1]);
+  }, [pathname]);
 
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "kablam_auth_complete" && event.newValue) {
+        try {
+          const data = JSON.parse(event.newValue) as { returnTo?: string };
+          window.location.replace(data.returnTo || returnTo);
+        } catch {
+          window.location.replace(returnTo);
+        }
+      }
+    };
+
+    let channel: BroadcastChannel | null = null;
+
+    try {
+      channel = new BroadcastChannel("kablam_customer_auth");
+      channel.onmessage = (event) => {
+        if (event.data?.type === "authenticated") {
+          window.location.replace(event.data.returnTo || returnTo);
+        }
+      };
+    } catch {
+      channel = null;
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      channel?.close();
+    };
+  }, [returnTo]);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     if (phone.replace(/\D/g, "").length < 8) {
-      setError("Ingresá un número válido");
+      setError("Ingresa un numero valido");
       return;
     }
+
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch("/api/auth/request-login", {
+      const response = await fetch("/api/auth/request-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.replace(/\D/g, ""), branchSlug }),
+        body: JSON.stringify({
+          phone: phone.replace(/\D/g, ""),
+          branchSlug,
+          returnTo,
+        }),
       });
 
-      const data = await res.json();
+      const data = await response.json();
+
       if (data.success) {
         setStep("sent");
       } else {
         setError(data.error || "Error al enviar");
       }
     } catch {
-      setError("Error de conexión");
+      setError("Error de conexion");
     }
+
     setLoading(false);
   };
 
@@ -52,19 +96,22 @@ export default function LoginPage() {
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle size={32} className="text-green-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">✅ Mensaje enviado</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Mensaje enviado
+            </h1>
             <p className="text-gray-600 mb-6">
               Te enviamos un mensaje por WhatsApp a <strong>{phone}</strong>.
-              Tocá el botón <strong>"Ingresar"</strong> para entrar automáticamente.
+              Toca el boton <strong>&quot;Ingresar&quot;</strong> para entrar
+              automaticamente.
             </p>
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm text-orange-700 mb-6">
-              ⏳ El link expira en 5 minutos
+              El link expira en 5 minutos
             </div>
             <button
               onClick={() => setStep("form")}
               className="text-sm text-gray-500 hover:text-gray-700 underline"
             >
-              Quiero usar otro número
+              Quiero usar otro numero
             </button>
           </div>
         ) : (
@@ -73,16 +120,16 @@ export default function LoginPage() {
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Phone size={28} className="text-orange-600" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">Ingresá</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Ingresa</h1>
               <p className="text-gray-500 mt-1">
-                Te enviaremos un link mágico por WhatsApp
+                Te enviaremos un link magico por WhatsApp
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tu número de WhatsApp
+                  Tu numero de WhatsApp
                 </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
@@ -92,7 +139,9 @@ export default function LoginPage() {
                     type="tel"
                     placeholder="379 409 4455"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                    onChange={(event) =>
+                      setPhone(event.target.value.replace(/\D/g, ""))
+                    }
                     className="w-full border border-gray-300 rounded-xl pl-12 pr-4 py-3.5 text-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition outline-none"
                     autoFocus
                   />
@@ -121,7 +170,7 @@ export default function LoginPage() {
             </form>
 
             <p className="text-xs text-gray-400 text-center mt-6">
-              Al ingresar aceptás recibir mensajes de WhatsApp de Mordisco
+              Al ingresar aceptas recibir mensajes de WhatsApp de Mordisco
             </p>
           </div>
         )}

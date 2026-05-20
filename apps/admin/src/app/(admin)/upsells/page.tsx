@@ -338,14 +338,14 @@ export default function UpsellsPage() {
                       className="accent-blue-500"
                     />
                     <span className="text-sm text-gray-200">{p.name}</span>
-                    <span className="text-xs text-gray-500 ml-auto">
+                    <span className="text-xs text-gray-400 ml-auto">
                       {getCategoryName(p.category_id)}
                     </span>
                   </label>
                 ))}
               {products.filter((p) => p.category_id !== selectedCategoryId)
                 .length === 0 && (
-                <p className="text-gray-500 text-sm text-center py-2">
+                <p className="text-gray-400 text-sm text-center py-2">
                   No hay productos disponibles
                 </p>
               )}
@@ -395,7 +395,7 @@ export default function UpsellsPage() {
                   </div>
                 </div>
 
-                <div className="text-2xl text-gray-500">→</div>
+                <div className="text-2xl text-gray-400">→</div>
 
                 <div className="text-center">
                   <div className="text-sm text-gray-400 mb-1">Sugerir</div>
@@ -454,7 +454,7 @@ export default function UpsellsPage() {
         })}
 
         {upsells.length === 0 && (
-          <p className="text-gray-500 text-center py-8">
+          <p className="text-gray-400 text-center py-8">
             No hay reglas de upsell configuradas
           </p>
         )}

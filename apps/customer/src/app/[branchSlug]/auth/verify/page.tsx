@@ -32,6 +32,8 @@ export default function VerifyPage({
 
   const token = searchParams.get("token");
   const phoneParam = searchParams.get("phone");
+  const returnTo =
+    searchParams.get("returnTo") || `/${branchSlug}/account/profile`;
 
   const [status, setStatus] = useState<VerificationStatus>("pending");
   const [message, setMessage] = useState("");
@@ -82,7 +84,7 @@ export default function VerifyPage({
 
       // Redirigir a perfil después de 2 segundos
       setTimeout(() => {
-        router.push(`/${branchSlug}/account/profile`);
+        router.replace(returnTo);
       }, 2000);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -110,6 +112,7 @@ export default function VerifyPage({
         body: JSON.stringify({
           branchSlug,
           phone,
+          returnTo,
         }),
       });
 

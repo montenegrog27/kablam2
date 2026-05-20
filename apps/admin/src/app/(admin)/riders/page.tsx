@@ -162,7 +162,7 @@ export default function RidersPage() {
           </div>
         </div>
 
-        <button className="bg-white text-black px-4 py-2 rounded">
+        <button className="bg-gray-900 text-white px-4 py-2 rounded">
           Crear Repartidor
         </button>
       </form>
@@ -170,7 +170,7 @@ export default function RidersPage() {
       {/* Lista */}
       <div className="space-y-4">
         {riders.length === 0 && (
-          <p className="text-gray-500">No hay repartidores creados</p>
+          <p className="text-gray-400">No hay repartidores creados</p>
         )}
 
         {riders.map((rider) => (
@@ -193,7 +193,7 @@ export default function RidersPage() {
                 {rider.phone}
                 {rider.email && ` • ${rider.email}`}
               </div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-gray-400 mt-1">
                 📍 {getBranchName(rider.branch_id)}
               </div>
             </div>

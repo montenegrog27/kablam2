@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Package,
   Clock,
@@ -24,11 +25,14 @@ type OrderStatus =
 
 interface OrderItem {
   id: string;
+  product_id?: string;
+  variant_id?: string;
   product_name: string;
   quantity: number;
   unit_price: number;
   total: number;
   notes?: string;
+  extras?: Array<{ type?: string; name?: string; price?: number }>;
 }
 
 interface Order {
@@ -47,9 +51,13 @@ interface Order {
 }
 
 export default function OrdersPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const branchSlug = pathname.split("/").filter(Boolean)[0];
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   // Cargar pedidos
   useEffect(() => {
@@ -161,6 +169,35 @@ export default function OrdersPage() {
     }).format(amount);
   };
 
+  const handleReorder = async (orderId: string) => {
+    setReorderingId(orderId);
+    setError("");
+
+    try {
+      const response = await fetch("/api/account/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "No pudimos repetir el pedido");
+      }
+
+      sessionStorage.setItem(
+        `cart_${branchSlug}`,
+        JSON.stringify(data.cartItems || []),
+      );
+      router.push(`/${branchSlug}/checkout`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message || "No pudimos repetir el pedido");
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -197,7 +234,7 @@ export default function OrdersPage() {
             Cuando realices tu primer pedido, aparecerá aquí.
           </p>
           <a
-            href="/order"
+            href={`/${branchSlug}/order`}
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
           >
             Ver menú
@@ -339,8 +376,21 @@ export default function OrdersPage() {
                     </button>
                   )}
                   {order.status === "delivered" && (
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-                      Volver a pedir
+                    <button
+                      onClick={() => handleReorder(order.id)}
+                      disabled={reorderingId === order.id}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+                    >
+                      {reorderingId === order.id ? "Cargando..." : "Volver a pedir"}
+                    </button>
+                  )}
+                  {order.status !== "delivered" && (
+                    <button
+                      onClick={() => handleReorder(order.id)}
+                      disabled={reorderingId === order.id}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+                    >
+                      {reorderingId === order.id ? "Cargando..." : "Repetir pedido"}
                     </button>
                   )}
                   <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium">

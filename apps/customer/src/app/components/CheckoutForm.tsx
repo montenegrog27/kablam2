@@ -68,6 +68,18 @@ type Coupon = {
   is_active?: boolean;
 };
 
+type SavedAddress = {
+  id: string;
+  alias: string;
+  address: string;
+  apartment?: string | null;
+  floor?: string | null;
+  notes?: string | null;
+  is_default: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
 export default function CheckoutForm({
   cart,
   orderMode,
@@ -85,7 +97,7 @@ export default function CheckoutForm({
 
   const [customerLat, setCustomerLat] = useState<number | null>(null);
   const [customerLng, setCustomerLng] = useState<number | null>(null);
-  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [showMapModal, setShowMapModal] = useState(false);
   const [mapLat, setMapLat] = useState<number | null>(null);
@@ -148,12 +160,48 @@ export default function CheckoutForm({
     }
   }, [branchSlug]);
 
-  useEffect(() => {
-    loadPaymentMethods();
-    loadDeliveryData();
-  }, [branchSlug, loadPaymentMethods]);
+  async function loadCustomerProfile() {
+    try {
+      const response = await fetch("/api/account/profile", { cache: "no-store" });
+      if (!response.ok) return;
 
-  const loadDeliveryData = async () => {
+      const data = await response.json();
+      const profile = data.customer;
+
+      setCustomer((current) => ({
+        ...current,
+        name: profile?.name || current.name,
+        phone: profile?.phone || current.phone,
+      }));
+    } catch {
+      // Anonymous checkout still works.
+    }
+  }
+
+  function formatSavedAddress(address: SavedAddress) {
+    return [
+      address.address,
+      address.floor ? `Piso ${address.floor}` : "",
+      address.apartment ? `Depto ${address.apartment}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  function selectSavedAddress(address: SavedAddress) {
+    setSelectedAddressId(address.id);
+    setCustomer((current) => ({
+      ...current,
+      address: formatSavedAddress(address),
+    }));
+
+    if (address.latitude && address.longitude) {
+      setCustomerLat(Number(address.latitude));
+      setCustomerLng(Number(address.longitude));
+    }
+  }
+
+  async function loadDeliveryData() {
     const { data: branch } = await supabase.from("branches").select("id, lat, lng").eq("slug", branchSlug).single();
     if (!branch) return;
     setBranchLat(branch.lat ? Number(branch.lat) : null);
@@ -167,22 +215,39 @@ export default function CheckoutForm({
       const res = await fetch("/api/account/addresses");
       if (res.ok) {
         const data = await res.json();
-        if (data.length > 0) {
-          setSavedAddresses(data);
+        const addresses = (data.addresses || []) as SavedAddress[];
+        if (addresses.length > 0) {
+          setSavedAddresses(addresses);
           // Auto-seleccionar dirección predeterminada
-          const def = data.find((a: any) => a.is_default) || data[0];
-          setSelectedAddressId(def.id);
-          setCustomer((c) => ({ ...c, address: def.address }));
-          if (def.latitude && def.longitude) {
-            setCustomerLat(Number(def.latitude));
-            setCustomerLng(Number(def.longitude));
-          }
+          const def =
+            addresses.find((address) => address.is_default) || addresses[0];
+          selectSavedAddress(def);
         }
       }
     } catch {}
-  };
+  }
 
   // Calcular costo de envío cuando cambia la ubicación
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      loadPaymentMethods();
+      loadCustomerProfile();
+      loadDeliveryData();
+
+      const storedAddress = sessionStorage.getItem(
+        `checkout_address_${branchSlug}`,
+      );
+      if (storedAddress) {
+        try {
+          const address = JSON.parse(storedAddress) as SavedAddress;
+          selectSavedAddress(address);
+        } catch {
+          sessionStorage.removeItem(`checkout_address_${branchSlug}`);
+        }
+      }
+    });
+  }, [branchSlug, loadPaymentMethods]);
+
   useEffect(() => {
     if (orderMode !== "delivery" || !customerLat || !customerLng || !branchLat || !branchLng || !deliverySettings) {
       setShippingCost(0);
@@ -351,6 +416,8 @@ export default function CheckoutForm({
         items: cart.map((item) => ({
           variantId: item.variantId,
           quantity: item.quantity,
+          extras: item.extras,
+          removedIngredients: item.removedIngredients,
         })),
         total,
         shippingCost,
@@ -447,6 +514,31 @@ export default function CheckoutForm({
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5" style={{ fontFamily }}>Dirección de entrega</label>
                   <div className="space-y-2.5">
+                    {savedAddresses.length > 0 && (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {savedAddresses.map((address) => (
+                          <button
+                            key={address.id}
+                            type="button"
+                            onClick={() => selectSavedAddress(address)}
+                            className={`rounded-xl border px-3 py-2.5 text-left text-sm transition ${
+                              selectedAddressId === address.id
+                                ? "border-gray-900 bg-gray-900 text-white"
+                                : "border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-400"
+                            }`}
+                          >
+                            <span className="block font-bold">
+                              {address.alias}
+                              {address.is_default ? " · Favorita" : ""}
+                            </span>
+                            <span className="mt-1 block line-clamp-1 text-xs opacity-80">
+                              {formatSavedAddress(address)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="relative group">
                       <input
                         ref={addressInputRef}

@@ -348,7 +348,7 @@ export default function CombosPage() {
                     <span className="text-sm text-gray-200 flex-1">
                       {p.name}
                     </span>
-                    <span className="text-xs text-gray-500 mr-2">
+                    <span className="text-xs text-gray-400 mr-2">
                       ${Number(p.product_variants?.[0]?.price) || 0}
                     </span>
                     {qty > 0 && (
@@ -382,7 +382,7 @@ export default function CombosPage() {
                 );
               })}
               {products.length === 0 && (
-                <p className="text-gray-500 text-sm text-center py-2">
+                <p className="text-gray-400 text-sm text-center py-2">
                   No hay productos
                 </p>
               )}
@@ -486,7 +486,7 @@ export default function CombosPage() {
         })}
 
         {combos.length === 0 && (
-          <div className="col-span-2 text-center py-12 text-gray-500 bg-gray-800/50 rounded-lg">
+          <div className="col-span-2 text-center py-12 text-gray-400 bg-gray-800/50 rounded-lg">
             No hay combos configurados
           </div>
         )}

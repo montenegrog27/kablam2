@@ -118,7 +118,7 @@ export default function ModifiersPage() {
               key={group.id}
               onClick={()=>setSelectedGroup(group.id)}
               className={`block w-full text-left p-2 rounded ${
-                selectedGroup===group.id ? "bg-white text-black" : ""
+                selectedGroup===group.id ? "bg-gray-900 text-white" : ""
               }`}
             >
               {group.name}
@@ -130,7 +130,7 @@ export default function ModifiersPage() {
         <div className="mt-6 space-y-2">
 
           <input
-            className="border p-2 w-full"
+            className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
             placeholder="Nuevo grupo"
             value={newGroupName}
             onChange={e=>setNewGroupName(e.target.value)}
@@ -138,7 +138,7 @@ export default function ModifiersPage() {
 
           <button
             onClick={createGroup}
-            className="bg-white text-black px-3 py-2 rounded w-full"
+            className="bg-gray-900 text-white px-3 py-2 rounded w-full"
           >
             Crear grupo
           </button>
@@ -161,7 +161,7 @@ export default function ModifiersPage() {
             <h2 className="font-semibold">Crear extra</h2>
 
             <input
-              className="border p-2 w-full"
+              className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
               placeholder="Nombre extra"
               value={newModifierName}
               onChange={e=>setNewModifierName(e.target.value)}
@@ -169,7 +169,7 @@ export default function ModifiersPage() {
 
             <input
               type="number"
-              className="border p-2 w-full"
+              className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
               placeholder="Precio"
               value={newModifierPrice}
               onChange={e=>setNewModifierPrice(e.target.value)}
@@ -177,7 +177,7 @@ export default function ModifiersPage() {
 
             <button
               onClick={createModifier}
-              className="bg-white text-black px-4 py-2 rounded"
+              className="bg-gray-900 text-white px-4 py-2 rounded"
             >
               Crear extra
             </button>

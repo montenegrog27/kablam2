@@ -9,6 +9,7 @@ import {
   ChefHat, Box, ShoppingBag, ShoppingCart, TicketPercent,
   Bike, Clock, CookingPot, Printer, Truck, CreditCard, Kanban,
   UserCog, Award, Zap, Settings, LogOut, ChevronDown, Menu,
+  DollarSign, TrendingUp, Receipt, FileText, Truck as TruckIcon, BarChart3,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -62,6 +63,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/printers", label: "Impresoras", icon: Printer },
       { href: "/flash-sales", label: "Ofertas Flash", icon: Zap },
       { href: "/kds-config", label: "KDS Config", icon: Kanban },
+    ]},
+    { section: "Finanzas", items: [
+      { href: "/ventas", label: "Ventas", icon: DollarSign },
+      { href: "/ventas/productos", label: "Ventas x Producto", icon: BarChart3 },
+      { href: "/reporte-diario", label: "Reporte Diario", icon: FileText },
+      { href: "/reports", label: "Reportes", icon: Receipt },
+      { href: "/expenses", label: "Gastos", icon: Receipt },
+      { href: "/expense-categories", label: "Cat. Gastos", icon: Tags },
+      { href: "/suppliers", label: "Proveedores", icon: TruckIcon },
+    ]},
+    { section: "Stock", items: [
+      { href: "/purchases", label: "Compras", icon: FileText },
+      { href: "/purchase-categories", label: "Cat. Compras", icon: Tags },
     ]},
     { section: "Configuración", items: [
       { href: "/delivery-settings", label: "Delivery", icon: Truck },
@@ -126,7 +140,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto bg-gray-50">
+      <main className="flex-1 overflow-y-auto bg-gray-950 text-gray-100">
         <div className="p-6 max-w-7xl mx-auto">{children}</div>
       </main>
     </div>

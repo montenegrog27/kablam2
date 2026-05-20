@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   MapPin,
   Plus,
@@ -26,6 +27,9 @@ interface Address {
 }
 
 export default function AddressesPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const branchSlug = pathname.split("/").filter(Boolean)[0];
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -200,6 +204,14 @@ export default function AddressesPage() {
       default:
         return MapPin;
     }
+  };
+
+  const handleUseAddress = (address: Address) => {
+    sessionStorage.setItem(
+      `checkout_address_${branchSlug}`,
+      JSON.stringify(address),
+    );
+    router.push(`/${branchSlug}/checkout`);
   };
 
   if (loading) {
@@ -512,7 +524,10 @@ export default function AddressesPage() {
 
                 {/* Botón usar en pedido */}
                 <div className="mt-6 pt-6 border-t">
-                  <button className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium">
+                  <button
+                    onClick={() => handleUseAddress(address)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
+                  >
                     <Navigation size={14} />
                     Usar en mi próximo pedido
                   </button>

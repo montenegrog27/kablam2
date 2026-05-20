@@ -132,21 +132,21 @@ export default function CouponsPage() {
         className="bg-black p-6 rounded shadow mb-8 space-y-4"
       >
         <input
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           placeholder="Nombre interno"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
         <input
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           placeholder="Código (Ej: VERANO10)"
           value={code}
           onChange={(e) => setCode(e.target.value)}
         />
 
         <select
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           value={discountType}
           onChange={(e) =>
             setDiscountType(e.target.value)
@@ -161,7 +161,7 @@ export default function CouponsPage() {
           discountType === "fixed") && (
           <input
             type="number"
-            className="border p-2 w-full"
+            className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
             placeholder="Valor"
             value={discountValue}
             onChange={(e) =>
@@ -183,7 +183,7 @@ export default function CouponsPage() {
 
         {requiresPhone && (
           <input
-            className="border p-2 w-full"
+            className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
             placeholder="Número permitido"
             value={allowedPhone}
             onChange={(e) =>
@@ -206,7 +206,7 @@ export default function CouponsPage() {
         {hasExpiration && (
           <input
             type="datetime-local"
-            className="border p-2 w-full"
+            className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
             value={expiresAt}
             onChange={(e) =>
               setExpiresAt(e.target.value)
@@ -215,7 +215,7 @@ export default function CouponsPage() {
         )}
 
         <select
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           value={usageType}
           onChange={(e) =>
             setUsageType(e.target.value)
@@ -232,7 +232,7 @@ export default function CouponsPage() {
         {usageType === "limited" && (
           <input
             type="number"
-            className="border p-2 w-full"
+            className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
             placeholder="Cantidad máxima de usos"
             value={usageLimit}
             onChange={(e) =>
@@ -244,7 +244,7 @@ export default function CouponsPage() {
         {usageType === "weekly_limited" && (
           <input
             type="number"
-            className="border p-2 w-full"
+            className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
             placeholder="Usos permitidos por semana"
             value={weeklyLimit}
             onChange={(e) =>
@@ -264,7 +264,7 @@ export default function CouponsPage() {
           Se puede combinar con descuentos del día
         </label>
 
-        <button className="bg-white text-black px-4 py-2 rounded">
+        <button className="bg-gray-900 text-white px-4 py-2 rounded">
           Crear Cupón
         </button>
       </form>

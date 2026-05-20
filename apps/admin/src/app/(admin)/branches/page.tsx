@@ -339,7 +339,7 @@ export default function BranchesPage() {
         const whatsapp = getWhatsapp(branch.id);
 
         return (
-          <div key={branch.id} className="border rounded-xl p-6 space-y-6">
+          <div key={branch.id} className="bg-gray-900 border border-gray-700 shadow-sm rounded-xl p-6 space-y-6">
             {/* =============================
                 BRANCH
             ============================= */}
@@ -348,7 +348,7 @@ export default function BranchesPage() {
               <h2 className="font-semibold text-lg">Sucursal</h2>
 
               <input
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branch.name || ""}
                 placeholder="Nombre"
                 onChange={(e) =>
@@ -357,7 +357,7 @@ export default function BranchesPage() {
               />
 
               <input
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branch.slug || ""}
                 placeholder="Slug"
                 onChange={(e) =>
@@ -378,12 +378,12 @@ export default function BranchesPage() {
                 BRANDING
             ============================= */}
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-t border-gray-700 pt-4">
               <h3 className="font-semibold">Branding</h3>
 
               <input
                 placeholder="Logo URL"
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branchSettings.logo_url || ""}
                 onChange={(e) =>
                   updateLocalSettings(branch.id, "logo_url", e.target.value)
@@ -401,6 +401,7 @@ export default function BranchesPage() {
                       e.target.value,
                     )
                   }
+                  className="w-full h-10 rounded-lg border border-gray-600 cursor-pointer p-0.5"
                 />
 
                 <input
@@ -413,6 +414,7 @@ export default function BranchesPage() {
                       e.target.value,
                     )
                   }
+                  className="w-full h-10 rounded-lg border border-gray-600 cursor-pointer p-0.5"
                 />
 
                 <input
@@ -425,6 +427,7 @@ export default function BranchesPage() {
                       e.target.value,
                     )
                   }
+                  className="w-full h-10 rounded-lg border border-gray-600 cursor-pointer p-0.5"
                 />
               </div>
 
@@ -439,7 +442,7 @@ export default function BranchesPage() {
                       e.target.value,
                     )
                   }
-                  className="w-full"
+                  className="w-full h-10 rounded-lg border border-gray-600 cursor-pointer p-0.5"
                 />
                 <input
                   type="color"
@@ -451,32 +454,32 @@ export default function BranchesPage() {
                       e.target.value,
                     )
                   }
-                  className="w-full"
+                  className="w-full h-10 rounded-lg border border-gray-600 cursor-pointer p-0.5"
                 />
               </div>
 
               <input
                 placeholder="Fuente (ej: 'Inter, sans-serif')"
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branchSettings.font_family || ""}
                 onChange={(e) =>
                   updateLocalSettings(branch.id, "font_family", e.target.value)
                 }
               />
-              <div className="text-xs text-gray-500 mb-2">
+              <div className="text-xs text-gray-400 mb-2">
                 Nombre de la familia de fuentes que se usará en CSS (ej:
                 "Inter", "Roboto", "MiFuente"). Si subes una fuente
                 personalizada, usa el mismo nombre aquí.
               </div>
               <input
                 placeholder="URL de Google Fonts (opcional)"
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branchSettings.font_url || ""}
                 onChange={(e) =>
                   updateLocalSettings(branch.id, "font_url", e.target.value)
                 }
               />
-              <div className="mt-2 p-2 border rounded bg-gray-50">
+              <div className="mt-2 p-3 border border-gray-700 rounded-lg bg-gray-800">
                 <div className="text-sm font-medium mb-1">
                   Subir fuente personalizada (.woff, .ttf, .woff2, .otf)
                 </div>
@@ -513,7 +516,7 @@ export default function BranchesPage() {
                       setFontFiles((prev) => ({ ...prev, [branch.id]: file }));
                     }
                   }}
-                  className="w-full text-sm"
+                  className="w-full text-sm bg-gray-900 border border-gray-600 rounded-lg px-3 py-2"
                   disabled={fontsBucketExists === false}
                 />
                 <button
@@ -524,7 +527,7 @@ export default function BranchesPage() {
                   Subir fuente
                 </button>
                 {branchSettings.font_url && (
-                  <div className="mt-2 text-xs text-gray-600">
+                  <div className="mt-2 text-xs text-gray-400">
                     URL actual:{" "}
                     <a
                       href={branchSettings.font_url}
@@ -542,12 +545,12 @@ export default function BranchesPage() {
                 REDES
             ============================= */}
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-t border-gray-700 pt-4">
               <h3 className="font-semibold">Redes</h3>
 
               <input
                 placeholder="Instagram URL"
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branchSettings.instagram_url || ""}
                 onChange={(e) =>
                   updateLocalSettings(
@@ -560,7 +563,7 @@ export default function BranchesPage() {
 
               <input
                 placeholder="Website URL"
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branchSettings.website_url || ""}
                 onChange={(e) =>
                   updateLocalSettings(branch.id, "website_url", e.target.value)
@@ -572,31 +575,31 @@ export default function BranchesPage() {
                 SEO Y METADATOS
             ============================= */}
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-t border-gray-700 pt-4">
               <h3 className="font-semibold">SEO y Metadatos</h3>
 
               <input
                 placeholder="Título para la pestaña del navegador"
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branchSettings.meta_title || ""}
                 onChange={(e) =>
                   updateLocalSettings(branch.id, "meta_title", e.target.value)
                 }
               />
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-400">
                 Este título aparece en la pestaña del navegador y en resultados
                 de búsqueda
               </div>
 
               <input
                 placeholder="URL del Favicon (icono de la pestaña)"
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branchSettings.favicon_url || ""}
                 onChange={(e) =>
                   updateLocalSettings(branch.id, "favicon_url", e.target.value)
                 }
               />
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-400">
                 URL de una imagen .ico, .png o .svg (recomendado: 32x32 o 48x48
                 px)
               </div>
@@ -606,16 +609,16 @@ export default function BranchesPage() {
                 TRACKING
             ============================= */}
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-t border-gray-700 pt-4">
               <h3 className="font-semibold">Tracking</h3>
 
               <div>
-                <label className="block text-sm text-gray-600 mb-1">
+                <label className="block text-sm text-gray-400 mb-1">
                   Pixel de Meta (Facebook/Meta)
                 </label>
                 <textarea
                   placeholder="Fragmento de código del Meta Pixel"
-                  className="border p-2 w-full rounded font-mono text-xs h-24"
+                  className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 font-mono text-xs h-24 w-full"
                   value={branchSettings.meta_pixel_script || ""}
                   onChange={(e) =>
                     updateLocalSettings(
@@ -625,24 +628,24 @@ export default function BranchesPage() {
                     )
                   }
                 />
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-gray-400 mt-1">
                   Pega el código del pixel de Meta (eventos de conversión, etc.)
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm text-gray-600 mb-1">
+                <label className="block text-sm text-gray-400 mb-1">
                   Google Analytics 4 (GA4)
                 </label>
                 <textarea
                   placeholder="Fragmento de código de GA4"
-                  className="border p-2 w-full rounded font-mono text-xs h-24"
+                  className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 font-mono text-xs h-24 w-full"
                   value={branchSettings.ga4_script || ""}
                   onChange={(e) =>
                     updateLocalSettings(branch.id, "ga4_script", e.target.value)
                   }
                 />
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-gray-400 mt-1">
                   Pega el código de medición de Google Analytics 4
                 </div>
               </div>
@@ -652,7 +655,7 @@ export default function BranchesPage() {
                 WEB STATUS
             ============================= */}
 
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-t border-gray-700 pt-4">
               <h3 className="font-semibold">Estado Web</h3>
 
               <label className="flex items-center gap-2">
@@ -668,7 +671,7 @@ export default function BranchesPage() {
 
               <input
                 placeholder="Mensaje cuando está cerrado"
-                className="border p-2 w-full rounded"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                 value={branchSettings.web_closed_message || ""}
                 onChange={(e) =>
                   updateLocalSettings(
@@ -702,7 +705,7 @@ export default function BranchesPage() {
                 <div className="space-y-2">
                   <input
                     placeholder="Phone Number ID"
-                    className="border p-2 w-full rounded"
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                     onChange={(e) =>
                       setWaForm({
                         ...waForm,
@@ -716,7 +719,7 @@ export default function BranchesPage() {
 
                   <input
                     placeholder="Access Token"
-                    className="border p-2 w-full rounded"
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
                     onChange={(e) =>
                       setWaForm({
                         ...waForm,

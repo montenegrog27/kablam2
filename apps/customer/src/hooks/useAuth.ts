@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.NEXT_PUBLIC_JWT_SECRET || "kablam-secret-change-in-production";
+import { usePathname, useRouter } from "next/navigation";
 
 type AuthSession = {
   customerId: string;
@@ -12,37 +9,47 @@ type AuthSession = {
   name?: string;
   branchId: string;
   tenantId: string;
-  createdAt: number;
+  expiresAt?: number;
 };
 
 export function useAuth() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    const cookies = document.cookie.split("; ").reduce((acc, c) => {
-      const [k, v] = c.split("=");
-      acc[k] = v;
-      return acc;
-    }, {} as Record<string, string>);
+    let cancelled = false;
 
-    const token = cookies["kablam_session"];
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET) as AuthSession;
-        setSession(decoded);
-      } catch {
-        setSession(null);
-      }
-    }
-    setLoading(false);
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!cancelled) {
+          setSession(data.session || null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSession(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     setSession(null);
-    router.push("/auth/login");
+
+    const branchSlug = pathname.split("/").filter(Boolean)[0];
+    router.push(branchSlug ? `/${branchSlug}/auth/login` : "/");
   };
 
   return { session, loading, logout, isAuthenticated: !!session };

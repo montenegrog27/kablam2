@@ -146,7 +146,7 @@ export default function RecipePage() {
         </select>
 
         <input
-          className="border p-2 w-full"
+          className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           type="number"
           placeholder="Cantidad"
           value={quantity}

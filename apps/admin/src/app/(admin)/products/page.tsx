@@ -463,10 +463,10 @@ export default function ProductsPage() {
   return (
     <div className="flex gap-6">
       {/* Sidebar de categorías */}
-      <aside className="w-64 bg-gray-50 border-r border-gray-200 rounded-lg p-4">
+      <aside className="w-64 bg-gray-800 border-r border-gray-700 rounded-lg p-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-semibold text-gray-800">Categorías</h2>
-          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
+          <span className="text-xs bg-gray-200 text-gray-400 px-2 py-1 rounded-full">
             {filteredProducts.length} productos
           </span>
         </div>
@@ -476,7 +476,7 @@ export default function ProductsPage() {
             className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
               !selectedCategory
                 ? "bg-black text-white font-medium"
-                : "text-gray-700 hover:bg-gray-100"
+                : "text-gray-300 hover:bg-gray-800"
             }`}
             onClick={() => setSelectedCategory(null)}
           >
@@ -497,13 +497,13 @@ export default function ProductsPage() {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex justify-between items-center ${
                     selectedCategory === cat.id
                       ? "bg-black text-white font-medium"
-                      : "text-gray-700 hover:bg-gray-100"
+                      : "text-gray-300 hover:bg-gray-800"
                   }`}
                   onClick={() => setSelectedCategory(cat.id)}
                 >
                   <span>{cat.name}</span>
                   {catProducts > 0 && (
-                    <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                    <span className="text-xs bg-gray-200 text-gray-400 px-2 py-0.5 rounded-full">
                       {catProducts}
                     </span>
                   )}
@@ -520,13 +520,13 @@ export default function ProductsPage() {
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex justify-between items-center ml-4 ${
                         selectedCategory === sub.id
                           ? "bg-gray-800 text-white font-medium"
-                          : "text-gray-600 hover:bg-gray-100"
+                          : "text-gray-400 hover:bg-gray-800"
                       }`}
                       onClick={() => setSelectedCategory(sub.id)}
                     >
                       <span>{sub.name}</span>
                       {subProducts > 0 && (
-                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-gray-200 text-gray-400 px-2 py-0.5 rounded-full">
                           {subProducts}
                         </span>
                       )}
@@ -544,8 +544,8 @@ export default function ProductsPage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
-            <p className="text-gray-500 text-sm mt-1">
+            <h1 className="text-2xl font-bold text-gray-100">Productos</h1>
+            <p className="text-gray-400 text-sm mt-1">
               Gestioná los productos de tu menú
             </p>
           </div>
@@ -574,9 +574,9 @@ export default function ProductsPage() {
 
         {/* Formulario de creación */}
         {showForm && (
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 mb-8">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-sm p-6 mb-8">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-lg font-semibold text-gray-100">
                 Crear nuevo producto
               </h3>
               <button
@@ -601,11 +601,11 @@ export default function ProductsPage() {
             <form onSubmit={handleCreateProduct} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Nombre del producto *
                   </label>
                   <input
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                    className="w-full border border-gray-600 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                     placeholder="Ej: Hamburguesa Clásica"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -614,11 +614,11 @@ export default function ProductsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Categoría *
                   </label>
                   <select
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-black focus:border-black transition appearance-none bg-white"
+                    className="w-full border border-gray-600 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-white focus:border-black transition appearance-none bg-gray-900"
                     value={categoryId || ""}
                     onChange={(e) => setCategoryId(e.target.value)}
                     required
@@ -634,11 +634,11 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Descripción
                 </label>
                 <textarea
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                  className="w-full border border-gray-600 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                   placeholder="Describe tu producto..."
                   rows={3}
                   value={description}
@@ -648,16 +648,16 @@ export default function ProductsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Precio *
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
                       $
                     </span>
                     <input
                       type="number"
-                      className="w-full border border-gray-300 rounded-lg pl-8 pr-4 py-3 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                      className="w-full border border-gray-600 rounded-lg pl-8 pr-4 py-3 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                       placeholder="0.00"
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
@@ -669,16 +669,16 @@ export default function ProductsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Costo (opcional)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
                       $
                     </span>
                     <input
                       type="number"
-                      className="w-full border border-gray-300 rounded-lg pl-8 pr-4 py-3 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                      className="w-full border border-gray-600 rounded-lg pl-8 pr-4 py-3 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                       placeholder="0.00"
                       value={cost}
                       onChange={(e) => setCost(e.target.value)}
@@ -690,10 +690,10 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Imagen del producto
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center">
                   <input
                     type="file"
                     accept="image/*"
@@ -719,7 +719,7 @@ export default function ProductsPage() {
                         d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                       />
                     </svg>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-400">
                       {imageFile
                         ? imageFile.name
                         : "Hacé clic para subir una imagen"}
@@ -733,18 +733,18 @@ export default function ProductsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">
+                  <h4 className="font-medium text-gray-100 mb-3">
                     Configuración
                   </h4>
                   <div className="space-y-3">
                     <label className="flex items-center gap-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                        className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                         checked={allowHalf}
                         onChange={(e) => setAllowHalf(e.target.checked)}
                       />
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-300">
                         Permite mitades (ej: pizzas)
                       </span>
                     </label>
@@ -752,11 +752,11 @@ export default function ProductsPage() {
                     <label className="flex items-center gap-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                        className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                         checked={showInMenu}
                         onChange={(e) => setShowInMenu(e.target.checked)}
                       />
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-300">
                         Visible en menú
                       </span>
                     </label>
@@ -764,11 +764,11 @@ export default function ProductsPage() {
                     <label className="flex items-center gap-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                        className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                         checked={isSuggestable}
                         onChange={(e) => setIsSuggestable(e.target.checked)}
                       />
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-300">
                         Solo en sugerencias
                       </span>
                     </label>
@@ -776,11 +776,11 @@ export default function ProductsPage() {
                     <label className="flex items-center gap-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                        className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                         checked={isFeatured}
                         onChange={(e) => setIsFeatured(e.target.checked)}
                       />
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-300">
                         Destacado (ocupa más espacio)
                       </span>
                     </label>
@@ -788,11 +788,11 @@ export default function ProductsPage() {
                     <label className="flex items-center gap-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                        className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                         checked={isHero}
                         onChange={(e) => setIsHero(e.target.checked)}
                       />
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-300">
                         Hero (portada de categoría)
                       </span>
                     </label>
@@ -800,11 +800,11 @@ export default function ProductsPage() {
                     <label className="flex items-center gap-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                        className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                         checked={isPreparable}
                         onChange={(e) => setIsPreparable(e.target.checked)}
                       />
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-300">
                         Preparable (aparece en KDS)
                       </span>
                     </label>
@@ -812,22 +812,22 @@ export default function ProductsPage() {
                 </div>
 
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">
+                  <h4 className="font-medium text-gray-100 mb-3">
                     Turnos disponibles
                   </h4>
                   <div className="grid grid-cols-2 gap-3">
                     {dayParts.map((part) => (
                       <label
                         key={part.id}
-                        className="flex items-center gap-2 bg-gray-50 p-3 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                        className="flex items-center gap-2 bg-gray-800 p-3 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer"
                       >
                         <input
                           type="checkbox"
-                          className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                          className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                           checked={selectedDayParts.includes(part.id)}
                           onChange={() => toggleDayPart(part.id)}
                         />
-                        <span className="text-sm text-gray-700">
+                        <span className="text-sm text-gray-300">
                           {part.name}
                         </span>
                       </label>
@@ -836,11 +836,11 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
@@ -857,7 +857,7 @@ export default function ProductsPage() {
 
         {/* Lista de productos */}
         {filteredProducts.length === 0 ? (
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-12 text-center">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-12 text-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-12 w-12 text-gray-400 mx-auto mb-4"
@@ -872,10 +872,10 @@ export default function ProductsPage() {
                 d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
               />
             </svg>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-lg font-medium text-gray-100 mb-2">
               No hay productos
             </h3>
-            <p className="text-gray-500 mb-6">
+            <p className="text-gray-400 mb-6">
               {selectedCategory
                 ? "No hay productos en esta categoría"
                 : "Comienza creando tu primer producto"}
@@ -892,7 +892,7 @@ export default function ProductsPage() {
             {filteredProducts.map((product) => (
               <div
                 key={product.id}
-                className={`bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden ${
+                className={`bg-gray-900 border border-gray-700 rounded-xl shadow-sm overflow-hidden ${
                   editingProduct?.id === product.id
                     ? "ring-2 ring-black"
                     : "hover:shadow-md transition-shadow"
@@ -901,7 +901,7 @@ export default function ProductsPage() {
                 {editingProduct?.id === product.id ? (
                   <div className="p-6">
                     <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-semibold text-gray-900">
+                      <h3 className="text-lg font-semibold text-gray-100">
                         Editando producto
                       </h3>
                       <button
@@ -926,11 +926,11 @@ export default function ProductsPage() {
 
                     <form onSubmit={updateProduct} className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
                           Nombre *
                         </label>
                         <input
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                          className="w-full border border-gray-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                           placeholder="Nombre del producto"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
@@ -939,11 +939,11 @@ export default function ProductsPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
                           Descripción
                         </label>
                         <textarea
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                          className="w-full border border-gray-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                           placeholder="Descripción"
                           rows={2}
                           value={description}
@@ -953,12 +953,12 @@ export default function ProductsPage() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
                             Precio *
                           </label>
                           <input
                             type="number"
-                            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                            className="w-full border border-gray-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                             placeholder="0"
                             value={price}
                             onChange={(e) => setPrice(e.target.value)}
@@ -966,12 +966,12 @@ export default function ProductsPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
                             Costo
                           </label>
                           <input
                             type="number"
-                            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                            className="w-full border border-gray-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                             placeholder="0"
                             value={cost}
                             onChange={(e) => setCost(e.target.value)}
@@ -980,13 +980,13 @@ export default function ProductsPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
                           Imagen
                         </label>
                         <input
                           type="file"
                           accept="image/*"
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm"
+                          className="w-full border border-gray-600 rounded-lg px-4 py-2 text-sm"
                           onChange={(e) =>
                             setImageFile(e.target.files?.[0] || null)
                           }
@@ -998,7 +998,7 @@ export default function ProductsPage() {
                               className="w-12 h-12 object-cover rounded"
                               alt="Imagen actual"
                             />
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-400">
                               Imagen actual
                             </span>
                           </div>
@@ -1007,11 +1007,11 @@ export default function ProductsPage() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
                             Categoría
                           </label>
                           <select
-                            className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                            className="w-full border border-gray-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                             value={categoryId || ""}
                             onChange={(e) => setCategoryId(e.target.value)}
                           >
@@ -1029,43 +1029,43 @@ export default function ProductsPage() {
                         <div className="flex items-center gap-3">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                            className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                             checked={allowHalf}
                             onChange={(e) => setAllowHalf(e.target.checked)}
                           />
-                          <span className="text-sm text-gray-700">
+                          <span className="text-sm text-gray-300">
                             Permite mitades
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                            className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                             checked={showInMenu}
                             onChange={(e) => setShowInMenu(e.target.checked)}
                           />
-                          <span className="text-sm text-gray-700">
+                          <span className="text-sm text-gray-300">
                             Visible en menú
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                            className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                             checked={isSuggestable}
                             onChange={(e) => setIsSuggestable(e.target.checked)}
                           />
-                          <span className="text-sm text-gray-700">
+                          <span className="text-sm text-gray-300">
                             Solo sugerencias
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                      <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                          className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                         >
                           Cancelar
                         </button>
@@ -1084,11 +1084,11 @@ export default function ProductsPage() {
                     <div className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h3 className="font-semibold text-gray-900 text-lg">
+                          <h3 className="font-semibold text-gray-100 text-lg">
                             {product.name}
                           </h3>
                           {product.description && (
-                            <p className="text-gray-500 text-sm mt-1">
+                            <p className="text-gray-400 text-sm mt-1">
                               {product.description}
                             </p>
                           )}
@@ -1115,12 +1115,12 @@ export default function ProductsPage() {
 
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <span className="text-2xl font-bold text-gray-900">
+                          <span className="text-2xl font-bold text-gray-100">
                             ${product.product_variants?.[0]?.price || 0}
                           </span>
                           {product.product_variants?.[0]?.cost != null && (
                             <span className="text-sm ml-2">
-                              <span className="text-gray-500">
+                              <span className="text-gray-400">
                                 Costo: $
                                 {Number(
                                   product.product_variants[0].cost,
@@ -1193,11 +1193,11 @@ export default function ProductsPage() {
                       )}
 
                       <div className="text-sm">
-                        <label className="text-gray-500 block mb-1">
+                        <label className="text-gray-400 block mb-1">
                           Cocina asignada
                         </label>
                         <select
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black transition"
+                          className="w-full border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
                           value={getProductKitchenOverride(product.id)}
                           onChange={(e) =>
                             handleKitchenChange(product.id, e.target.value)
@@ -1222,8 +1222,8 @@ export default function ProductsPage() {
                       )}
 
                       {/* Extras disponibles (modifier groups) */}
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="font-medium text-gray-900 mb-3 text-sm">
+                      <div className="pt-4 border-t border-gray-700">
+                        <h4 className="font-medium text-gray-100 mb-3 text-sm">
                           Extras disponibles
                         </h4>
                         {modifierGroups.length > 0 ? (
@@ -1231,11 +1231,11 @@ export default function ProductsPage() {
                             {modifierGroups.map((group) => (
                               <label
                                 key={group.id}
-                                className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                                className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer"
                               >
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 text-black rounded border-gray-300 focus:ring-black"
+                                  className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
                                   checked={
                                     productGroups[product.id]?.includes(
                                       group.id,
@@ -1245,14 +1245,14 @@ export default function ProductsPage() {
                                     toggleGroup(product.id, group.id)
                                   }
                                 />
-                                <span className="text-sm text-gray-700">
+                                <span className="text-sm text-gray-300">
                                   {group.name}
                                 </span>
                               </label>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-400">
                             No hay grupos de extras configurados
                           </p>
                         )}
@@ -1260,8 +1260,8 @@ export default function ProductsPage() {
 
                       {/* Ingredientes display */}
                       {product.product_ingredients_display?.length > 0 && (
-                        <div className="pt-4 border-t border-gray-200">
-                          <h4 className="font-medium text-gray-900 mb-2 text-sm">
+                        <div className="pt-4 border-t border-gray-700">
+                          <h4 className="font-medium text-gray-100 mb-2 text-sm">
                             Ingredientes visibles en pedido
                           </h4>
                           <div className="flex flex-wrap gap-1.5">
@@ -1272,7 +1272,7 @@ export default function ProductsPage() {
                                   className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
                                     pi.is_essential
                                       ? "bg-red-50 text-red-700 border border-red-200"
-                                      : "bg-gray-50 text-gray-600 border border-gray-200"
+                                      : "bg-gray-800 text-gray-400 border border-gray-700"
                                   }`}
                                 >
                                   {pi.ingredients?.name}
@@ -1388,14 +1388,14 @@ function RecipeSection({
   );
 
   return (
-    <div className="pt-4 border-t border-gray-200">
+    <div className="pt-4 border-t border-gray-700">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center justify-between w-full text-left"
       >
-        <h4 className="font-medium text-gray-900 text-sm">Receta</h4>
+        <h4 className="font-medium text-gray-100 text-sm">Receta</h4>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-400">
             {recipeItems.length} ingredientes
             {totalCost > 0 && ` · $${totalCost.toFixed(2)}`}
           </span>
@@ -1422,16 +1422,16 @@ function RecipeSection({
             {recipeItems.map((item: any) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded text-sm"
+                className="flex items-center justify-between bg-gray-800 px-3 py-2 rounded text-sm"
               >
-                <span className="text-gray-700">
+                <span className="text-gray-300">
                   {item.ingredients?.name}{" "}
                   <span className="text-gray-400">
                     ({item.quantity} {item.ingredients?.unit})
                   </span>
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-600 font-medium">
+                  <span className="text-gray-400 font-medium">
                     $
                     {(
                       item.quantity * (item.ingredients?.cost_per_unit || 0)
@@ -1456,7 +1456,7 @@ function RecipeSection({
           {/* Agregar ingrediente */}
           <form onSubmit={handleAdd} className="flex gap-2">
             <select
-              className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs"
+              className="flex-1 border border-gray-600 rounded px-2 py-1.5 text-xs"
               value={selectedIngredient}
               onChange={(e) => setSelectedIngredient(e.target.value)}
             >
@@ -1471,7 +1471,7 @@ function RecipeSection({
               type="number"
               step="0.01"
               placeholder="Cant."
-              className="w-16 border border-gray-300 rounded px-2 py-1.5 text-xs"
+              className="w-16 border border-gray-600 rounded px-2 py-1.5 text-xs"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
             />
