@@ -1,10 +1,38 @@
 import { createClient } from "@supabase/supabase-js";
+import { logAppError } from "@/lib/logAppError";
 
 type OrderItemInput = {
+  itemType?: "product" | "combo";
+  comboId?: string;
   variantId: string;
   quantity: number;
   extras?: Array<{ id: string; name: string; price: number }>;
   removedIngredients?: Array<{ id: string; name: string }>;
+};
+
+type VariantRow = {
+  id: string;
+  product_id: string;
+  price: number;
+  is_default?: boolean;
+};
+
+type ComboRow = {
+  id: string;
+  name: string;
+  price: number;
+  combo_products?: Array<{
+    product_id: string;
+    quantity: number;
+    products?: {
+      product_variants?: VariantRow[];
+    } | null;
+  }>;
+};
+
+const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
+const debugLog = (...args: unknown[]) => {
+  if (DEBUG_LOGS) console.log(...args);
 };
 
 export async function POST(req: Request) {
@@ -76,17 +104,55 @@ export async function POST(req: Request) {
        2. VARIANTS (🔥 CORE)
     ========================= */
 
-    const { data: variants } = await supabase
-      .from("product_variants")
-      .select("id, product_id, price")
-      .in(
-        "id",
-        items.map((i) => i.variantId),
-      );
-    console.log("🧪 VARIANTS:", variants);
-    if (!variants || variants.length === 0) {
+    const productItems = items.filter((item) => item.itemType !== "combo");
+    const comboItems = items.filter((item) => item.itemType === "combo");
+    const variantIds = productItems.map((i) => i.variantId).filter(Boolean);
+
+    const { data: variants } =
+      variantIds.length > 0
+        ? await supabase
+            .from("product_variants")
+            .select("id, product_id, price")
+            .in("id", variantIds)
+        : { data: [] as VariantRow[] };
+
+    const comboIds = comboItems
+      .map((item) => item.comboId)
+      .filter((id): id is string => Boolean(id));
+
+    const { data: combos } =
+      comboIds.length > 0
+        ? await supabase
+            .from("combos")
+            .select(
+              `
+              id,
+              name,
+              price,
+              combo_products(
+                product_id,
+                quantity,
+                products(
+                  product_variants(id, product_id, price, is_default)
+                )
+              )
+            `,
+            )
+            .in("id", comboIds)
+            .eq("branch_id", branch.id)
+            .eq("is_active", true)
+        : { data: [] as ComboRow[] };
+    debugLog("VARIANTS:", variants);
+    if (productItems.length > 0 && (!variants || variants.length === 0)) {
       return Response.json({ success: false, error: "Invalid products" });
     }
+
+    if (comboItems.length > 0 && (!combos || combos.length !== comboIds.length)) {
+      return Response.json({ success: false, error: "Invalid combos" });
+    }
+
+    const variantRows = variants || [];
+    const comboRows = (combos || []) as ComboRow[];
 
     /* =========================
        3. BUILD ITEMS
@@ -94,8 +160,8 @@ export async function POST(req: Request) {
 
     let subtotal = 0;
 
-    const itemsToInsert = items.map((item) => {
-      const variant = variants.find((v) => v.id === item.variantId);
+    const itemsToInsert = productItems.map((item) => {
+      const variant = variantRows.find((v) => v.id === item.variantId);
 
       if (!variant) {
         throw new Error(`Variant not found: ${item.variantId}`);
@@ -118,6 +184,49 @@ export async function POST(req: Request) {
         total: itemTotal,
         extras: extrasArr,
       };
+    });
+
+    comboItems.forEach((item) => {
+      const combo = comboRows.find(
+        (candidate) => candidate.id === item.comboId,
+      );
+      if (!combo) throw new Error(`Combo not found: ${item.comboId}`);
+
+      const comboProducts = combo.combo_products || [];
+      if (comboProducts.length === 0) {
+        throw new Error(`Combo has no products: ${combo.name}`);
+      }
+
+      const expandedUnits = comboProducts.reduce(
+        (sum, comboProduct) => sum + (comboProduct.quantity || 1),
+        0,
+      );
+      const unitShare =
+        expandedUnits > 0 ? Number(combo.price) / expandedUnits : 0;
+
+      subtotal += Number(combo.price) * item.quantity;
+
+      comboProducts.forEach((comboProduct) => {
+        const defaultVariant =
+          comboProduct.products?.product_variants?.find(
+            (variant) => variant.is_default,
+          ) || comboProduct.products?.product_variants?.[0];
+
+        if (!defaultVariant) {
+          throw new Error(`Combo product has no variant: ${combo.name}`);
+        }
+
+        const quantity = (comboProduct.quantity || 1) * item.quantity;
+
+        itemsToInsert.push({
+          product_id: comboProduct.product_id,
+          variant_id: defaultVariant.id,
+          quantity,
+          unit_price: Math.round(unitShare),
+          total: Math.round(unitShare * quantity),
+          extras: [{ type: "extra", name: `Combo: ${combo.name}`, price: 0 }],
+        });
+      });
     });
 
     const orderTotal = total ?? subtotal;
@@ -145,13 +254,13 @@ export async function POST(req: Request) {
         .select()
         .single();
 
-      console.log("💥 CUSTOMER INSERT ERROR:", error);
-      console.log("🧪 CUSTOMER INSERT RESULT:", data);
+      debugLog("CUSTOMER INSERT ERROR:", error);
+      debugLog("CUSTOMER INSERT RESULT:", data);
 
       customerDB = data;
     } else {
       // Actualizar nombre/dirección si cambió
-      const updates: any = {};
+      const updates: Record<string, string> = {};
       if (customer.name && customer.name !== customerDB.name) updates.name = customer.name;
       if (customer.address && customer.address !== customerDB.address) updates.address = customer.address;
       if (Object.keys(updates).length > 0) {
@@ -186,7 +295,7 @@ export async function POST(req: Request) {
         .select()
         .single();
 
-      console.log("💥 CONVERSATION INSERT ERROR:", error);
+      debugLog("CONVERSATION INSERT ERROR:", error);
 
       conversation = data;
     }
@@ -219,8 +328,8 @@ export async function POST(req: Request) {
       })
       .select()
       .single();
-    console.log("🧪 ORDER:", order);
-    console.log("💥 ORDER ERROR:", orderError);
+    debugLog("ORDER:", order);
+    debugLog("ORDER ERROR:", orderError);
     if (!order) {
       return Response.json({ success: false });
     }
@@ -237,24 +346,53 @@ export async function POST(req: Request) {
        7. ORDER ITEMS
     ========================= */
 
-    await supabase.from("order_items").insert(
+    const { error: itemsError } = await supabase.from("order_items").insert(
       itemsToInsert.map((item) => ({
         ...item,
         order_id: order.id,
       })),
     );
 
+    if (itemsError) {
+      await logAppError("customer", "Order items could not be created", {
+        tenantId: branch.tenant_id,
+        branchId: branch.id,
+        code: itemsError.code,
+        context: { orderId: order.id, phase: "order_items_insert" },
+      });
+      await supabase.from("orders").delete().eq("id", order.id);
+      return Response.json({
+        success: false,
+        error: "Order items could not be created",
+      });
+    }
+
     /* =========================
        7.5 ORDER PAYMENT
     ========================= */
 
     if (paymentMethodId) {
-      await supabase.from("order_payments").insert({
+      const { error: paymentError } = await supabase.from("order_payments").insert({
         order_id: order.id,
         payment_method_id: paymentMethodId,
         amount: orderTotal,
         reference: paymentReference || null,
       });
+
+      if (paymentError) {
+        await logAppError("customer", "Order payment could not be created", {
+          tenantId: branch.tenant_id,
+          branchId: branch.id,
+          code: paymentError.code,
+          context: { orderId: order.id, phase: "order_payments_insert" },
+        });
+        await supabase.from("order_items").delete().eq("order_id", order.id);
+        await supabase.from("orders").delete().eq("id", order.id);
+        return Response.json({
+          success: false,
+          error: "Order payment could not be created",
+        });
+      }
     }
 
     /* =========================

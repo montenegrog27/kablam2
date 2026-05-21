@@ -25,9 +25,12 @@ export default function ProfessionalMenu({
   branding,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
-  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
+  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(
+    null,
+  );
   const [scrolled, setScrolled] = useState(false);
   const [flashSales, setFlashSales] = useState<any[]>([]);
+  const [allCategoriesFromApi, setAllCategoriesFromApi] = useState<any[]>([]);
   const [now, setNow] = useState(Date.now());
   const tabsRef = useRef<HTMLDivElement>(null);
 
@@ -36,12 +39,32 @@ export default function ProfessionalMenu({
   const fontFamily =
     branding?.font_family || branding?.font_primary || "CustomFont";
 
-  // Get unique categories from products
-  const allCategories = productos.flatMap((p) => p.categories || []);
-  const uniqueCategories = allCategories
-    .filter((cat, index, self) => self.findIndex((c) => c.id === cat.id) === index)
-    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  // Build category list from products + API (to include categories without products)
+  const productCategories = productos.flatMap((p) => p.categories || []);
+  const allCategoryIds = new Set(productCategories.map((c) => c.id));
+  
+  // Merge product categories with API categories (API has the definitive order by position)
+  let mergedCategories: Category[] = [];
+  if (allCategoriesFromApi.length > 0) {
+    // Use API order as the source of truth, but keep product-assigned categories
+    mergedCategories = allCategoriesFromApi
+      .filter((c: any) => allCategoryIds.has(c.id) || !c.parent_id) // Show roots + any cat linked to a product
+      .map((c: any) => ({ id: c.id, name: c.name, parent_id: c.parent_id }));
+    // Also add any product categories not in the API response
+    productCategories.forEach((pc) => {
+      if (!mergedCategories.find((c) => c.id === pc.id)) {
+        mergedCategories.push({ id: pc.id, name: pc.name, parent_id: pc.parent_id });
+      }
+    });
+  } else {
+    // Fallback: just use product categories when API hasn't loaded yet
+    mergedCategories = productCategories
+      .filter((cat, index, self) => self.findIndex((c) => c.id === cat.id) === index);
+  }
+
+  const uniqueCategories = mergedCategories;
   const rootCategories = uniqueCategories.filter((c) => !c.parent_id);
+  console.log("[root categories]", rootCategories.map((c) => c.name));
 
   // Convertir combos a productos para mostrarlos en el menú
   const comboAsProducts: Product[] = (combos || []).map((combo) => {
@@ -113,6 +136,24 @@ export default function ProfessionalMenu({
       .catch(() => {});
   }, []);
 
+  // Fetch categories in the correct order from admin
+  useEffect(() => {
+    const slug = window.location.pathname.split("/")[1];
+    if (!slug) return;
+    fetch(`/api/categories?slug=${slug}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          console.log("[API categories]", data.map((c: any) => `${c.name}(pos:${c.position}, parent:${c.parent_id||"root"})`));
+          setAllCategoriesFromApi(data);
+        }
+      })
+      .catch((e) => console.error("[cat API err]", e));
+  }, []);
+
   // Countdown ticker
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -156,12 +197,7 @@ export default function ProfessionalMenu({
   );
 
   const getPrice = (product: Product) => {
-    console.log(
-      "getPrice: product name:",
-      product.name,
-      "variants:",
-      product.product_variants,
-    );
+
     const variants = product.product_variants || [];
     const variant = variants.find((v) => v.is_default) || variants[0];
     const price = Number(variant?.price) || 0;
@@ -170,8 +206,18 @@ export default function ProfessionalMenu({
       console.log("  -> FALLBACK USADO!");
       return 10000;
     }
-    console.log("  -> price:", price);
     return price;
+  };
+
+  const handleAddProduct = (product: Product) => {
+    const combo = combos?.find((item) => item.id === product.id);
+
+    if (combo && onAgregarCombo) {
+      onAgregarCombo(combo);
+      return;
+    }
+
+    onAgregar(product);
   };
 
   const getImage = (product: Product) => {
@@ -410,7 +456,7 @@ export default function ProfessionalMenu({
               <div key={product.id} className="snap-start flex-shrink-0 w-[65vw] max-w-[280px]">
                 <FeaturedCard
                   product={product}
-                  onAgregar={onAgregar}
+                  onAgregar={handleAddProduct}
                   brandColor={brandColor}
                   fontFamily={fontFamily}
                   getPrice={getPrice}
@@ -427,7 +473,7 @@ export default function ProfessionalMenu({
               <FeaturedCard
                 key={product.id}
                 product={product}
-                onAgregar={onAgregar}
+                onAgregar={handleAddProduct}
                 brandColor={brandColor}
                 fontFamily={fontFamily}
                 getPrice={getPrice}
@@ -468,11 +514,11 @@ export default function ProfessionalMenu({
                       return (
                         <div key={sub.id} id={`sub-${sub.id}`} className="mb-4 ml-4">
                           <h5 className="text-sm font-semibold text-gray-500 mb-2">{sub.name}</h5>
-                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={onAgregar} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
                         </div>
                       );
                     }) : (
-                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={onAgregar} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
                     )}
                   </div>
                 );
@@ -490,12 +536,12 @@ export default function ProfessionalMenu({
                       <span className="w-1 h-5 rounded-full" style={{ backgroundColor: brandColor }} />
                       {sub.name}
                     </h4>
-                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={onAgregar} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
                   </div>
                 );
               });
             }
-            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={onAgregar} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />));
+            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />));
           })()}
         </div>
       </div>

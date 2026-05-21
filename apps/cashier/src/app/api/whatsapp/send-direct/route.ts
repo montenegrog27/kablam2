@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
+const debugLog = (...args: unknown[]) => {
+  if (DEBUG_LOGS) console.log(...args);
+};
+
 export async function POST(req: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,7 +35,7 @@ export async function POST(req: Request) {
 
   const url = `https://graph.facebook.com/v18.0/${number.phone_number_id}/messages`;
 
-  console.log("📱 Sending WhatsApp to rider:", phoneNormalized);
+  debugLog("Sending WhatsApp to rider");
 
   const res = await fetch(url, {
     method: "POST",
@@ -47,7 +52,7 @@ export async function POST(req: Request) {
   });
 
   const result = await res.json();
-  console.log("📱 WhatsApp response:", result);
+  debugLog("WhatsApp response:", result);
 
   if (result.error) {
     console.error("WhatsApp error:", result.error);

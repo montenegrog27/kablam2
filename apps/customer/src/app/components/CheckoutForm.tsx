@@ -121,6 +121,7 @@ export default function CheckoutForm({
   const [paymentReference, setPaymentReference] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const fontFamily =
     branding?.font_family || branding?.font_primary || "inherit";
@@ -398,6 +399,7 @@ export default function CheckoutForm({
     if (!isValid() || isPhoneMissingForCoupon) return;
 
     setLoading(true);
+    setSubmitError("");
 
     const phoneNormalized = customer.phone.replace(/\D/g, "");
     console.log("CART:", cart);
@@ -414,6 +416,8 @@ export default function CheckoutForm({
           phone: phoneNormalized,
         },
         items: cart.map((item) => ({
+          itemType: item.itemType || "product",
+          comboId: item.comboId,
           variantId: item.variantId,
           quantity: item.quantity,
           extras: item.extras,
@@ -436,6 +440,8 @@ export default function CheckoutForm({
     if (data.success) {
       sessionStorage.removeItem(`cart_${branchSlug}`);
       window.location.href = `/${branchSlug}/success`;
+    } else {
+      setSubmitError(data.error || "No pudimos confirmar el pedido.");
     }
 
     setLoading(false);
@@ -849,6 +855,12 @@ export default function CheckoutForm({
                   </>
                 )}
               </button>
+
+              {submitError && (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                  {submitError}
+                </div>
+              )}
 
               {/* Validation hints */}
               {!isValid() && (

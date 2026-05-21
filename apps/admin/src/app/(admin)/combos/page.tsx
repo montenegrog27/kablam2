@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
+import { getDefaultVariant, getVariantCostMap } from "@kablam/supabase/costs";
 
 export default function CombosPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -9,6 +10,7 @@ export default function CombosPage() {
   const [combos, setCombos] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [variantCosts, setVariantCosts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingCombo, setEditingCombo] = useState<any>(null);
@@ -73,8 +75,15 @@ export default function CombosPage() {
           return { ...combo, combo_products: cp || [] };
         }),
       );
+      const comboVariantIds = combosWithProducts.flatMap((combo: any) =>
+        (combo.combo_products || [])
+          .map((cp: any) => getDefaultVariant(cp.products)?.id)
+          .filter(Boolean),
+      );
+      setVariantCosts(await getVariantCostMap(supabase, comboVariantIds));
       setCombos(combosWithProducts);
     } else {
+      setVariantCosts({});
       setCombos([]);
     }
 
@@ -258,7 +267,8 @@ export default function CombosPage() {
   const sumProductsCost = (combo: any) => {
     return (
       combo.combo_products?.reduce((acc: number, cp: any) => {
-        const productCost = cp.products?.product_variants?.[0]?.cost || 0;
+        const variant = getDefaultVariant(cp.products);
+        const productCost = variant ? variantCosts[variant.id] || 0 : 0;
         return acc + productCost * cp.quantity;
       }, 0) || 0
     );

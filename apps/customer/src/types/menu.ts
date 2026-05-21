@@ -55,6 +55,8 @@ export type CartItem = {
   uid: string;
   variantId: string;
   productId?: string;
+  itemType?: "product" | "combo";
+  comboId?: string;
   name: string;
   price: number;
   quantity: number;

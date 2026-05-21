@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
+import { getVariantCostMap } from "@kablam/supabase/costs";
 
 type BillDenomination =
   | 10
@@ -25,6 +26,14 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-AR").format(value || 0);
 }
 
+function formatDuration(from: string) {
+  const start = new Date(from).getTime();
+  const diff = Math.max(0, Date.now() - start);
+  const hours = Math.floor(diff / 1000 / 60 / 60);
+  const minutes = Math.floor(diff / 1000 / 60) % 60;
+  return `${hours}h ${minutes}m`;
+}
+
 export default function CloseCash({ session, onClosed }: any) {
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
@@ -32,6 +41,8 @@ export default function CloseCash({ session, onClosed }: any) {
   const [summary, setSummary] = useState<any>(null);
   const [countedCash, setCountedCash] = useState("");
   const [carryOver, setCarryOver] = useState("");
+  const [differenceReason, setDifferenceReason] = useState("");
+  const [paymentChecks, setPaymentChecks] = useState<Record<string, string>>({});
 
   const [bills, setBills] = useState<BillsState>({
     10: 0,
@@ -81,6 +92,29 @@ export default function CloseCash({ session, onClosed }: any) {
       return;
     }
 
+    const { data: ordersData } = await supabase
+      .from("orders")
+      .select("id,total,subtotal,shipping_cost,type")
+      .eq("cash_session_id", session.id)
+      .eq("status", "delivered");
+
+    const deliveredOrders = ordersData || [];
+    const totalRevenue = deliveredOrders.reduce(
+      (sum: number, order: any) => sum + Number(order.total || 0),
+      0,
+    );
+    const totalShipping = deliveredOrders.reduce(
+      (sum: number, order: any) => sum + Number(order.shipping_cost || 0),
+      0,
+    );
+    const totalWithoutShipping = deliveredOrders.reduce((sum: number, order: any) => {
+      const subtotal =
+        order.subtotal !== null && order.subtotal !== undefined
+          ? Number(order.subtotal)
+          : Number(order.total || 0) - Number(order.shipping_cost || 0);
+      return sum + subtotal;
+    }, 0);
+
     // ================= PAGOS =================
     const { data: paymentsData } = await supabase
       .from("order_payments")
@@ -94,36 +128,72 @@ export default function CloseCash({ session, onClosed }: any) {
       .eq("orders.cash_session_id", session.id)
       .eq("orders.status", "delivered");
 
-    let paymentSummary: Record<string, number> = {};
+    const paymentSummary: Record<string, number> = {};
+    const paymentDetails: Record<string, { amount: number; affectsCash: boolean }> = {};
     let expectedCash = Number(session.opening_amount);
-    let totalRevenue = 0;
-    const orderIds = new Set<string>();
 
     paymentsData?.forEach((p: any) => {
       const method = p.payment_methods.name;
       const amount = Number(p.amount);
+      const affectsCash = Boolean(p.payment_methods.affects_cash);
 
       if (!paymentSummary[method]) paymentSummary[method] = 0;
       paymentSummary[method] += amount;
 
-      totalRevenue += amount;
-      orderIds.add(p.orders.id);
+      if (!paymentDetails[method]) {
+        paymentDetails[method] = { amount: 0, affectsCash };
+      }
+      paymentDetails[method].amount += amount;
 
-      if (p.payment_methods.affects_cash) {
+      if (affectsCash) {
         expectedCash += amount;
       }
     });
+
+    const { data: movementsData, error: movementsError } = await supabase
+      .from("cash_movements")
+      .select("type, amount, reason, created_at")
+      .eq("cash_session_id", session.id);
+
+    if (movementsError) {
+      setError(
+        "No se pudieron cargar los movimientos de caja. Ejecuta el SQL de caja antes de cerrar.",
+      );
+      setLoading(false);
+      return;
+    }
+
+    const movementsSummary = {
+      in: 0,
+      out: 0,
+      net: 0,
+      items: movementsData || [],
+    };
+
+    movementsData?.forEach((movement: any) => {
+      const amount = Number(movement.amount || 0);
+      if (movement.type === "in") {
+        movementsSummary.in += amount;
+        expectedCash += amount;
+      }
+      if (movement.type === "out") {
+        movementsSummary.out += amount;
+        expectedCash -= amount;
+      }
+    });
+
+    movementsSummary.net = movementsSummary.in - movementsSummary.out;
 
     // ================= PRODUCTOS =================
     const { data: itemsData } = await supabase
       .from("order_items")
       .select(
         `
+      variant_id,
       quantity,
       total,
       product_variants (
         name,
-        cost,
         products (
           name
         )
@@ -137,12 +207,16 @@ export default function CloseCash({ session, onClosed }: any) {
     const productSummary: Record<string, any> = {};
     let totalUnits = 0;
     let totalCost = 0;
+    const variantCosts = await getVariantCostMap(
+      supabase,
+      (itemsData || []).map((item: any) => item.variant_id),
+    );
 
     itemsData?.forEach((item: any) => {
-      const productName = item.product_variants.products.name;
-      const variantName = item.product_variants.name;
+      const productName = item.product_variants?.products?.name || "Producto";
+      const variantName = item.product_variants?.name || "Variante";
       const qty = Number(item.quantity);
-      const cost = Number(item.product_variants.cost || 0);
+      const cost = Number(variantCosts[item.variant_id] || 0);
 
       totalUnits += qty;
       totalCost += cost * qty;
@@ -163,19 +237,30 @@ export default function CloseCash({ session, onClosed }: any) {
       productSummary[productName].variants[variantName] += qty;
     });
 
-    const totalOrders = orderIds.size;
+    const totalOrders = deliveredOrders.length;
     const ticketAverage = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const nonCashChecks = Object.fromEntries(
+      Object.entries(paymentDetails)
+        .filter(([, detail]) => !detail.affectsCash)
+        .map(([name, detail]) => [name, String(detail.amount)]),
+    );
+
+    setPaymentChecks(nonCashChecks);
 
     setSummary({
       payments: paymentSummary,
+      paymentDetails,
       expectedCash,
       totalRevenue,
+      totalWithoutShipping,
+      totalShipping,
       totalOrders,
       ticketAverage,
       totalUnits,
       totalCost,
       profit: totalRevenue - totalCost,
       products: productSummary,
+      movements: movementsSummary,
     });
 
     setLoading(false);
@@ -216,6 +301,35 @@ if (freshSession.status !== "open") {
       }
 
       const difference = Number(countedCash) - summary.expectedCash;
+      const paymentVerification = Object.fromEntries(
+        Object.entries(summary.paymentDetails)
+          .filter(([, detail]: any) => !detail.affectsCash)
+          .map(([name, detail]: any) => {
+            const expected = Number(detail.amount || 0);
+            const counted = Number(paymentChecks[name] || 0);
+            return [
+              name,
+              {
+                expected,
+                counted,
+                difference: counted - expected,
+              },
+            ];
+          }),
+      );
+      const paymentDifference = Object.values(paymentVerification).reduce(
+        (sum: number, verification: any) =>
+          sum + Math.abs(Number(verification.difference || 0)),
+        0,
+      );
+
+      if ((difference !== 0 || paymentDifference !== 0) && !differenceReason.trim()) {
+        alert("Ingresa un motivo para la diferencia de caja.");
+        return;
+      }
+
+      const { data: authData } = await supabase.auth.getSession();
+      const closedBy = authData.session?.user?.id || session.opened_by;
 
       // 🧾 2. Crear snapshot INMUTABLE
       const snapshotData = {
@@ -225,52 +339,44 @@ if (freshSession.status !== "open") {
         cash_session_id: session.id,
 
         opened_by: session.opened_by,
-        closed_by: session.opened_by,
+        closed_by: closedBy,
 
         opened_at: session.opened_at,
-        closed_at: new Date(),
+        closed_at: new Date().toISOString(),
         carry_over: Number(carryOver),
         bills_detail: bills,
         opening_amount: session.opening_amount,
         closing_amount: Number(countedCash),
         expected_cash: summary.expectedCash,
         difference: difference,
+        difference_reason: differenceReason.trim() || null,
 
         total_revenue: summary.totalRevenue,
+        total_without_shipping: summary.totalWithoutShipping,
+        total_shipping: summary.totalShipping,
         total_orders: summary.totalOrders ?? 0,
         total_units: summary.totalUnits ?? 0,
         total_cost: summary.totalCost ?? 0,
         profit: summary.profit ?? 0,
 
         payments: summary.payments ?? {},
+        payment_verification: paymentVerification,
         products: summary.products ?? {},
+        cash_movements: summary.movements ?? {},
       };
 
-      const { error: snapshotError } = await supabase
-        .from("cash_closures")
-        .insert(snapshotData);
-
-      if (snapshotError) {
-        console.error("ERROR GUARDANDO SNAPSHOT:", snapshotError);
-        alert("No se pudo guardar el cierre. La caja sigue abierta.");
-        return;
-      }
-
-      // 🔒 3. Cerrar sesión SOLO si snapshot fue exitoso
-      const { error: closeError } = await supabase
-        .from("cash_sessions")
-        .update({
-          status: "closed",
-          closed_at: new Date(),
-          closed_by: session.opened_by,
-          closing_amount: Number(countedCash),
-          difference: difference,
-        })
-        .eq("id", session.id);
+      const { error: closeError } = await supabase.rpc(
+        "close_cash_session_atomic",
+        {
+          p_cash_session_id: session.id,
+          p_closed_by: closedBy,
+          p_snapshot: snapshotData,
+        },
+      );
 
       if (closeError) {
-        console.error("ERROR CERRANDO SESIÓN:", closeError);
-        alert("Error cerrando sesión. Revisar base.");
+        console.error("ERROR CERRANDO CAJA:", closeError);
+        alert("No se pudo cerrar la caja. Revisar base.");
         return;
       }
 
@@ -288,6 +394,18 @@ if (freshSession.status !== "open") {
 
   const difference =
     countedCash !== "" ? Number(countedCash) - summary.expectedCash : 0;
+  const paymentVerificationPreview = Object.entries(summary.paymentDetails || {})
+    .filter(([, detail]: any) => !detail.affectsCash)
+    .map(([name, detail]: any) => {
+      const expected = Number(detail.amount || 0);
+      const counted = Number(paymentChecks[name] || 0);
+      return { name, expected, counted, difference: counted - expected };
+    });
+  const paymentDifference = paymentVerificationPreview.reduce(
+    (sum, payment) => sum + Math.abs(payment.difference),
+    0,
+  );
+  const hasAnyDifference = difference !== 0 || paymentDifference !== 0;
 
   return (
     <div className="p-8 bg-gray-950 text-white space-y-8 min-h-screen">
@@ -304,6 +422,11 @@ if (freshSession.status !== "open") {
         </div>
 
         <div className="flex justify-between">
+          <span>Duracion de jornada</span>
+          <span>{formatDuration(session.opened_at)}</span>
+        </div>
+
+        <div className="flex justify-between">
           <span>Monto inicial</span>
           <span>${formatCurrency(session.opening_amount)}</span>
         </div>
@@ -317,6 +440,21 @@ if (freshSession.status !== "open") {
         <div className="flex justify-between">
           <span>Ticket promedio</span>
           <span>${formatCurrency(summary.ticketAverage)}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span>Total sin envio</span>
+          <span>${formatCurrency(summary.totalWithoutShipping)}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span>Total envio</span>
+          <span>${formatCurrency(summary.totalShipping)}</span>
+        </div>
+
+        <div className="flex justify-between font-bold text-green-300">
+          <span>Total total</span>
+          <span>${formatCurrency(summary.totalRevenue)}</span>
         </div>
 
         <div className="flex justify-between">
@@ -364,12 +502,89 @@ if (freshSession.status !== "open") {
         <span>${formatCurrency(session.opening_amount)}</span>
       </div>
 
-      {Object.entries(summary.payments).map(([name, amount]: any) => (
-        <div key={name} className="flex justify-between">
-          <span>{name}</span>
-          <span>${formatCurrency(amount)}</span>
+      <div className="bg-gray-900 p-6 rounded-lg space-y-4">
+        <h3 className="font-bold">Medios de pago</h3>
+        {Object.entries(summary.paymentDetails).map(([name, detail]: any) => {
+          const isCash = detail.affectsCash;
+          const counted = Number(paymentChecks[name] || 0);
+          const paymentDiff = counted - Number(detail.amount || 0);
+
+          return (
+            <div
+              key={name}
+              className="rounded-lg border border-gray-800 bg-gray-950 p-3 space-y-2"
+            >
+              <div className="flex justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{name}</p>
+                  <p className="text-xs text-gray-500">
+                    {isCash
+                      ? "Se controla con contador de billetes"
+                      : "Verificar contra comprobantes o cuenta bancaria"}
+                  </p>
+                </div>
+                <span className="font-bold">${formatCurrency(detail.amount)}</span>
+              </div>
+
+              {!isCash && (
+                <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                  <input
+                    type="number"
+                    value={paymentChecks[name] || ""}
+                    onChange={(e) =>
+                      setPaymentChecks((prev) => ({
+                        ...prev,
+                        [name]: e.target.value,
+                      }))
+                    }
+                    className="bg-gray-800 border border-gray-700 p-2 rounded text-white"
+                    placeholder="Monto verificado"
+                  />
+                  <span
+                    className={`text-sm font-semibold ${
+                      paymentDiff === 0 ? "text-green-300" : "text-red-300"
+                    }`}
+                  >
+                    Dif. ${formatCurrency(paymentDiff)}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="bg-gray-900 p-6 rounded-lg space-y-3">
+        <h3 className="font-bold">Movimientos de caja</h3>
+        <div className="flex justify-between text-green-300">
+          <span>Ingresos manuales</span>
+          <span>${formatCurrency(summary.movements.in)}</span>
         </div>
-      ))}
+        <div className="flex justify-between text-red-300">
+          <span>Retiros manuales</span>
+          <span>${formatCurrency(summary.movements.out)}</span>
+        </div>
+        <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
+          <span>Neto movimientos</span>
+          <span>${formatCurrency(summary.movements.net)}</span>
+        </div>
+        {summary.movements.items.length > 0 && (
+          <div className="space-y-2 pt-2">
+            {summary.movements.items.map((movement: any, index: number) => (
+              <div
+                key={`${movement.created_at}-${index}`}
+                className="flex justify-between text-sm text-gray-400"
+              >
+                <span>
+                  {movement.type === "in" ? "Ingreso" : "Retiro"} -{" "}
+                  {movement.reason || "Sin motivo"}
+                </span>
+                <span>${formatCurrency(Number(movement.amount))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="border-t border-gray-700 pt-2 flex justify-between font-bold text-lg">
         <span>Efectivo esperado</span>
@@ -416,6 +631,15 @@ if (freshSession.status !== "open") {
           onChange={(e) => setCarryOver(e.target.value)}
           className="w-full bg-gray-800 p-3 rounded border border-gray-700"
         />
+        {hasAnyDifference && (
+          <textarea
+            placeholder="Motivo de la diferencia de caja o pagos"
+            value={differenceReason}
+            onChange={(e) => setDifferenceReason(e.target.value)}
+            rows={3}
+            className="w-full resize-none bg-gray-800 p-3 rounded border border-gray-700"
+          />
+        )}
       </div>
 
       <button

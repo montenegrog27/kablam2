@@ -105,6 +105,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
+const debugLog = (...args: unknown[]) => {
+  if (DEBUG_LOGS) console.log(...args);
+};
+
 export async function POST(req: Request) {
 
   const supabase = createClient(
@@ -244,7 +249,7 @@ const {
 
   }
 
-  console.log("SEND WHATSAPP START");
+  debugLog("SEND WHATSAPP START");
 
   const res = await fetch(url, {
     method: "POST",
@@ -256,7 +261,7 @@ const {
   });
 
   const result = await res.json();
-  console.log("META RESPONSE:", result);
+  debugLog("META RESPONSE:", result);
 
   if (result.error) {
     console.error(result.error);
@@ -269,7 +274,7 @@ const {
 // =============================
 
 if (orderId && messageId) {
-  console.log("📝 SAVING whatsapp_message_id on order:", { orderId, messageId });
+  debugLog("SAVING whatsapp_message_id on order:", { orderId, messageId });
 
   await supabase
     .from("orders")
@@ -278,9 +283,9 @@ if (orderId && messageId) {
     })
     .eq("id", orderId);
 
-  console.log("✅ whatsapp_message_id saved on order");
+  debugLog("whatsapp_message_id saved on order");
 }
-  console.log("ORDER ID RECEIVED:", orderId);
+  debugLog("ORDER ID RECEIVED:", orderId);
   // =============================
   // guardar mensaje
   // =============================

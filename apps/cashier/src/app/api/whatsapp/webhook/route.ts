@@ -6,6 +6,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
+const debugLog = (...args: unknown[]) => {
+  if (DEBUG_LOGS) console.log(...args);
+};
+
 // ===============================
 // HELPERS
 // ===============================
@@ -30,19 +35,19 @@ async function sendText(number: any, to: string, body: string) {
 
 async function downloadMedia(mediaId: string, token: string, fileName = "media") {
   try {
-    console.log("📥 downloadMedia: starting for", mediaId);
+    debugLog("downloadMedia: starting for", mediaId);
     const meta = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await meta.json();
-    console.log("📥 downloadMedia: Meta response:", JSON.stringify(data).slice(0, 500));
+    debugLog("downloadMedia: Meta response:", JSON.stringify(data).slice(0, 500));
 
     if (!data.url) {
       console.error("📥 downloadMedia: no URL from Meta for", mediaId);
       return null;
     }
 
-    console.log("📥 downloadMedia: downloading from", data.url);
+    debugLog("downloadMedia: downloading from Meta URL");
     const res = await fetch(data.url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
       console.error("📥 downloadMedia: failed to download from Meta URL", res.status);
@@ -50,10 +55,10 @@ async function downloadMedia(mediaId: string, token: string, fileName = "media")
     }
 
     const contentType = res.headers.get("content-type") || data.mime_type || "image/jpeg";
-    console.log("📥 downloadMedia: downloaded, content-type:", contentType, "size:", res.headers.get("content-length"));
+    debugLog("downloadMedia: downloaded", { contentType, size: res.headers.get("content-length") });
 
     const arrayBuffer = await res.arrayBuffer();
-    console.log("📥 downloadMedia: arrayBuffer size:", arrayBuffer.byteLength);
+    debugLog("downloadMedia: arrayBuffer size:", arrayBuffer.byteLength);
 
     // Limit data URL to 8MB
     if (arrayBuffer.byteLength > 8 * 1024 * 1024) {
@@ -64,7 +69,7 @@ async function downloadMedia(mediaId: string, token: string, fileName = "media")
     const buffer = Buffer.from(arrayBuffer);
     const base64 = buffer.toString("base64");
     const result = `data:${contentType};base64,${base64}`;
-    console.log("📥 downloadMedia: success, data URL length:", result.length);
+    debugLog("downloadMedia: success, data URL length:", result.length);
     return result;
   } catch (err) {
     console.error("📥 downloadMedia error:", err);
@@ -84,7 +89,7 @@ export async function GET(req: Request) {
   const challenge = url.searchParams.get("hub.challenge");
 
   if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    console.log("✅ WEBHOOK VERIFIED");
+    debugLog("WEBHOOK VERIFIED");
     return new Response(challenge, { status: 200 });
   }
 
@@ -96,18 +101,18 @@ export async function GET(req: Request) {
 // ===============================
 
 export async function POST(req: Request) {
-  console.log("🔥 WEBHOOK HIT");
+  debugLog("WEBHOOK HIT");
 
   const body = await req.json();
 
-  console.log("📦 FULL WEBHOOK BODY:", JSON.stringify(body, null, 2));
+  debugLog("WEBHOOK BODY RECEIVED");
 
   const entry = body.entry?.[0];
   const change = entry?.changes?.[0];
   const value = change?.value;
 
   if (!value) {
-    console.log("⚠️ No value in webhook");
+    debugLog("No value in webhook");
     return NextResponse.json({ ok: true });
   }
 
@@ -118,7 +123,7 @@ export async function POST(req: Request) {
   const status = value?.statuses?.[0];
 
   if (status) {
-    console.log("📬 STATUS UPDATE:", status.status, status.id);
+    debugLog("STATUS UPDATE:", status.status, status.id);
     await supabase
       .from("messages")
       .update({ status: status.status })
@@ -134,12 +139,12 @@ export async function POST(req: Request) {
   const message = value?.messages?.[0];
 
   if (!message) {
-    console.log("⚠️ No message in webhook value");
+    debugLog("No message in webhook value");
     return NextResponse.json({ ok: true });
   }
 
-  console.log("💬 MESSAGE TYPE:", message.type);
-  console.log("💬 MESSAGE DUMP:", JSON.stringify(message, null, 2));
+  debugLog("MESSAGE TYPE:", message.type);
+  debugLog("MESSAGE DUMP:", JSON.stringify(message, null, 2));
 
   const phoneNumberId = value?.metadata?.phone_number_id;
   const phone = message.from;
@@ -155,7 +160,7 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (!number) {
-    console.log("⚠️ whatsapp number not configured");
+    debugLog("whatsapp number not configured");
     return NextResponse.json({ ok: true });
   }
 
@@ -177,10 +182,10 @@ export async function POST(req: Request) {
     const payload = (message as any).interactive?.button_reply?.id || message.button?.payload;
     const originalMessageId = message.context?.id;
 
-    console.log("🔘 BUTTON CLICK DETECTED!", { payload, originalMessageId, messageType: message.type });
+    debugLog("BUTTON CLICK DETECTED", { payload, originalMessageId, messageType: message.type });
 
     if (!originalMessageId) {
-      console.log("⚠️ No context.id in button click - cannot match order");
+      debugLog("No context.id in button click - cannot match order");
       return NextResponse.json({ ok: true });
     }
 
@@ -204,7 +209,7 @@ export async function POST(req: Request) {
 
     const matchedOrder = order || orderByPhone?.data;
 
-    console.log("🔍 ORDER LOOKUP:", {
+    debugLog("ORDER LOOKUP:", {
       originalMessageId,
       byMessageId: !!order,
       byPhone: !!orderByPhone?.data,
@@ -213,7 +218,7 @@ export async function POST(req: Request) {
     });
 
     if (!matchedOrder) {
-      console.log("⚠️ No order found for message ID or phone");
+      debugLog("No order found for message ID or phone");
       return NextResponse.json({ ok: true });
     }
 
@@ -228,14 +233,14 @@ export async function POST(req: Request) {
     // CONFIRM ORDER
 
     if (payload === "confirmar_pedido") {
-      console.log("✅ CONFIRMING ORDER:", matchedOrder.id);
+      debugLog("CONFIRMING ORDER:", matchedOrder.id);
       const { error: updateError } = await supabase
         .from("orders")
         .update({ status: "confirmed" })
         .eq("id", matchedOrder.id);
 
       if (updateError) console.error("❌ Error updating order:", updateError);
-      else console.log("✅ Order confirmed successfully:", matchedOrder.id);
+      else debugLog("Order confirmed successfully:", matchedOrder.id);
 
       // Guardar mensaje en el chat: "✅ El cliente confirmó el pedido"
       if (conv) {
@@ -274,14 +279,18 @@ export async function POST(req: Request) {
     // CANCEL ORDER
 
     if (payload === "cancelar_pedido") {
-      console.log("❌ CANCELLING ORDER:", matchedOrder.id);
+      debugLog("CANCELLING ORDER:", matchedOrder.id);
       const { error: cancelError } = await supabase
         .from("orders")
-        .update({ status: "cancelled" })
+        .update({
+          status: "cancelled",
+          cancel_reason: "Cliente cancelo por WhatsApp",
+          cancelled_at: new Date().toISOString(),
+        })
         .eq("id", matchedOrder.id);
 
       if (cancelError) console.error("❌ Error cancelling order:", cancelError);
-      else console.log("✅ Order cancelled successfully:", matchedOrder.id);
+      else debugLog("Order cancelled successfully:", matchedOrder.id);
 
       // Guardar mensaje en el chat
       if (conv) {
@@ -304,7 +313,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true });
   } else if (message.type === "interactive") {
-    console.log("⚠️ Interactive message but not button_reply:", JSON.stringify((message as any).interactive));
+    debugLog("Interactive message but not button_reply:", JSON.stringify((message as any).interactive));
   }
 
   // ===============================
@@ -321,7 +330,7 @@ export async function POST(req: Request) {
     .limit(1)
     .maybeSingle();
 
-  console.log("🏍️ Rider lookup:", { phone, rider });
+  debugLog("Rider lookup:", { phone, riderId: rider?.id });
 
   // ===============================
   // IF RIDER - HANDLE RIDER CONVERSATION
@@ -402,12 +411,12 @@ export async function POST(req: Request) {
         .update({ last_message_at: new Date() })
         .eq("id", riderConv.id);
 
-      console.log("✅ RIDER MESSAGE SAVED");
+      debugLog("RIDER MESSAGE SAVED");
       return NextResponse.json({ ok: true });
     }
 
     // No tiene conversación de rider activa → tratar como cliente
-    console.log("🏍️ Rider found but no active conversation, treating as customer");
+    debugLog("Rider found but no active conversation, treating as customer");
   }
 
   // ===============================
@@ -424,7 +433,7 @@ export async function POST(req: Request) {
     .limit(1)
     .maybeSingle();
 
-  console.log("📱 Phone lookup:", {
+  debugLog("Phone lookup:", {
     phone,
     phoneNormalized,
     phoneWithCountry,
@@ -575,7 +584,7 @@ export async function POST(req: Request) {
     })
     .eq("id", conversation.id);
 
-  console.log("✅ MESSAGE SAVED");
+  debugLog("MESSAGE SAVED");
 
   return NextResponse.json({ ok: true });
 }

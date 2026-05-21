@@ -5,7 +5,8 @@
 
   "exports": {
     "./client": "./client.ts",
-    "./server": "./server.ts"
+    "./server": "./server.ts",
+    "./costs": "./costs.ts"
   }
 
 }

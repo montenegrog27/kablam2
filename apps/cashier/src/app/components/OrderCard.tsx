@@ -111,9 +111,18 @@ export default function OrderCard({
   };
 
   const handleCancel = async () => {
-    if (!confirm("¿Cancelar este pedido? Esta acción no se puede deshacer.")) return;
+    const reason = window.prompt("Motivo de cancelacion");
+    if (!reason?.trim()) return;
     setCancelling(true);
-    await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
+    await supabase
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancel_reason: reason.trim(),
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: userRecord?.id || null,
+      })
+      .eq("id", order.id);
     setCancelling(false);
   };
 

@@ -9,7 +9,8 @@ import {
   ChefHat, Box, ShoppingBag, ShoppingCart, TicketPercent,
   Bike, Clock, CookingPot, Printer, Truck, CreditCard, Kanban,
   UserCog, Award, Zap, Settings, LogOut, ChevronDown, Menu,
-  DollarSign, TrendingUp, Receipt, FileText, Truck as TruckIcon, BarChart3, Star,
+  DollarSign, TrendingUp, Receipt, FileText, Truck as TruckIcon, BarChart3, Star, Shield,
+  Calculator,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -70,6 +71,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { section: "Finanzas", items: [
       { href: "/ventas", label: "Ventas", icon: DollarSign },
       { href: "/ventas/productos", label: "Ventas x Producto", icon: BarChart3 },
+      { href: "/arqueos", label: "Arqueos de Caja", icon: Calculator },
       { href: "/reporte-diario", label: "Reporte Diario", icon: FileText },
       { href: "/reports", label: "Reportes", icon: Receipt },
       { href: "/expenses", label: "Gastos", icon: Receipt },
@@ -81,9 +83,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/purchase-categories", label: "Cat. Compras", icon: Tags },
     ]},
     { section: "Configuración", items: [
+      { href: "/roles", label: "Roles y Permisos", icon: Shield },
+      { href: "/users", label: "Usuarios", icon: UserCog },
       { href: "/delivery-settings", label: "Delivery", icon: Truck },
       { href: "/payment-methods", label: "Métodos de Pago", icon: CreditCard },
-      { href: "/users", label: "Usuarios", icon: UserCog },
       { href: "/settings", label: "Configuración", icon: Settings },
     ]},
   ];

@@ -72,25 +72,19 @@ export default function MenuPageClient({
           combos={combos}
           onAgregar={agregarAlCarrito}
           onAgregarCombo={(combo) => {
-            // Agregar combo como un item especial (no es un producto real, tiene productId vacío)
             setCarrito((prev) => [
               ...prev,
               {
                 uid: `combo-${combo.id}-${Date.now()}`,
+                itemType: "combo",
+                comboId: combo.id,
                 variantId: "",
-                productId: "",
+                productId: combo.id,
                 name: combo.name,
                 price: combo.price,
                 quantity: 1,
-                variant: {
-                  id: "",
-                  name: "Combo",
-                  price: combo.price,
-                  is_default: true,
-                },
-                categories: combo.categories || [],
+                variant: { id: combo.id + "-variant", name: combo.name, price: combo.price, is_default: true },
                 extras: [],
-                removedIngredients: [],
               },
             ]);
           }}

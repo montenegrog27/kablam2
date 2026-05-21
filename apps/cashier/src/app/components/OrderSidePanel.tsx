@@ -5,7 +5,9 @@ import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { validateCoupon } from "@/lib/validateCoupon";
 import { calculateShippingCost } from "@/lib/calculateShippingCost";
 import { calculateDistanceKm } from "@/lib/calculateDelivery";
+import { logAppError } from "@/lib/logAppError";
 import { useCurrentBranch } from "../(cashier)/context/BranchContext";
+import { Minus, Plus, Search, X } from "lucide-react";
 
 type PaymentLine = {
   payment_method_id: string;
@@ -17,6 +19,11 @@ type PaymentMethod = {
   id: string;
   name: string;
   requires_reference: boolean;
+};
+
+const DEBUG_LOGS = process.env.NEXT_PUBLIC_DEBUG_LOGS === "true";
+const debugLog = (...args: unknown[]) => {
+  if (DEBUG_LOGS) console.log(...args);
 };
 
 export default function OrderSidePanel({
@@ -34,6 +41,7 @@ export default function OrderSidePanel({
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [selectedParentCategory, setSelectedParentCategory] = useState<string | null>(null);
+  const [productSearch, setProductSearch] = useState("");
   const [autoShippingEnabled, setAutoShippingEnabled] = useState(true);
   const [cart, setCart] = useState<any[]>([]);
   const [orderType, setOrderType] = useState("takeaway");
@@ -60,6 +68,12 @@ export default function OrderSidePanel({
   const isView = mode === "view";
   const isEdit = mode === "edit";
   const isBuilder = mode === "builder";
+  const canEditClosedCashOrder =
+    userRecord && ["owner", "admin"].includes(userRecord.role);
+  const selectedOrderBelongsToOpenSession =
+    !selectedOrder?.cash_session_id || selectedOrder.cash_session_id === session.id;
+  const canEditSelectedOrder =
+    !selectedOrder || selectedOrderBelongsToOpenSession || canEditClosedCashOrder;
 
   // Categorías padre (raíz) y subcategorías según selección
   const rootCategories = categories.filter((c: any) => !c.parent_id);
@@ -95,8 +109,8 @@ export default function OrderSidePanel({
       .eq("tenant_id", tenantId)
       .eq("branch_id", branchId);
 
-    console.log("DELIVERY RAW DATA:", data);
-    console.log("DELIVERY ERROR:", error);
+    debugLog("DELIVERY RAW DATA:", data);
+    debugLog("DELIVERY ERROR:", error);
 
     if (data && data.length > 0) {
       setDeliverySettings(data[0]);
@@ -158,14 +172,14 @@ export default function OrderSidePanel({
       customerLng,
     );
 
-    console.log("DISTANCE:", distance);
+    debugLog("DISTANCE:", distance);
 
     const cost = calculateShippingCost({
       distanceKm: distance,
       settings: deliverySettings,
     });
 
-    console.log("SHIPPING COST:", cost);
+    debugLog("SHIPPING COST:", cost);
 
     if (cost === null) {
       alert("Fuera de zona de entrega");
@@ -252,13 +266,22 @@ export default function OrderSidePanel({
   const loadOrderForEdit = async () => {
     const { data: items } = await supabase
       .from("order_items")
-      .select("*, products(*)")
+      .select("*, products(*), product_variants(*)")
       .eq("order_id", selectedOrder.id);
 
     if (items) {
       setCart(
         items.map((item: any) => ({
-          variant: { ...item.products, product_id: item.product_id },
+          variant: {
+            ...item.products,
+            product_id: item.product_id,
+            variant_id: item.variant_id,
+            price:
+              item.unit_price ??
+              item.product_variants?.price ??
+              item.products?.price ??
+              0,
+          },
           quantity: item.quantity,
           note: item.note || "",
         })),
@@ -292,7 +315,61 @@ export default function OrderSidePanel({
 
   const addToCart = (variant: any) => {
     if (isView) return;
-    setCart([...cart, { variant, quantity: 1, note: "" }]);
+    const defaultVariant =
+      variant.product_variants?.find((v: any) => v.is_default) ||
+      variant.product_variants?.[0];
+    const productId = variant.product_id || variant.id;
+    const variantId = variant.variant_id || defaultVariant?.id || null;
+    const price = Number(variant.price ?? defaultVariant?.price ?? 0);
+
+    setCart((current) => {
+      const existingIndex = current.findIndex(
+        (item) =>
+          (item.variant.variant_id || null) === variantId &&
+          (item.variant.product_id || item.variant.id) === productId &&
+          !item.note,
+      );
+
+      if (existingIndex >= 0) {
+        return current.map((item, index) =>
+          index === existingIndex
+            ? { ...item, quantity: Number(item.quantity || 0) + 1 }
+            : item,
+        );
+      }
+
+      return [
+        ...current,
+        {
+          variant: {
+            ...variant,
+            product_id: productId,
+            variant_id: variantId,
+            price,
+          },
+          quantity: 1,
+          note: "",
+        },
+      ];
+    });
+  };
+
+  const addFirstSearchResult = () => {
+    const [firstResult] = searchResults;
+    if (!firstResult) return;
+    addToCart(firstResult);
+    setProductSearch("");
+  };
+
+  const changeCartQuantity = (index: number, delta: number) => {
+    if (isView) return;
+    setCart((current) =>
+      current.flatMap((item, itemIndex) => {
+        if (itemIndex !== index) return [item];
+        const nextQuantity = Number(item.quantity || 0) + delta;
+        return nextQuantity > 0 ? [{ ...item, quantity: nextQuantity }] : [];
+      }),
+    );
   };
 
   const updateNote = (index: number, value: string) => {
@@ -423,6 +500,11 @@ export default function OrderSidePanel({
   };
   // ================= SAVE =================
   const handleSave = async () => {
+    if (isEdit && !canEditSelectedOrder) {
+      alert("No se puede editar un pedido de una caja cerrada.");
+      return;
+    }
+
     const subtotal = calculateSubtotal();
     const discount = calculateDiscount();
     const total = calculateTotal();
@@ -576,7 +658,8 @@ export default function OrderSidePanel({
 
     const itemsToInsert = cart.map((item) => ({
       order_id: orderId,
-      product_id: item.variant.id,
+      product_id: item.variant.product_id || item.variant.id,
+      variant_id: item.variant.variant_id || null,
       quantity: item.quantity,
       unit_price: item.variant.price,
       total: item.variant.price * item.quantity,
@@ -584,7 +667,24 @@ export default function OrderSidePanel({
     }));
 
     if (itemsToInsert.length) {
-      await supabase.from("order_items").insert(itemsToInsert);
+      const { error: itemsError } = await supabase
+        .from("order_items")
+        .insert(itemsToInsert);
+
+      if (itemsError) {
+        console.error("ERROR INSERTANDO ITEMS:", itemsError);
+        await logAppError("cashier", "Error insertando productos", {
+          tenantId,
+          branchId,
+          code: itemsError.code,
+          context: { orderId, phase: "order_items_insert" },
+        });
+        if (isBuilder) {
+          await supabase.from("orders").delete().eq("id", orderId);
+        }
+        alert("Error insertando productos.");
+        return;
+      }
     }
 
     // ===============================
@@ -613,6 +713,16 @@ export default function OrderSidePanel({
 
     if (paymentInsert.error) {
       console.error("ERROR INSERTANDO PAYMENT:", paymentInsert.error);
+      await logAppError("cashier", "Error insertando pago", {
+        tenantId,
+        branchId,
+        code: paymentInsert.error.code,
+        context: { orderId, phase: "order_payments_insert" },
+      });
+      if (isBuilder) {
+        await supabase.from("order_items").delete().eq("order_id", orderId);
+        await supabase.from("orders").delete().eq("id", orderId);
+      }
       alert("Error insertando pago.");
       return;
     }
@@ -646,7 +756,7 @@ export default function OrderSidePanel({
     const categoryCounts: any = {};
 
     cart.forEach((item) => {
-      const productId = item.variant.id;
+      const productId = item.variant.product_id || item.variant.id;
       const categoryId = item.variant.category_id;
 
       if (!productCounts[productId]) productCounts[productId] = 0;
@@ -761,6 +871,22 @@ export default function OrderSidePanel({
     (acc, p) => acc + Number(p.amount || 0),
     0,
   );
+  const normalizedSearch = productSearch.trim().toLowerCase();
+  const searchResults = products
+    .filter((product) => {
+      if (!normalizedSearch) return true;
+      const category = categories.find((cat: any) => cat.id === product.category_id);
+      return [product.name, product.description, category?.name]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+    })
+    .sort((a, b) => {
+      if (!normalizedSearch) return a.name?.localeCompare(b.name);
+      const aStarts = a.name?.toLowerCase().startsWith(normalizedSearch) ? 0 : 1;
+      const bStarts = b.name?.toLowerCase().startsWith(normalizedSearch) ? 0 : 1;
+      return aStarts - bStarts || a.name?.localeCompare(b.name);
+    })
+    .slice(0, normalizedSearch ? 12 : 8);
 
   return (
     <div className="w-[520px] h-full flex flex-col bg-white border-l border-gray-200">
@@ -821,6 +947,90 @@ export default function OrderSidePanel({
             </div>
 
             {/* CATEGORÍAS / PRODUCTOS */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Buscar producto
+                </label>
+                <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm focus-within:border-gray-900">
+                  <Search size={18} className="text-gray-400" />
+                  <input
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addFirstSearchResult();
+                      }
+                    }}
+                    autoFocus
+                    placeholder="Nombre del producto..."
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                  />
+                  {productSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setProductSearch("")}
+                      className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-400">
+                  Enter agrega el primer resultado. Click agrega directo.
+                </p>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                {searchResults.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-gray-400">
+                    No encontramos productos con esa busqueda
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {searchResults.map((product) => {
+                      const defaultVariant =
+                        product.product_variants?.find((variant: any) => variant.is_default) ||
+                        product.product_variants?.[0];
+                      const price = Number(product.price ?? defaultVariant?.price ?? 0);
+                      const category = categories.find((cat: any) => cat.id === product.category_id);
+
+                      return (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onClick={() => {
+                            addToCart(product);
+                            setProductSearch("");
+                          }}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-gray-50"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-gray-900">
+                              {product.name}
+                            </p>
+                            {category?.name && (
+                              <p className="truncate text-xs text-gray-400">{category.name}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold text-gray-900">
+                              ${price.toLocaleString("es-AR")}
+                            </span>
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-white">
+                              <Plus size={14} />
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="hidden">
             {!selectedParentCategory && !selectedCategory ? (
               /* ★ MODO INICIAL: Cards de categorías PADRE */
               <div>
@@ -921,6 +1131,7 @@ export default function OrderSidePanel({
                 </div>
               </div>
             )}
+            </div>
           </>
         )}
 
@@ -1029,12 +1240,18 @@ export default function OrderSidePanel({
                 </div>
 
                 {/* Botón Editar */}
-                <button
-                  onClick={() => setMode("edit")}
-                  className="w-full py-3 rounded-lg bg-gray-900 text-white hover:bg-black transition font-medium"
-                >
-                  Editar pedido
-                </button>
+                {canEditSelectedOrder ? (
+                  <button
+                    onClick={() => setMode("edit")}
+                    className="w-full py-3 rounded-lg bg-gray-900 text-white hover:bg-black transition font-medium"
+                  >
+                    Editar pedido
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    Pedido bloqueado: pertenece a una caja cerrada.
+                  </div>
+                )}
               </div>
             )}
 
@@ -1281,7 +1498,69 @@ export default function OrderSidePanel({
 
       {/* RESUMEN INFERIOR */}
       <div className="border-t border-gray-200 p-6 bg-gray-50 space-y-4">
-        <div className="max-h-[150px] overflow-y-auto space-y-2">
+        <div className="max-h-[220px] overflow-y-auto space-y-2">
+          {cart.length === 0 && (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-400">
+              Buscá productos y agregalos con Enter
+            </div>
+          )}
+
+          {cart.map((item, i) => (
+            <div key={i} className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-gray-900">
+                    {item.variant.name}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    ${Number(item.variant.price || 0).toLocaleString("es-AR")} c/u
+                  </p>
+                </div>
+
+                <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={() => changeCartQuantity(i, -1)}
+                    className="flex h-8 w-8 items-center justify-center text-gray-600 hover:text-gray-900"
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <span className="w-8 text-center text-sm font-bold tabular-nums text-gray-900">
+                    {item.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => changeCartQuantity(i, 1)}
+                    className="flex h-8 w-8 items-center justify-center text-gray-600 hover:text-gray-900"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+
+                <div className="w-20 text-right text-sm font-bold text-gray-900">
+                  ${(Number(item.variant.price || 0) * item.quantity).toLocaleString("es-AR")}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => removeFromCart(i)}
+                  className="rounded-full p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              <input
+                value={item.note ?? ""}
+                onChange={(e) => updateNote(i, e.target.value)}
+                placeholder="Nota para este producto"
+                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-gray-900"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden">
           {cart.map((item, i) => (
             <div key={i} className="space-y-1">
               <div className="flex justify-between text-sm text-gray-800">

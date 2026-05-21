@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getVariantCostMap } from "@kablam/supabase/costs";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -172,39 +173,18 @@ export async function GET(req: NextRequest) {
     const uniqueVariantIds = [...new Set(itemVariantIds)];
 
     if (uniqueVariantIds.length > 0) {
-      // Ingredient costs
-      const { data: recipes } = await supabase
-        .from("product_recipes")
-        .select("variant_id, quantity, ingredients(name, cost_per_unit)")
-        .in("variant_id", uniqueVariantIds);
-
-      const variantCost: Record<string, number> = {};
-      recipes?.forEach((r) => {
-        variantCost[r.variant_id] = (variantCost[r.variant_id] || 0) + (r.quantity || 0) * Number((r.ingredients as any)?.cost_per_unit || 0);
-      });
-
-      // Packaging costs
-      const { data: pkgRecipes } = await supabase
-        .from("product_packaging")
-        .select("variant_id, quantity, packaging(name, cost_per_unit)")
-        .in("variant_id", uniqueVariantIds);
-
-      const variantPkgCost: Record<string, number> = {};
-      pkgRecipes?.forEach((r) => {
-        variantPkgCost[r.variant_id] = (variantPkgCost[r.variant_id] || 0) + (r.quantity || 0) * Number((r.packaging as any)?.cost_per_unit || 0);
-      });
+      const variantCosts = await getVariantCostMap(supabase, uniqueVariantIds);
 
       // Calculate CMV from order items
       orders?.forEach((o) => {
         (o.order_items || []).forEach((item: any) => {
-          const ingCost = variantCost[item.variant_id] || 0;
-          const pkgCost = variantPkgCost[item.variant_id] || 0;
-          const totalItemCost = (ingCost + pkgCost) * (item.quantity || 1);
+          const cost = variantCosts[item.variant_id] || 0;
+          const totalItemCost = cost * (item.quantity || 1);
           cmv += totalItemCost;
           cmvDetails.push({
             product: item.products?.name || "N/A",
             cost: totalItemCost,
-            type: ingCost > 0 && pkgCost > 0 ? "ingredientes+packaging" : ingCost > 0 ? "ingredientes" : "packaging",
+            type: cost > 0 ? "ingredientes+packaging" : "sin receta",
           });
         });
       });

@@ -92,8 +92,10 @@ import SalesTab from "./SalesTab";
 import DeliveredTab from "./DeliveredTab";
 import KDSTab from "./KDSTab";
 import CloseCash from "./CloseCash";
+import CashClosuresTab from "./CashClosuresTab";
 import CustomerChatList from "./CustomerChatList";
 import { useBranch } from "../(cashier)/context/BranchContext";
+import { usePermissions } from "../../hooks/usePermissions";
 import { MapPin, Settings, X, Check } from "lucide-react";
 
 export default function CashierTabs({ session }: any) {
@@ -106,14 +108,16 @@ export default function CashierTabs({ session }: any) {
   const [riders, setRiders] = useState<any[]>([]);
   const [savingRiders, setSavingRiders] = useState(false);
   const { currentBranch, allBranches, changeBranch } = useBranch();
+  const { can } = usePermissions();
 
-  const tabs = [
-    { id: "orders", label: "Pedidos" },
-    { id: "kds", label: "Cocina" },
-    { id: "delivered", label: "Entregados" },
-    { id: "whatsapp", label: "WhatsApp" },
-    { id: "arqueos", label: "Arqueos" },
+  const allTabs = [
+    { id: "orders", label: "Pedidos", perm: "cashier.orders.view" },
+    { id: "kds", label: "Cocina", perm: "cashier.kds.view" },
+    { id: "delivered", label: "Entregados", perm: "cashier.orders.view" },
+    { id: "whatsapp", label: "WhatsApp", perm: "cashier.chat.view" },
+    { id: "arqueos", label: "Arqueos", perm: "cashier.close_cash.view" },
   ];
+  const tabs = allTabs.filter((t) => can(t.perm));
 
   const loadRiders = async () => {
     if (!currentBranch?.id) return;
@@ -202,12 +206,14 @@ export default function CashierTabs({ session }: any) {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowCloseModal(true)}
-          className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-semibold transition"
-        >
-          Hacer Cierre
-        </button>
+        {can("cashier.close_cash.view") && (
+          <button
+            onClick={() => setShowCloseModal(true)}
+            className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-semibold transition"
+          >
+            Hacer Cierre
+          </button>
+        )}
       </div>
 
       {/* CONTENT */}
@@ -228,9 +234,10 @@ export default function CashierTabs({ session }: any) {
         )}
 
         {tab === "arqueos" && (
-          <div className="h-full flex items-center justify-center text-gray-400">
-            Próximamente Arqueos
-          </div>
+          <CashClosuresTab
+            session={session}
+            onCloseCash={() => setShowCloseModal(true)}
+          />
         )}
       </div>
 
