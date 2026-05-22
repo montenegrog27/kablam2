@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       notes,
     } = body;
 
-    if (!branchSlug || !customerName || !customerPhone || !partySize || !reservationDate || !reservationTime) {
+    if (!branchSlug || !customerName || !customerPhone || !partySize || !reservationDate) {
       return Response.json({ success: false, error: "Faltan datos obligatorios" }, { status: 400 });
     }
 
@@ -71,6 +71,12 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Reservas no disponibles" }, { status: 404 });
     }
 
+    const finalReservationTime = settings.no_time ? "00:00" : reservationTime;
+
+    if (!finalReservationTime) {
+      return Response.json({ success: false, error: "Horario requerido" }, { status: 400 });
+    }
+
     const size = Number(partySize);
     if (size < Number(settings.min_party_size || 1) || size > Number(settings.max_party_size || 20)) {
       return Response.json({ success: false, error: "Cantidad de personas fuera de rango" }, { status: 400 });
@@ -83,7 +89,7 @@ export async function POST(req: Request) {
         .eq("branch_id", branch.id)
         .match(eventId ? { reservation_event_id: eventId } : {})
         .eq("reservation_date", reservationDate)
-        .eq("reservation_time", reservationTime)
+        .eq("reservation_time", finalReservationTime)
         .not("status", "in", "(cancelled,no_show)");
 
       const reservedPeople = (sameSlot || []).reduce(
@@ -107,7 +113,7 @@ export async function POST(req: Request) {
         customer_email: customerEmail?.trim() || null,
         party_size: size,
         reservation_date: reservationDate,
-        reservation_time: reservationTime,
+        reservation_time: finalReservationTime,
         notes: notes?.trim() || null,
         status: "pending",
         source: "customer",

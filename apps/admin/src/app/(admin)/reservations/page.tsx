@@ -24,6 +24,7 @@ type ReservationEvent = {
   branch_id?: string;
   slug?: string;
   enabled: boolean;
+  no_time: boolean;
   title: string;
   description: string;
   hero_image_url: string;
@@ -62,6 +63,7 @@ type Reservation = {
 
 const DEFAULT_EVENT: ReservationEvent = {
   enabled: true,
+  no_time: false,
   slug: "",
   title: "Nuevo evento",
   description: "Elegí tu horario y guardá tu lugar.",
@@ -107,6 +109,11 @@ function formatDate(value?: string) {
 
 function formatTime(value?: string) {
   return value?.slice(0, 5) || "-";
+}
+
+function formatReservationTime(value?: string, noTime?: boolean) {
+  if (noTime || value === "00:00:00" || value === "00:00") return "Sin hora";
+  return formatTime(value);
 }
 
 function slugify(value: string) {
@@ -292,14 +299,15 @@ export default function ReservationsPage() {
       branch_id: branchId,
       slug: selectedEvent.slug || slugify(selectedEvent.title || "reservas"),
       enabled: Boolean(selectedEvent.enabled),
+      no_time: Boolean(selectedEvent.no_time),
       title: selectedEvent.title || "Reservas",
       description: selectedEvent.description || null,
       hero_image_url: selectedEvent.hero_image_url || null,
       location_name: selectedEvent.location_name || selectedBranch?.name || null,
       location_address: selectedEvent.location_address || null,
       event_date: selectedEvent.event_date || today(),
-      start_time: selectedEvent.start_time || "12:00",
-      end_time: selectedEvent.end_time || "15:00",
+      start_time: selectedEvent.no_time ? "00:00" : selectedEvent.start_time || "12:00",
+      end_time: selectedEvent.no_time ? "00:00" : selectedEvent.end_time || "15:00",
       slot_interval_minutes: Number(selectedEvent.slot_interval_minutes || 30),
       min_party_size: Number(selectedEvent.min_party_size || 1),
       max_party_size: Number(selectedEvent.max_party_size || 20),
@@ -444,12 +452,23 @@ export default function ReservationsPage() {
                 <Field label="Lugar"><input className="input" value={selectedEvent.location_name || ""} onChange={(e) => updateEvent("location_name", e.target.value)} /></Field>
                 <Field label="Direccion"><input className="input" value={selectedEvent.location_address || ""} onChange={(e) => updateEvent("location_address", e.target.value)} /></Field>
                 <Field label="Fecha"><input type="date" className="input" value={selectedEvent.event_date || ""} onChange={(e) => updateEvent("event_date", e.target.value)} /></Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Desde"><input type="time" className="input" value={selectedEvent.start_time || ""} onChange={(e) => updateEvent("start_time", e.target.value)} /></Field>
-                  <Field label="Hasta"><input type="time" className="input" value={selectedEvent.end_time || ""} onChange={(e) => updateEvent("end_time", e.target.value)} /></Field>
-                </div>
+                <label className="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 md:col-span-1">
+                  <span>
+                    <span className="block text-sm font-medium text-gray-100">Sin hora</span>
+                    <span className="text-xs text-gray-500">La gente reserva el evento sin elegir horario.</span>
+                  </span>
+                  <input type="checkbox" checked={Boolean(selectedEvent.no_time)} onChange={(e) => updateEvent("no_time", e.target.checked)} className="h-5 w-5 accent-white" />
+                </label>
+                {!selectedEvent.no_time && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Desde"><input type="time" className="input" value={selectedEvent.start_time || ""} onChange={(e) => updateEvent("start_time", e.target.value)} /></Field>
+                    <Field label="Hasta"><input type="time" className="input" value={selectedEvent.end_time || ""} onChange={(e) => updateEvent("end_time", e.target.value)} /></Field>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-3 md:col-span-2">
-                  <Field label="Intervalo min"><input type="number" className="input" value={selectedEvent.slot_interval_minutes || 30} onChange={(e) => updateEvent("slot_interval_minutes", e.target.value)} /></Field>
+                  {!selectedEvent.no_time && (
+                    <Field label="Intervalo min"><input type="number" className="input" value={selectedEvent.slot_interval_minutes || 30} onChange={(e) => updateEvent("slot_interval_minutes", e.target.value)} /></Field>
+                  )}
                   <Field label="Min personas"><input type="number" className="input" value={selectedEvent.min_party_size || 1} onChange={(e) => updateEvent("min_party_size", e.target.value)} /></Field>
                   <Field label="Max personas"><input type="number" className="input" value={selectedEvent.max_party_size || 20} onChange={(e) => updateEvent("max_party_size", e.target.value)} /></Field>
                 </div>
@@ -490,7 +509,7 @@ export default function ReservationsPage() {
               <p className="mt-2 text-sm leading-6 text-gray-400">{selectedEvent?.description}</p>
               <div className="mt-5 grid grid-cols-2 gap-2 text-sm text-gray-300">
                 <div className="rounded-lg bg-white/5 p-3"><Calendar size={16} /> <span className="mt-2 block">{formatDate(selectedEvent?.event_date)}</span></div>
-                <div className="rounded-lg bg-white/5 p-3"><Clock size={16} /> <span className="mt-2 block">{selectedEvent?.start_time}</span></div>
+                <div className="rounded-lg bg-white/5 p-3"><Clock size={16} /> <span className="mt-2 block">{formatReservationTime(selectedEvent?.start_time, selectedEvent?.no_time)}</span></div>
               </div>
             </div>
           </div>
@@ -549,7 +568,7 @@ export default function ReservationsPage() {
                       {reservation.notes && <p className="mt-2 text-sm text-gray-400">{reservation.notes}</p>}
                     </div>
                     <div className="text-sm text-gray-300"><Calendar size={15} className="mb-1" /> {formatDate(reservation.reservation_date)}</div>
-                    <div className="text-sm text-gray-300"><Clock size={15} className="mb-1" /> {formatTime(reservation.reservation_time)} <span className="ml-3 inline-flex items-center gap-1"><Users size={15} /> {reservation.party_size}</span></div>
+                    <div className="text-sm text-gray-300"><Clock size={15} className="mb-1" /> {formatReservationTime(reservation.reservation_time, event?.no_time)} <span className="ml-3 inline-flex items-center gap-1"><Users size={15} /> {reservation.party_size}</span></div>
                     <div className="flex gap-2">
                       <button onClick={() => updateReservationStatus(reservation.id, "confirmed")} className="rounded-lg bg-emerald-500/10 p-2 text-emerald-300 hover:bg-emerald-500/20"><Check size={16} /></button>
                       <button onClick={() => updateReservationStatus(reservation.id, "cancelled")} className="rounded-lg bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20"><X size={16} /></button>

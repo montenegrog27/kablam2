@@ -50,6 +50,7 @@ create table if not exists public.reservation_events (
   branch_id uuid not null references public.branches(id) on delete cascade,
   slug text,
   enabled boolean not null default true,
+  no_time boolean not null default false,
   title text not null default 'Reservas',
   description text,
   hero_image_url text,
@@ -76,7 +77,8 @@ alter table public.reservations
   add column if not exists reservation_event_id uuid references public.reservation_events(id) on delete set null;
 
 alter table public.reservation_events
-  add column if not exists slug text;
+  add column if not exists slug text,
+  add column if not exists no_time boolean not null default false;
 
 create index if not exists reservations_branch_date_idx
   on public.reservations(branch_id, reservation_date, reservation_time);

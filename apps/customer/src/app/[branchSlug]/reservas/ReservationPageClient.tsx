@@ -8,6 +8,7 @@ import { getBrandFontFamily } from "@/lib/fonts";
 
 type Settings = {
   title?: string | null;
+  no_time?: boolean | null;
   description?: string | null;
   hero_image_url?: string | null;
   location_name?: string | null;
@@ -95,12 +96,14 @@ export default function ReservationPageClient({
   const backgroundColor = branding?.background_color || "#F5F2EB";
   const fontFamily = getBrandFontFamily(branding);
   const title = settings.title || branchName;
+  const noTime = Boolean(settings.no_time);
   const reservationDate = settings.event_date || "";
   const maxPartySize = Number(settings.max_party_size || 20);
   const minPartySize = Number(settings.min_party_size || 1);
   const capacityPerSlot = Number(settings.capacity_per_slot || 0);
 
   const slots = useMemo(() => {
+    if (noTime) return [];
     const start = normalizeTime(settings.start_time);
     const end = normalizeTime(settings.end_time);
     const interval = Number(settings.slot_interval_minutes || 30);
@@ -128,14 +131,14 @@ export default function ReservationPageClient({
     }
 
     return options;
-  }, [capacityPerSlot, reservationDate, reservations, settings.end_time, settings.slot_interval_minutes, settings.start_time]);
+  }, [capacityPerSlot, noTime, reservationDate, reservations, settings.end_time, settings.slot_interval_minutes, settings.start_time]);
 
   const selectedSlot = slots.find((slot) => slot.time === selectedTime);
   const canSubmit =
     customerName.trim() &&
     customerPhone.replace(/\D/g, "").length >= 10 &&
-    selectedTime &&
-    (!selectedSlot?.remaining || selectedSlot.remaining >= partySize);
+    (noTime || selectedTime) &&
+    (noTime || !selectedSlot?.remaining || selectedSlot.remaining >= partySize);
 
   const submit = async () => {
     setError("");
@@ -152,7 +155,7 @@ export default function ReservationPageClient({
         customerEmail,
         partySize,
         reservationDate,
-        reservationTime: selectedTime,
+        reservationTime: noTime ? "00:00" : selectedTime,
         notes,
       }),
     });
@@ -181,7 +184,7 @@ export default function ReservationPageClient({
           <p className="mt-4 text-lg opacity-70">{settings.confirmation_message || "Te vamos a contactar por WhatsApp con los detalles."}</p>
           <div className="mt-8 rounded-2xl p-5 text-left" style={{ background: `${primaryColor}10` }}>
             <p className="font-bold capitalize">{formatDate(reservationDate)}</p>
-            <p className="mt-1 opacity-70">{selectedTime} · {partySize} personas</p>
+            <p className="mt-1 opacity-70">{noTime ? "Sin hora" : selectedTime} · {partySize} personas</p>
           </div>
           <button
             onClick={() => {
@@ -267,27 +270,33 @@ export default function ReservationPageClient({
 
               <div>
                 <h3 className="mb-3 text-2xl font-bold">Horario</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  {slots.map((slot) => {
-                    const disabled = slot.remaining !== null && slot.remaining < partySize;
-                    return (
-                      <button
-                        key={slot.time}
-                        disabled={disabled}
-                        onClick={() => setSelectedTime(slot.time)}
-                        className="rounded-2xl border px-3 py-4 text-center font-bold transition disabled:opacity-30"
-                        style={{
-                          borderColor: selectedTime === slot.time ? primaryColor : `${primaryColor}25`,
-                          background: selectedTime === slot.time ? primaryColor : "transparent",
-                          color: selectedTime === slot.time ? backgroundColor : primaryColor,
-                        }}
-                      >
-                        {slot.time}
-                        {slot.remaining !== null && <span className="mt-1 block text-[10px] opacity-60">{slot.remaining} libres</span>}
-                      </button>
-                    );
-                  })}
-                </div>
+                {noTime ? (
+                  <div className="rounded-2xl border px-4 py-5 text-center font-bold" style={{ borderColor: `${primaryColor}25`, background: `${primaryColor}0D` }}>
+                    Este evento no requiere elegir horario
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {slots.map((slot) => {
+                      const disabled = slot.remaining !== null && slot.remaining < partySize;
+                      return (
+                        <button
+                          key={slot.time}
+                          disabled={disabled}
+                          onClick={() => setSelectedTime(slot.time)}
+                          className="rounded-2xl border px-3 py-4 text-center font-bold transition disabled:opacity-30"
+                          style={{
+                            borderColor: selectedTime === slot.time ? primaryColor : `${primaryColor}25`,
+                            background: selectedTime === slot.time ? primaryColor : "transparent",
+                            color: selectedTime === slot.time ? backgroundColor : primaryColor,
+                          }}
+                        >
+                          {slot.time}
+                          {slot.remaining !== null && <span className="mt-1 block text-[10px] opacity-60">{slot.remaining} libres</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {settings.deposit_amount ? (
@@ -312,7 +321,7 @@ export default function ReservationPageClient({
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-3">
                 <Summary icon={Users} text={`${partySize} personas`} color={primaryColor} />
-                <Summary icon={Clock} text={selectedTime} color={primaryColor} />
+                <Summary icon={Clock} text={noTime ? "Sin hora" : selectedTime} color={primaryColor} />
               </div>
 
               <Input label="Tu nombre" icon={Users}>

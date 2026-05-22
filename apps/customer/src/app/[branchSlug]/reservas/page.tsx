@@ -16,6 +16,11 @@ function formatTime(value?: string | null) {
   return value?.slice(0, 5) || "";
 }
 
+function formatEventTime(event: any) {
+  if (event.no_time) return "Sin hora";
+  return `${formatTime(event.start_time)} a ${formatTime(event.end_time)}`;
+}
+
 export default async function ReservationsHubPage({
   params,
 }: {
@@ -104,7 +109,7 @@ export default async function ReservationsHubPage({
                     <p className="mt-3 line-clamp-3 text-sm leading-6 opacity-70">{event.description}</p>
                     <div className="mt-5 grid gap-2 text-sm opacity-75">
                       <span className="inline-flex items-center gap-2 capitalize"><Calendar size={16} /> {formatDate(event.event_date)}</span>
-                      <span className="inline-flex items-center gap-2"><Clock size={16} /> {formatTime(event.start_time)} a {formatTime(event.end_time)}</span>
+                      <span className="inline-flex items-center gap-2"><Clock size={16} /> {formatEventTime(event)}</span>
                       {(event.location_name || event.location_address) && (
                         <span className="inline-flex items-center gap-2"><MapPin size={16} /> {event.location_name || event.location_address}</span>
                       )}
