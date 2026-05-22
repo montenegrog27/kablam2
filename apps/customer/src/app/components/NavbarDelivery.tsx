@@ -4,6 +4,7 @@ import { ShoppingCart, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Branding } from "@/types/menu";
+import { getBrandFontFamily } from "@/lib/fonts";
 
 type Props = {
   onCartClick: () => void;
@@ -31,8 +32,7 @@ export default function NavbarDelivery({
       className="w-full flex items-center justify-between px-4 py-3 border-b sticky top-0 z-50"
       style={{
         background: branding?.background_color || "#fff",
-        fontFamily:
-          branding?.font_family || branding?.font_primary || "CustomFont",
+        fontFamily: getBrandFontFamily(branding),
       }}
     >
       {/* Logo / nombre */}

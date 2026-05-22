@@ -10,7 +10,8 @@ import {
   Bike, Clock, CookingPot, Printer, Truck, CreditCard, Kanban,
   UserCog, Award, Zap, Settings, LogOut, ChevronDown, Menu,
   DollarSign, TrendingUp, Receipt, FileText, Truck as TruckIcon, BarChart3, Star, Shield,
-  Calculator,
+  Calculator, Link as LinkIcon,
+  CalendarCheck,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -62,6 +63,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/loyalty", label: "Fidelización", icon: Award },
       { href: "/coupons", label: "Cupones", icon: TicketPercent },
       { href: "/riders", label: "Repartidores", icon: Bike },
+      { href: "/reservations", label: "Reservas", icon: CalendarCheck },
       { href: "/day-parts", label: "Turnos", icon: Clock },
       { href: "/kitchens", label: "Cocinas", icon: CookingPot },
       { href: "/printers", label: "Impresoras", icon: Printer },
@@ -87,6 +89,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/users", label: "Usuarios", icon: UserCog },
       { href: "/delivery-settings", label: "Delivery", icon: Truck },
       { href: "/payment-methods", label: "Métodos de Pago", icon: CreditCard },
+      { href: "/customer-hub", label: "Hub Cliente", icon: LinkIcon },
       { href: "/settings", label: "Configuración", icon: Settings },
     ]},
   ];

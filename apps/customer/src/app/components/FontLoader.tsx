@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { Branding } from "@/types/menu";
+import { getLoadedFontFamily } from "@/lib/fonts";
 
 type FontLoaderProps = {
   branding?: Branding;
@@ -12,7 +13,7 @@ export default function FontLoader({ branding }: FontLoaderProps) {
     if (!branding?.font_url) return;
 
     const fontUrl = branding.font_url;
-    const fontFamily = branding.font_family || "CustomFont";
+    const fontFamily = getLoadedFontFamily(branding);
 
     // Detectar tipo de fuente por extensión
     const isFontFile = /\.(woff|woff2|ttf|otf)(\?.*)?$/i.test(fontUrl);

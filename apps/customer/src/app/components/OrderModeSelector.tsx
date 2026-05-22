@@ -3,6 +3,7 @@
 import { Package, Truck, ArrowLeft } from "lucide-react";
 import type { Branding } from "@/types/menu";
 import Link from "next/link";
+import { getBrandFontFamily } from "@/lib/fonts";
 
 type Props = {
   onSelect: (mode: "delivery" | "takeaway") => void;
@@ -17,8 +18,7 @@ export default function OrderModeSelector({
 }: Props) {
   const primaryColor =
     branding?.primary_color || branding?.brand_color || "#000000";
-  const fontFamily =
-    branding?.font_family || branding?.font_primary || "CustomFont";
+  const fontFamily = getBrandFontFamily(branding);
 
   return (
     <div className="mt-20 text-center" style={{ fontFamily }}>

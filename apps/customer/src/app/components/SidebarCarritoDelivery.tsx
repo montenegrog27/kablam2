@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Dispatch, SetStateAction } from "react";
 import type { CartItem, Branding } from "@/types/menu";
+import { getBrandFontFamily } from "@/lib/fonts";
 
 type Props = {
   abierto: boolean;
@@ -88,8 +89,7 @@ export default function SidebarCarritoDelivery({
         <div
           className="flex items-center justify-between p-4 border-b border-gray-100"
           style={{
-            fontFamily:
-              branding?.font_family || branding?.font_primary || "CustomFont",
+            fontFamily: getBrandFontFamily(branding),
           }}
         >
           <h2 className="text-xl font-bold text-gray-900">Tu pedido</h2>

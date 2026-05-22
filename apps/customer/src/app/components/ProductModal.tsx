@@ -10,6 +10,7 @@ import type {
   IngredientDisplay,
   ProductExtra,
 } from "../../types/menu";
+import { getBrandFontFamily } from "@/lib/fonts";
 
 function getDefaultVariant(product: NonNullable<ProductModalProps["product"]>) {
   return (
@@ -38,8 +39,7 @@ export default function ProductModal({
     first: string;
     second: string;
   } | null>(null);
-  const fontFamily =
-    branding?.font_family || branding?.font_primary || "CustomFont";
+  const fontFamily = getBrandFontFamily(branding);
   const primaryColor =
     branding?.primary_color || branding?.brand_color || "#000000";
   const _accentColor =

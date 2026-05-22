@@ -34,7 +34,7 @@ function formatDuration(from: string) {
   return `${hours}h ${minutes}m`;
 }
 
-export default function CloseCash({ session, onClosed }: any) {
+export default function CloseCash({ session, onClosed, onCancel }: any) {
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
   const [error, setError] = useState("");
@@ -389,8 +389,46 @@ if (freshSession.status !== "open") {
     }
   };
 
-  if (loading) return <div className="p-8 text-white">Calculando...</div>;
-  if (error) return <div className="p-8 text-red-400">{error}</div>;
+  if (loading) {
+    return (
+      <div className="p-8 text-white">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold">Cierre de Caja</h2>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800"
+            >
+              Salir
+            </button>
+          )}
+        </div>
+        Calculando...
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="p-8 text-white">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold">Cierre de Caja</h2>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800"
+            >
+              Salir
+            </button>
+          )}
+        </div>
+        <div className="rounded-lg border border-red-900/40 bg-red-950/30 p-4 text-red-300">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   const difference =
     countedCash !== "" ? Number(countedCash) - summary.expectedCash : 0;
@@ -409,7 +447,24 @@ if (freshSession.status !== "open") {
 
   return (
     <div className="p-8 bg-gray-950 text-white space-y-8 min-h-screen">
-      <h2 className="text-2xl font-bold">Cierre de Caja</h2>
+      <div className="sticky top-0 z-20 -mx-8 -mt-8 flex items-center justify-between gap-4 border-b border-gray-800 bg-gray-950/95 px-8 py-5 backdrop-blur">
+        <div>
+          <h2 className="text-2xl font-bold">Cierre de Caja</h2>
+          <p className="text-sm text-gray-500">
+            Revisá ventas, pagos y efectivo antes de confirmar.
+          </p>
+        </div>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={closing}
+            className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:bg-gray-800 disabled:opacity-50"
+          >
+            Salir
+          </button>
+        )}
+      </div>
       <div className="bg-gray-900 p-6 rounded-lg space-y-2">
         <div className="flex justify-between">
           <span>Cajero</span>

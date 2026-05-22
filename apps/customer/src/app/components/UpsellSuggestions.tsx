@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Plus, Minus, Trash2 } from "lucide-react";
 import type { CartItem, Product, Branding } from "../../types/menu";
 import { getUpsellSuggestions } from "../../lib/upsell";
+import { getBrandFontFamily } from "@/lib/fonts";
 
 type UpsellSuggestionsProps = {
   branchSlug: string;
@@ -30,8 +31,7 @@ export default function UpsellSuggestions({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fontFamily =
-    branding?.font_family || branding?.font_primary || "inherit";
+  const fontFamily = getBrandFontFamily(branding);
   const primaryColor = branding?.primary_color || "#000000";
 
   useEffect(() => {

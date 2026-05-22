@@ -214,7 +214,7 @@ export default function CashierTabs({ session }: any) {
             </button>
           ))}
         </div>
-        {can("cashier.close_cash.view") && (
+        {can("cashier.close_cash.view") && session && (
           <button
             onClick={() => setShowCloseModal(true)}
             className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-semibold transition"
@@ -265,10 +265,17 @@ export default function CashierTabs({ session }: any) {
 
       {/* MODAL CIERRE */}
       {showCloseModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-xl w-[700px] max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setShowCloseModal(false)}
+        >
+          <div
+            className="bg-gray-900 rounded-xl w-[700px] max-h-[90vh] overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
             <CloseCash
               session={session}
+              onCancel={() => setShowCloseModal(false)}
               onClosed={() => {
                 setShowCloseModal(false);
                 window.location.reload();

@@ -63,7 +63,8 @@ export default function BranchesPage() {
     const { data: branchesData } = await supabase
       .from("branches")
       .select("*")
-      .eq("tenant_id", tenantId);
+      .eq("tenant_id", tenantId)
+      .or("active.is.null,active.eq.true");
 
     const { data: settingsData } = await supabase
       .from("branch_settings")
@@ -124,6 +125,36 @@ export default function BranchesPage() {
 
     setSaving(false);
     alert("Sucursal guardada");
+  };
+
+  const deleteBranch = async (branch: any) => {
+    const confirmed = window.confirm(
+      `Eliminar la sucursal "${branch.name}"?\n\nSe ocultara de customer y no se podran tomar pedidos nuevos para esta sucursal. Los pedidos historicos se conservan.`,
+    );
+
+    if (!confirmed) return;
+
+    setSaving(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const response = await fetch(`/api/branches/${branch.id}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const result = await response.json().catch(() => null);
+
+    setSaving(false);
+
+    if (!response.ok) {
+      alert(
+        "No se pudo eliminar la sucursal: " +
+          (result?.details || result?.error || "error desconocido"),
+      );
+      return;
+    }
+
+    await loadData();
+    alert("Sucursal eliminada");
   };
 
   /* =============================
@@ -365,13 +396,22 @@ export default function BranchesPage() {
                 }
               />
 
-              <button
-                onClick={() => saveBranch(branch)}
-                disabled={saving}
-                className="bg-black text-white px-4 py-2 rounded"
-              >
-                Guardar sucursal
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => saveBranch(branch)}
+                  disabled={saving}
+                  className="bg-black text-white px-4 py-2 rounded"
+                >
+                  Guardar sucursal
+                </button>
+                <button
+                  onClick={() => deleteBranch(branch)}
+                  disabled={saving}
+                  className="border border-red-900 bg-red-950/30 text-red-300 px-4 py-2 rounded hover:bg-red-950/50"
+                >
+                  Eliminar sucursal
+                </button>
+              </div>
             </div>
 
             {/* =============================

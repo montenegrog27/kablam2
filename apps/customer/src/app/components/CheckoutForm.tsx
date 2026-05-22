@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { CartItem, Branding } from "@/types/menu";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import UpsellSuggestions from "./UpsellSuggestions";
+import { getBrandFontFamily } from "@/lib/fonts";
 import { Map as MapIcon, Navigation } from "lucide-react";
 import {
   User,
@@ -123,8 +124,7 @@ export default function CheckoutForm({
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  const fontFamily =
-    branding?.font_family || branding?.font_primary || "inherit";
+  const fontFamily = getBrandFontFamily(branding);
 
   const loadPaymentMethods = useCallback(async () => {
     console.log(

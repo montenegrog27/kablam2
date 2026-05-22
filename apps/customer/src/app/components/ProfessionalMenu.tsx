@@ -8,6 +8,7 @@ import type {
   Combo,
   ProductVariant,
 } from "../../types/menu";
+import { getBrandFontFamily } from "@/lib/fonts";
 
 type Props = {
   productos: Product[];
@@ -36,8 +37,7 @@ export default function ProfessionalMenu({
 
   const brandColor = branding?.brand_color || "#FF6B35";
   const accentColor = branding?.accent_color || "#1A1A1A";
-  const fontFamily =
-    branding?.font_family || branding?.font_primary || "CustomFont";
+  const fontFamily = getBrandFontFamily(branding);
 
   // Build category list from products + API (to include categories without products)
   const productCategories = productos.flatMap((p) => p.categories || []);
