@@ -110,8 +110,18 @@ export async function POST(req: Request) {
        2. VARIANTS (🔥 CORE)
     ========================= */
 
-    const productItems = items.filter((item) => item.itemType !== "combo");
-    const comboItems = items.filter((item) => item.itemType === "combo");
+    // Auto-detect combo items by variantId pattern (combo variants end with "-variant")
+    const normalizedItems = items.map((item) => {
+      const isCombo = item.itemType === "combo" || item.variantId?.endsWith("-variant");
+      return {
+        ...item,
+        itemType: isCombo ? "combo" : "product",
+        comboId: item.comboId || (isCombo ? item.variantId?.replace(/-variant$/, "") : undefined),
+      };
+    });
+
+    const productItems = normalizedItems.filter((item) => item.itemType !== "combo");
+    const comboItems = normalizedItems.filter((item) => item.itemType === "combo");
     const variantIds = productItems.map((i) => i.variantId).filter(Boolean);
     const productIds = productItems
       .map((i) => i.productId)
