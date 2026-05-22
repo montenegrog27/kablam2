@@ -3,6 +3,7 @@ import { logAppError } from "@/lib/logAppError";
 
 type OrderItemInput = {
   itemType?: "product" | "combo";
+  productId?: string;
   comboId?: string;
   variantId: string;
   quantity: number;
@@ -107,13 +108,24 @@ export async function POST(req: Request) {
     const productItems = items.filter((item) => item.itemType !== "combo");
     const comboItems = items.filter((item) => item.itemType === "combo");
     const variantIds = productItems.map((i) => i.variantId).filter(Boolean);
+    const productIds = productItems
+      .map((i) => i.productId)
+      .filter((id): id is string => Boolean(id));
 
     const { data: variants } =
       variantIds.length > 0
         ? await supabase
             .from("product_variants")
-            .select("id, product_id, price")
+            .select("id, product_id, price, is_default")
             .in("id", variantIds)
+        : { data: [] as VariantRow[] };
+
+    const { data: variantsByProduct } =
+      productIds.length > 0
+        ? await supabase
+            .from("product_variants")
+            .select("id, product_id, price, is_default")
+            .in("product_id", productIds)
         : { data: [] as VariantRow[] };
 
     const comboIds = comboItems
@@ -143,7 +155,12 @@ export async function POST(req: Request) {
             .eq("is_active", true)
         : { data: [] as ComboRow[] };
     debugLog("VARIANTS:", variants);
-    if (productItems.length > 0 && (!variants || variants.length === 0)) {
+    const variantRows = [...(variants || []), ...(variantsByProduct || [])].filter(
+      (variant, index, all) =>
+        all.findIndex((candidate) => candidate.id === variant.id) === index,
+    );
+
+    if (productItems.length > 0 && variantRows.length === 0) {
       return Response.json({ success: false, error: "Invalid products" });
     }
 
@@ -151,7 +168,6 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Invalid combos" });
     }
 
-    const variantRows = variants || [];
     const comboRows = (combos || []) as ComboRow[];
 
     /* =========================
@@ -161,10 +177,15 @@ export async function POST(req: Request) {
     let subtotal = 0;
 
     const itemsToInsert = productItems.map((item) => {
-      const variant = variantRows.find((v) => v.id === item.variantId);
+      const variant =
+        variantRows.find((v) => v.id === item.variantId) ||
+        variantRows.find((v) => v.product_id === item.productId && v.is_default) ||
+        variantRows.find((v) => v.product_id === item.productId);
 
       if (!variant) {
-        throw new Error(`Variant not found: ${item.variantId}`);
+        throw new Error(
+          `Variant not found for product ${item.productId || "unknown"} (${item.variantId || "no variant"})`,
+        );
       }
 
       // Build extras array from selected modifiers + removed ingredients
@@ -177,7 +198,7 @@ export async function POST(req: Request) {
       subtotal += itemTotal;
 
       return {
-        product_id: variant.product_id,
+        product_id: variant.product_id || item.productId,
         variant_id: variant.id,
         quantity: item.quantity,
         unit_price: variant.price,
@@ -363,7 +384,7 @@ export async function POST(req: Request) {
       await supabase.from("orders").delete().eq("id", order.id);
       return Response.json({
         success: false,
-        error: "Order items could not be created",
+        error: `Order items could not be created: ${itemsError.message}`,
       });
     }
 
@@ -432,6 +453,9 @@ export async function POST(req: Request) {
     return Response.json({ success: true });
   } catch (err) {
     console.error("ORDER ERROR:", err);
-    return Response.json({ success: false });
+    return Response.json({
+      success: false,
+      error: err instanceof Error ? err.message : "Order could not be created",
+    });
   }
 }

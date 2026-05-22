@@ -417,6 +417,7 @@ export default function CheckoutForm({
         },
         items: cart.map((item) => ({
           itemType: item.itemType || "product",
+          productId: item.productId,
           comboId: item.comboId,
           variantId: item.variantId,
           quantity: item.quantity,

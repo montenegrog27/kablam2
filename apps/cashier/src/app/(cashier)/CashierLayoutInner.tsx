@@ -6,6 +6,7 @@ import OpenCash from "../components/OpenCash";
 import SelectCashRegister from "../components/SelectCashRegister";
 import { useRouter } from "next/navigation";
 import { useCashSession } from "./context/CashSessionContext";
+import { usePermissions } from "../../hooks/usePermissions";
 
 export default function CashierLayoutInner({ children }: any) {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function CashierLayoutInner({ children }: any) {
   const [userRecord, setUserRecord] = useState<any>(null);
   const [selectedRegister, setSelectedRegister] = useState<any>(null);
   const [registerOccupiedBy, setRegisterOccupiedBy] = useState<any>(null);
+  const { can, loading: permissionsLoading } = usePermissions();
 
   useEffect(() => {
     init();
@@ -88,12 +90,23 @@ export default function CashierLayoutInner({ children }: any) {
     }
   };
 
-  if (loading) {
+  const legacyRoleRequiresCash =
+    ["owner", "admin"].includes(userRecord?.role) ||
+    (userRecord?.role === "cashier" && !userRecord?.role_id);
+  const permissionRequiresCash =
+    can("cashier.menu.view") || can("cashier.close_cash.view");
+  const requiresCashSession = legacyRoleRequiresCash || permissionRequiresCash;
+
+  if (loading || permissionsLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-black text-white">
         Cargando...
       </div>
     );
+  }
+
+  if (!requiresCashSession) {
+    return <div className="h-screen">{children}</div>;
   }
 
   // 🔐 Si ya tiene sesión abierta

@@ -26,6 +26,18 @@ const handleLogout = async () => {
 const loadRegisters = async () => {
   if (!userRecord) return;
 
+  const assignedRegisters: any[] = [];
+
+  if (userRecord.cash_register_id) {
+    const { data: directRegister } = await supabase
+      .from("cash_registers")
+      .select("id, name, branch_id")
+      .eq("id", userRecord.cash_register_id)
+      .maybeSingle();
+
+    if (directRegister) assignedRegisters.push(directRegister);
+  }
+
   const { data, error } = await supabase
     .from("user_cash_registers")
     .select(`
@@ -43,8 +55,31 @@ const loadRegisters = async () => {
     return;
   }
 
-  const mapped =
+  const relationRegisters =
     data?.map((r: any) => r.cash_registers).filter(Boolean) || [];
+
+  const byId = new Map<string, any>();
+  [...assignedRegisters, ...relationRegisters].forEach((register) => {
+    byId.set(register.id, register);
+  });
+
+  let mapped = [...byId.values()];
+
+  if (mapped.length === 0) {
+    let query = supabase
+      .from("cash_registers")
+      .select("id, name, branch_id")
+      .eq("tenant_id", userRecord.tenant_id)
+      .eq("is_active", true)
+      .order("name");
+
+    if (userRecord.branch_id) {
+      query = query.eq("branch_id", userRecord.branch_id);
+    }
+
+    const { data: branchRegisters } = await query;
+    mapped = branchRegisters || [];
+  }
 
   setRegisters(mapped);
   setLoading(false);
@@ -62,15 +97,21 @@ const loadRegisters = async () => {
           Seleccionar Caja
         </h2>
 
-        {registers.map((register) => (
-          <button
-            key={register.id}
-            onClick={() => onSelected(register)}
-            className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 p-3 rounded-lg text-white transition"
-          >
-            {register.name}
-          </button>
-        ))}
+        {registers.length === 0 ? (
+          <div className="rounded-lg border border-yellow-900/40 bg-yellow-950/30 p-4 text-sm text-yellow-200">
+            No hay cajas activas para tu sucursal. Un administrador debe crear o activar una caja.
+          </div>
+        ) : (
+          registers.map((register) => (
+            <button
+              key={register.id}
+              onClick={() => onSelected(register)}
+              className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 p-3 rounded-lg text-white transition"
+            >
+              {register.name}
+            </button>
+          ))
+        )}
 <button
   onClick={handleLogout}
   className="w-full bg-red-600 hover:bg-red-500 p-3 rounded-lg text-white transition"

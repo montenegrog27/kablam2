@@ -86,7 +86,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import SalesTab from "./SalesTab";
 import DeliveredTab from "./DeliveredTab";
@@ -108,7 +108,7 @@ export default function CashierTabs({ session }: any) {
   const [riders, setRiders] = useState<any[]>([]);
   const [savingRiders, setSavingRiders] = useState(false);
   const { currentBranch, allBranches, changeBranch } = useBranch();
-  const { can } = usePermissions();
+  const { can, loading: permissionsLoading } = usePermissions();
 
   const allTabs = [
     { id: "orders", label: "Pedidos", perm: "cashier.orders.view" },
@@ -118,6 +118,14 @@ export default function CashierTabs({ session }: any) {
     { id: "arqueos", label: "Arqueos", perm: "cashier.close_cash.view" },
   ];
   const tabs = allTabs.filter((t) => can(t.perm));
+
+  useEffect(() => {
+    if (permissionsLoading) return;
+    if (tabs.length === 0) return;
+    if (!tabs.some((item) => item.id === tab)) {
+      setTab(tabs[0].id);
+    }
+  }, [permissionsLoading, tabs, tab]);
 
   const loadRiders = async () => {
     if (!currentBranch?.id) return;
@@ -218,13 +226,27 @@ export default function CashierTabs({ session }: any) {
 
       {/* CONTENT */}
       <div className="flex-1 overflow-hidden">
-        {tab === "orders" && <SalesTab session={session} />}
+        {!permissionsLoading && tabs.length === 0 && (
+          <div className="h-full flex items-center justify-center text-gray-400">
+            Tu usuario no tiene permisos asignados para cashier.
+          </div>
+        )}
 
-        {tab === "kds" && <KDSTab />}
+        {tab === "orders" && can("cashier.orders.view") && session && (
+          <SalesTab session={session} />
+        )}
 
-        {tab === "delivered" && <DeliveredTab session={session} />}
+        {tab === "orders" && can("cashier.orders.view") && !session && (
+          <div className="h-full flex items-center justify-center text-gray-400">
+            Para tomar pedidos necesitás abrir una caja.
+          </div>
+        )}
 
-        {tab === "whatsapp" && (
+        {tab === "kds" && can("cashier.kds.view") && <KDSTab />}
+
+        {tab === "delivered" && can("cashier.orders.view") && <DeliveredTab session={session} />}
+
+        {tab === "whatsapp" && can("cashier.chat.view") && (
           <CustomerChatList
             branchId={currentBranch?.id || ""}
             tenantId={currentBranch?.tenant_id || ""}
@@ -233,7 +255,7 @@ export default function CashierTabs({ session }: any) {
           />
         )}
 
-        {tab === "arqueos" && (
+        {tab === "arqueos" && can("cashier.close_cash.view") && session && (
           <CashClosuresTab
             session={session}
             onCloseCash={() => setShowCloseModal(true)}
