@@ -94,17 +94,28 @@ export default function ProfessionalMenu({
       description: combo.description,
       itemType: "combo",
       comboId: combo.id,
+      combo_products: combo.combo_products || [],
+      combo_removable_ingredients: combo.combo_removable_ingredients || [],
       allow_half: false,
       is_hero: false,
-      is_featured: false,
+      is_featured: combo.is_featured || false,
+      featured_order: combo.featured_order || 0,
       is_suggestable: false,
       show_in_menu: true,
       categories: combo.categories || [],
       product_variants: variants,
       modifier_group_products: [],
-      product_ingredients_display: [],
-      product_extras: [],
-    } as Product;
+      product_ingredients_display: (combo.combo_removable_ingredients || [])
+        .filter((r: any) => r.is_active)
+        .map((r: any) => ({
+          id: r.id,
+          ingredient_id: r.ingredient_id,
+          is_essential: false,
+          is_visible: true,
+          ingredients: r.ingredients ? { id: r.ingredients.id, name: r.ingredients.name, sale_price: undefined, cost_per_unit: undefined } : { id: "", name: "", sale_price: undefined, cost_per_unit: undefined },
+        })),
+      product_extras: combo.product_extras || [],
+    };
     return product;
   });
 
