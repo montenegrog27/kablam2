@@ -66,11 +66,10 @@ export default function ProductExtrasPage() {
         .from("products")
         .select("id, name, image_url, product_variants(id, name, price, is_default, product_recipes(id, ingredient_id, ingredients(id, name)))")
         .eq("tenant_id", userRecord.tenant_id)
-        .order("name")
-        .limit(200),
+        .order("name"),
       supabase
         .from("combos")
-        .select("id, name, image_url, price, combo_products(id, product_id, quantity, products(id, name, product_variants(id, name, is_default, product_recipes(id, ingredient_id, ingredients(id, name))))))")
+        .select("id, name, image_url, price, combo_products(id, product_id, quantity, products(id, name))")
         .eq("tenant_id", userRecord.tenant_id)
         .eq("is_active", true)
         .order("name")
@@ -78,13 +77,22 @@ export default function ProductExtrasPage() {
     ]);
 
     setIngredients(ings || []);
-    setProducts(
-      (prods || []).map((product: any) => ({
+    const productsWithPrice = (prods || []).map((product: any) => ({
         ...product,
         price: product.product_variants?.[0]?.price || 0,
+      }));
+    const productsById = new Map(productsWithPrice.map((product: any) => [product.id, product]));
+
+    setProducts(productsWithPrice);
+    setCombos(
+      (comboRows || []).map((combo: any) => ({
+        ...combo,
+        combo_products: (combo.combo_products || []).map((comboProduct: any) => ({
+          ...comboProduct,
+          products: productsById.get(comboProduct.product_id) || comboProduct.products,
+        })),
       })),
     );
-    setCombos(comboRows || []);
     setLoading(false);
   };
 
@@ -174,9 +182,9 @@ export default function ProductExtrasPage() {
     selectedItem?.combo_products?.find((item: any) => item.product_id === selectedComboProductId);
 
   const getRecipeIngredients = (product: any) => {
-    const rows = (product?.product_variants || []).flatMap(
-      (variant: any) => variant.product_recipes || [],
-    );
+    const variants = product?.product_variants || [];
+    const defaultVariant = variants.find((variant: any) => variant.is_default) || variants[0];
+    const rows = defaultVariant?.product_recipes || [];
     const byId = new Map<string, any>();
 
     rows.forEach((row: any) => {
