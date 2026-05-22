@@ -346,9 +346,7 @@ export default function ProductModal({
               <div className="space-y-3">
                 {comboRemovableGroups.map((group) => (
                   <div key={group.productId} className="rounded-2xl bg-gray-50 p-3">
-                    <div className="mb-2 text-xs font-black uppercase tracking-wider text-gray-500">
-                      {group.productName}
-                    </div>
+        
                     <div className="flex flex-wrap gap-2">
                       {(group.ingredients || []).map((ingredient) => {
                         const ingredientName = ingredient.ingredients?.name || "Ingrediente";

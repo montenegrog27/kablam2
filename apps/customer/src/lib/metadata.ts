@@ -7,6 +7,20 @@ type CustomerMetaInput = {
   faviconUrl?: string | null;
 };
 
+function normalizeAssetUrl(url?: string | null) {
+  const trimmed = url?.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("/")
+  ) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
 export function buildCustomerMetadata({
   title,
   fallbackTitle,
@@ -14,6 +28,7 @@ export function buildCustomerMetadata({
   faviconUrl,
 }: CustomerMetaInput): Metadata {
   const metaTitle = title?.trim() || fallbackTitle?.trim() || "Kablam";
+  const normalizedFaviconUrl = normalizeAssetUrl(faviconUrl);
   const metadata: Metadata = {
     title: metaTitle,
     description: description || `Pedidos online de ${metaTitle}`,
@@ -23,11 +38,11 @@ export function buildCustomerMetadata({
     },
   };
 
-  if (faviconUrl?.trim()) {
+  if (normalizedFaviconUrl) {
     metadata.icons = {
-      icon: faviconUrl,
-      shortcut: faviconUrl,
-      apple: faviconUrl,
+      icon: normalizedFaviconUrl,
+      shortcut: normalizedFaviconUrl,
+      apple: normalizedFaviconUrl,
     };
   }
 

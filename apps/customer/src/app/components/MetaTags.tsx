@@ -7,12 +7,26 @@ type MetaTagsProps = {
   branding?: Branding;
 };
 
+function normalizeAssetUrl(url?: string | null) {
+  const trimmed = url?.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("/")
+  ) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
 export default function MetaTags({ branding }: MetaTagsProps) {
   useEffect(() => {
     if (!branding) return;
 
     const metaTitle = branding.meta_title;
-    const faviconUrl = branding.favicon_url;
+    const faviconUrl = normalizeAssetUrl(branding.favicon_url);
     const metaPixelScript = branding.meta_pixel_script;
     const ga4Script = branding.ga4_script;
 
