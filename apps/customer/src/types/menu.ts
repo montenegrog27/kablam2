@@ -114,9 +114,12 @@ export type Combo = {
   name: string;
   description?: string;
   price: number;
+  is_featured?: boolean;
+  featured_order?: number;
   image_url?: string;
   category_id?: string;
   categories?: Category[];
+  product_extras?: ProductExtra[];
   combo_products: Array<{
     id: string;
     product_id: string;

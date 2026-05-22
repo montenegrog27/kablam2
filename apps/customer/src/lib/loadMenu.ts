@@ -265,12 +265,26 @@ export type ComboRow = {
   branch_id: string;
   category_id: string | null;
   price: number;
+  is_featured?: boolean;
+  featured_order?: number | null;
   image_url: string | null;
   categories: {
     id: string;
     name: string;
     parent_id: string | null;
+    position?: number;
   } | null;
+  combo_extras?: Array<{
+    id: string;
+    ingredient_id: string;
+    is_active: boolean;
+    ingredients: {
+      id: string;
+      name: string;
+      sale_price: number | null;
+      cost_per_unit: number | null;
+    } | null;
+  }>;
   combo_products: Array<{
     id: string;
     product_id: string;
@@ -313,11 +327,14 @@ export async function loadCombos(
       branch_id,
       category_id,
       price,
+      is_featured,
+      featured_order,
       image_url,
       categories(
         id,
         name,
-        parent_id
+        parent_id,
+        position
       ),
       combo_products(
         id,
@@ -332,6 +349,17 @@ export async function loadCombos(
             price,
             is_default
           )
+        )
+      ),
+      combo_extras(
+        id,
+        ingredient_id,
+        is_active,
+        ingredients(
+          id,
+          name,
+          sale_price,
+          cost_per_unit
         )
       )
     `,
@@ -353,6 +381,8 @@ export async function loadCombos(
       name: c.name,
       description: c.description || undefined,
       price: Number(c.price) || 0,
+      is_featured: c.is_featured || false,
+      featured_order: c.featured_order ?? 0,
       image_url: c.image_url || undefined,
       category_id: c.category_id || undefined,
       categories: c.categories
@@ -361,9 +391,33 @@ export async function loadCombos(
               id: c.categories.id,
               name: c.categories.name,
               parent_id: c.categories.parent_id,
+              position: c.categories.position ?? 0,
             },
           ]
         : [],
+      product_extras: (c.combo_extras || [])
+        .filter((extra) => extra.is_active)
+        .map((extra) => {
+          const ingredient = extra.ingredients;
+          return {
+            id: extra.id,
+            ingredient_id: extra.ingredient_id,
+            is_active: extra.is_active || false,
+            ingredients: ingredient
+              ? {
+                  id: ingredient.id,
+                  name: ingredient.name,
+                  sale_price: ingredient.sale_price ?? undefined,
+                  cost_per_unit: ingredient.cost_per_unit ?? undefined,
+                }
+              : {
+                  id: "",
+                  name: "",
+                  sale_price: undefined,
+                  cost_per_unit: undefined,
+                },
+          };
+        }),
       combo_products: (c.combo_products || []).map((cp) => ({
         id: cp.id,
         product_id: cp.product_id,

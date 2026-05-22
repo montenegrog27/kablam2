@@ -32,6 +32,7 @@ export default function ProfessionalMenu({
   const [allCategoriesFromApi, setAllCategoriesFromApi] = useState<any[]>([]);
   const [now, setNow] = useState(Date.now());
   const tabsRef = useRef<HTMLDivElement>(null);
+  const productsRef = useRef<HTMLDivElement>(null);
 
   const brandColor = branding?.brand_color || "#FF6B35";
   const accentColor = branding?.accent_color || "#1A1A1A";
@@ -39,7 +40,16 @@ export default function ProfessionalMenu({
 
   // Build category list from products + API (to include categories without products)
   const productCategories = productos.flatMap((p) => p.categories || []);
-  const allCategoryIds = new Set(productCategories.map((c) => c.id));
+  const comboCategories = (combos || []).flatMap((c) => c.categories || []);
+  const menuCategories = [...productCategories, ...comboCategories];
+  const allCategoryIds = new Set(menuCategories.map((c) => c.id));
+  const sortCategories = (categories: Category[]) =>
+    [...categories].sort((a, b) => {
+      const posA = a.position ?? 9999;
+      const posB = b.position ?? 9999;
+      if (posA !== posB) return posA - posB;
+      return a.name.localeCompare(b.name, "es");
+    });
   
   // Merge product categories with API categories (API has the definitive order by position)
   let mergedCategories: Category[] = [];
@@ -47,21 +57,21 @@ export default function ProfessionalMenu({
     // Use API order as the source of truth, but keep product-assigned categories
     mergedCategories = allCategoriesFromApi
       .filter((c: any) => allCategoryIds.has(c.id) || !c.parent_id) // Show roots + any cat linked to a product
-      .map((c: any) => ({ id: c.id, name: c.name, parent_id: c.parent_id }));
+      .map((c: any) => ({ id: c.id, name: c.name, parent_id: c.parent_id, position: c.position ?? 0 }));
     // Also add any product categories not in the API response
-    productCategories.forEach((pc) => {
+    menuCategories.forEach((pc) => {
       if (!mergedCategories.find((c) => c.id === pc.id)) {
-        mergedCategories.push({ id: pc.id, name: pc.name, parent_id: pc.parent_id });
+        mergedCategories.push({ id: pc.id, name: pc.name, parent_id: pc.parent_id, position: pc.position });
       }
     });
   } else {
     // Fallback: just use product categories when API hasn't loaded yet
-    mergedCategories = productCategories
+    mergedCategories = menuCategories
       .filter((cat, index, self) => self.findIndex((c) => c.id === cat.id) === index);
   }
 
-  const uniqueCategories = mergedCategories;
-  const rootCategories = uniqueCategories.filter((c) => !c.parent_id);
+  const uniqueCategories = sortCategories(mergedCategories);
+  const rootCategories = sortCategories(uniqueCategories.filter((c) => !c.parent_id));
   console.log("[root categories]", rootCategories.map((c) => c.name));
 
   // Convertir combos a productos para mostrarlos en el menú
@@ -86,15 +96,16 @@ export default function ProfessionalMenu({
       description: combo.description,
       allow_half: false,
       is_hero: false,
-      is_featured: false,
+      is_featured: combo.is_featured || false,
+      featured_order: combo.featured_order || 0,
       is_suggestable: false,
       show_in_menu: true,
       categories: combo.categories || [],
       combo_products: combo.combo_products || [],
+      product_extras: combo.product_extras || [],
       product_variants: variants,
       modifier_group_products: [],
       product_ingredients_display: [],
-      product_extras: [],
     };
     return product;
   });
@@ -102,22 +113,6 @@ export default function ProfessionalMenu({
   // Combinar productos normales + combos
 
   const allProductsInMenu = [...productos, ...comboAsProducts];
-
-  // Agregar categorías de combos
-  if (combos && combos.length > 0) {
-    const comboCategories = combos.flatMap((c) => c.categories || []);
-    comboCategories.forEach((cat) => {
-      if (!uniqueCategories.find((c) => c.id === cat.id)) {
-        uniqueCategories.push(cat);
-      }
-    });
-    const comboRootCategories = uniqueCategories.filter((c) => !c.parent_id);
-    comboRootCategories.forEach((cat) => {
-      if (!rootCategories.find((c) => c.id === cat.id)) {
-        rootCategories.push(cat);
-      }
-    });
-  }
 
   useEffect(() => {
     const handleScroll = () => {
@@ -168,15 +163,18 @@ export default function ProfessionalMenu({
     }
   }, [rootCategories, activeTab]);
 
-  const currentSubcategories = !activeTab ? [] : uniqueCategories.filter(
-    (c) => c.parent_id === activeTab,
-  );
+  const currentSubcategories = !activeTab
+    ? []
+    : sortCategories(uniqueCategories.filter((c) => c.parent_id === activeTab));
 
   // Filter products per category
 
   const filteredProducts = allProductsInMenu.filter((p) => {
     if (activeTab === null) return !p.id.includes("-variant"); // Todos: show all except combos
     const productCats = p.categories || [];
+    if (activeSubcategory) {
+      return productCats.some((c) => c.id === activeSubcategory);
+    }
     return productCats.some(
       (c) => c.id === activeTab || c.parent_id === activeTab,
     );
@@ -263,19 +261,7 @@ export default function ProfessionalMenu({
   const scrollToSubcategory = (subId: string) => {
     setActiveSubcategory(subId);
     setTimeout(() => {
-      const el = document.getElementById(`sub-${subId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else {
-        // Not in view yet (e.g. Todos tab), switch to parent category
-        const subCat = uniqueCategories.find((c) => c.id === subId);
-        if (subCat?.parent_id) {
-          setActiveTab(subCat.parent_id);
-          setTimeout(() => {
-            document.getElementById(`sub-${subId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }, 200);
-        }
-      }
+      productsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
   };
 
@@ -402,7 +388,12 @@ export default function ProfessionalMenu({
           {activeTab && currentSubcategories.length > 0 && (
             <div className="flex gap-2 pb-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4">
               <button
-                onClick={() => setActiveSubcategory(null)}
+                onClick={() => {
+                  setActiveSubcategory(null);
+                  setTimeout(() => {
+                    productsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }, 100);
+                }}
                 className={`snap-start flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                   !activeSubcategory
                     ? "bg-gray-900 text-white"
@@ -481,7 +472,7 @@ export default function ProfessionalMenu({
       )}
 
       {/* All Products - Full Width Horizontal List */}
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div ref={productsRef} className="max-w-6xl mx-auto px-4 py-6">
 
 
         <div className="space-y-8">
@@ -495,7 +486,7 @@ export default function ProfessionalMenu({
               return rootCategories.map((rootCat) => {
                 const rootProducts = uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === rootCat.id || c.parent_id === rootCat.id));
                 if (rootProducts.length === 0) return null;
-                const subs = uniqueCategories.filter((c) => c.parent_id === rootCat.id);
+                const subs = sortCategories(uniqueCategories.filter((c) => c.parent_id === rootCat.id));
                 return (
                   <div key={rootCat.id}>
                     <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">

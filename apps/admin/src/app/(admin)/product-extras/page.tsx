@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
+import { Package, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
+
+type ItemType = "product" | "combo";
 
 export default function ProductExtrasPage() {
+  const [mode, setMode] = useState<ItemType>("product");
   const [products, setProducts] = useState<any[]>([]);
+  const [combos, setCombos] = useState<any[]>([]);
   const [ingredients, setIngredients] = useState<any[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
   const [extras, setExtras] = useState<any[]>([]);
   const [newExtraIngredient, setNewExtraIngredient] = useState("");
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -16,6 +21,12 @@ export default function ProductExtrasPage() {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    setSelectedItem(null);
+    setExtras([]);
+    setNewExtraIngredient("");
+  }, [mode]);
 
   const loadInitialData = async () => {
     setLoading(true);
@@ -39,69 +50,82 @@ export default function ProductExtrasPage() {
 
     setTenantId(userRecord.tenant_id);
 
-    // Cargar ingredientes
-    const { data: ings } = await supabase
-      .from("ingredients")
-      .select("*")
-      .eq("tenant_id", userRecord.tenant_id)
-      .order("name");
+    const [{ data: ings }, { data: prods }, { data: comboRows }] = await Promise.all([
+      supabase
+        .from("ingredients")
+        .select("*")
+        .eq("tenant_id", userRecord.tenant_id)
+        .order("name"),
+      supabase
+        .from("products")
+        .select("id, name, image_url, product_variants(name, price)")
+        .eq("tenant_id", userRecord.tenant_id)
+        .order("name")
+        .limit(200),
+      supabase
+        .from("combos")
+        .select("id, name, image_url, price")
+        .eq("tenant_id", userRecord.tenant_id)
+        .eq("is_active", true)
+        .order("name")
+        .limit(200),
+    ]);
 
     setIngredients(ings || []);
-
-    // Cargar productos
-    let q = supabase
-      .from("products")
-      .select("id, name, image_url, product_variants(name, price)")
-      .eq("tenant_id", userRecord.tenant_id)
-      .order("name")
-      .limit(50);
-
-    if (search) {
-      q = q.ilike("name", `%${search}%`);
-    }
-
-    const { data: prods } = await q;
-    const prodsWithPrice = (prods || []).map((p: any) => ({
-      ...p,
-      price: p.product_variants?.[0]?.price || 0,
-    }));
-    setProducts(prodsWithPrice);
-
+    setProducts(
+      (prods || []).map((product: any) => ({
+        ...product,
+        price: product.product_variants?.[0]?.price || 0,
+      })),
+    );
+    setCombos(comboRows || []);
     setLoading(false);
   };
 
-  const loadExtras = async (prod: any) => {
-    setSelectedProduct(prod);
+  const visibleItems = useMemo(() => {
+    const source = mode === "product" ? products : combos;
+    const normalized = search.trim().toLowerCase();
+    if (!normalized) return source;
+    return source.filter((item) => item.name?.toLowerCase().includes(normalized));
+  }, [combos, mode, products, search]);
+
+  const tableName = mode === "product" ? "product_extras" : "combo_extras";
+  const ownerColumn = mode === "product" ? "product_id" : "combo_id";
+
+  const loadExtras = async (item: any) => {
+    setSelectedItem(item);
 
     const { data: extrasData } = await supabase
-      .from("product_extras")
+      .from(tableName)
       .select("*, ingredients(*)")
-      .eq("product_id", prod.id)
+      .eq(ownerColumn, item.id)
       .eq("is_active", true);
 
     setExtras(extrasData || []);
   };
 
-  const handleAddExtra = async (e: any) => {
-    e.preventDefault();
+  const handleAddExtra = async (event: React.FormEvent) => {
+    event.preventDefault();
 
-    if (!selectedProduct || !newExtraIngredient) {
+    if (!selectedItem || !newExtraIngredient) {
       alert("Seleccioná un ingrediente");
       return;
     }
 
-    // Verificar si ya existe
-    const exists = extras.find((ex) => ex.ingredient_id === newExtraIngredient);
+    const exists = extras.find((extra) => extra.ingredient_id === newExtraIngredient);
     if (exists) {
       alert("Este ingrediente ya está agregado como extra");
       return;
     }
 
-    const { error } = await supabase.from("product_extras").insert({
-      product_id: selectedProduct.id,
-      ingredient_id: newExtraIngredient,
-      is_active: true,
-    });
+    const { error } = await supabase.from(tableName).upsert(
+      {
+        [ownerColumn]: selectedItem.id,
+        ingredient_id: newExtraIngredient,
+        is_active: true,
+      },
+      { onConflict: `${ownerColumn},ingredient_id` },
+    );
 
     if (error) {
       alert(error.message);
@@ -109,185 +133,172 @@ export default function ProductExtrasPage() {
     }
 
     setNewExtraIngredient("");
-    loadExtras(selectedProduct);
+    loadExtras(selectedItem);
   };
 
   const handleDeleteExtra = async (id: string) => {
     if (!confirm("¿Eliminar este extra?")) return;
-
-    await supabase
-      .from("product_extras")
-      .update({ is_active: false })
-      .eq("id", id);
-
-    loadExtras(selectedProduct);
+    await supabase.from(tableName).update({ is_active: false }).eq("id", id);
+    loadExtras(selectedItem);
   };
 
   const unassignedIngredients = ingredients.filter(
-    (ing) => !extras.find((ex) => ex.ingredient_id === ing.id),
+    (ingredient) => !extras.find((extra) => extra.ingredient_id === ingredient.id),
   );
 
   if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center h-64">
-        <div className="text-gray-400">Cargando...</div>
-      </div>
-    );
+    return <div className="p-6 text-gray-400">Cargando...</div>;
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-2">Extras por Producto</h1>
-      <p className="text-gray-400 mb-6">
-        Agregá ingredientes como extras que el cliente puede elegir. El precio
-        se toma del ingrediente.
-      </p>
-
-      {/* Search */}
-      <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Buscar producto..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            loadInitialData();
-          }}
-          className="border p-3 w-full rounded-lg bg-gray-900 text-white"
-        />
+    <div className="space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-100">Extras por Producto y Combo</h1>
+        <p className="mt-1 text-sm text-gray-400">
+          Agregá ingredientes como extras elegibles. El precio se toma del ingrediente.
+        </p>
       </div>
 
-      <div className="flex gap-6">
-        {/* Product list - left side */}
-        <div className="flex-1">
-          <h3 className="font-semibold mb-3 text-gray-400">
-            Seleccioná un producto ({products.length})
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="inline-flex rounded-xl border border-gray-700 bg-gray-900 p-1">
+          <button
+            onClick={() => setMode("product")}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${
+              mode === "product" ? "bg-white text-gray-950" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <Package size={16} /> Productos
+          </button>
+          <button
+            onClick={() => setMode("combo")}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${
+              mode === "combo" ? "bg-white text-gray-950" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <ShoppingBag size={16} /> Combos
+          </button>
+        </div>
+
+        <div className="relative min-w-0 lg:w-96">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            type="text"
+            placeholder={`Buscar ${mode === "product" ? "producto" : "combo"}...`}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="w-full rounded-lg border border-gray-700 bg-gray-900 py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-gray-500"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+        <section>
+          <h3 className="mb-3 font-semibold text-gray-400">
+            Seleccioná {mode === "product" ? "un producto" : "un combo"} ({visibleItems.length})
           </h3>
 
-          {products.length === 0 ? (
-            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-400">
-              No hay productos
+          {visibleItems.length === 0 ? (
+            <div className="rounded-lg bg-gray-800 p-8 text-center text-gray-400">
+              No hay {mode === "product" ? "productos" : "combos"}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {products.map((prod) => (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {visibleItems.map((item) => (
                 <button
-                  key={prod.id}
-                  onClick={() => loadExtras(prod)}
-                  className={`p-4 rounded-lg border text-left transition ${
-                    selectedProduct?.id === prod.id
+                  key={item.id}
+                  onClick={() => loadExtras(item)}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    selectedItem?.id === item.id
                       ? "border-blue-500 bg-blue-500/20"
-                      : "border-gray-700 hover:border-gray-500 bg-gray-800"
+                      : "border-gray-700 bg-gray-800 hover:border-gray-500"
                   }`}
                 >
-                  <div className="font-medium text-white">{prod.name}</div>
-                  <div className="text-sm text-gray-400">${prod.price}</div>
+                  <div className="font-semibold text-white">{item.name}</div>
+                  <div className="mt-1 text-sm text-gray-400">
+                    ${new Intl.NumberFormat("es-AR").format(Number(item.price || 0))}
+                  </div>
                 </button>
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Right side - extras config */}
-        <div className="w-96">
-          {selectedProduct ? (
-            <div className="bg-gray-800 p-5 rounded-lg sticky top-6">
-              <h2 className="text-lg font-bold mb-4 text-white">
-                {selectedProduct.name} - Extras
+        <aside>
+          {selectedItem ? (
+            <div className="sticky top-6 rounded-xl bg-gray-800 p-5">
+              <h2 className="text-lg font-bold text-white">
+                {selectedItem.name}
               </h2>
+              <p className="mt-1 text-sm text-gray-400">
+                Extras para {mode === "product" ? "producto" : "combo"}
+              </p>
 
-              {/* Add extra form */}
-              <form onSubmit={handleAddExtra} className="mb-6">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">
-                    Seleccionar ingrediente
-                  </label>
+              <form onSubmit={handleAddExtra} className="mt-5 space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs text-gray-400">Ingrediente</span>
                   <select
                     value={newExtraIngredient}
-                    onChange={(e) => setNewExtraIngredient(e.target.value)}
-                    className="w-full border p-2 rounded bg-gray-900 text-white"
+                    onChange={(event) => setNewExtraIngredient(event.target.value)}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-900 p-2 text-sm text-white"
                   >
                     <option value="">Elegir ingrediente...</option>
-                    {unassignedIngredients.map((ing) => (
-                      <option key={ing.id} value={ing.id}>
-                        {ing.name} → ${ing.sale_price || ing.cost_per_unit}
+                    {unassignedIngredients.map((ingredient) => (
+                      <option key={ingredient.id} value={ingredient.id}>
+                        {ingredient.name} → ${ingredient.sale_price || ingredient.cost_per_unit}
                       </option>
                     ))}
                   </select>
-                </div>
+                </label>
 
                 <button
                   type="submit"
-                  className="mt-3 w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                 >
-                  Agregar Extra
+                  <Plus size={16} /> Agregar extra
                 </button>
               </form>
 
-              {/* Extras list */}
-              <div>
-                <h3 className="font-semibold mb-3 text-gray-400 text-sm">
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-semibold text-gray-400">
                   Extras configurados ({extras.length})
                 </h3>
 
-                {extras.length === 0 && (
-                  <p className="text-gray-400 text-sm py-4 text-center bg-gray-900 rounded">
+                {extras.length === 0 ? (
+                  <p className="rounded-lg bg-gray-900 py-5 text-center text-sm text-gray-400">
                     No hay extras configurados
                   </p>
-                )}
-
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {extras.map((extra) => (
-                    <div
-                      key={extra.id}
-                      className="bg-gray-900 p-3 rounded flex justify-between items-center"
-                    >
-                      <div>
-                        <span className="text-white font-medium">
-                          {extra.ingredients?.name}
-                        </span>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-green-400 font-semibold">
-                            $
-                            {extra.ingredients?.sale_price ||
-                              extra.ingredients?.cost_per_unit}
-                          </span>
-                          {extra.ingredients?.sale_price && (
-                            <span className="text-xs text-gray-400">
-                              (costo: ${extra.ingredients?.cost_per_unit})
-                            </span>
-                          )}
+                ) : (
+                  <div className="max-h-72 space-y-2 overflow-y-auto">
+                    {extras.map((extra) => (
+                      <div key={extra.id} className="flex items-center justify-between rounded-lg bg-gray-900 p-3">
+                        <div>
+                          <span className="font-medium text-white">{extra.ingredients?.name}</span>
+                          <div className="mt-1 text-sm font-semibold text-green-400">
+                            ${extra.ingredients?.sale_price || extra.ingredients?.cost_per_unit}
+                          </div>
                         </div>
+                        <button
+                          onClick={() => handleDeleteExtra(extra.id)}
+                          className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleDeleteExtra(extra.id)}
-                        className="text-red-400 hover:text-red-300 p-1"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Info */}
-              <div className="mt-4 pt-4 border-t border-gray-700 text-xs text-gray-400">
-                <p>
-                  El precio se toma del campo <strong>"Precio venta"</strong>{" "}
-                  del ingrediente.
-                </p>
-                <p className="mt-1">
-                  Editá el ingrediente para cambiar el precio.
-                </p>
+              <div className="mt-5 border-t border-gray-700 pt-4 text-xs leading-5 text-gray-400">
+                El precio visible en customer sale de <strong>Precio venta</strong> del ingrediente.
               </div>
             </div>
           ) : (
-            <div className="bg-gray-800 p-8 rounded-lg text-center text-gray-400 sticky top-6">
-              <div className="text-4xl mb-3">👈</div>
-              <p>Seleccioná un producto para configurar sus extras</p>
+            <div className="sticky top-6 rounded-xl bg-gray-800 p-8 text-center text-gray-400">
+              Seleccioná {mode === "product" ? "un producto" : "un combo"} para configurar extras.
             </div>
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );

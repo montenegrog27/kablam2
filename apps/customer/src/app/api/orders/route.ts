@@ -212,6 +212,11 @@ export async function POST(req: Request) {
         (candidate) => candidate.id === item.comboId,
       );
       if (!combo) throw new Error(`Combo not found: ${item.comboId}`);
+      const comboExtrasArr: Array<{ type: string; name: string; price?: number }> = [];
+      const comboExtrasTotal = (item.extras || []).reduce((sum, extra) => {
+        comboExtrasArr.push({ type: "extra", name: extra.name, price: extra.price });
+        return sum + Number(extra.price || 0);
+      }, 0);
 
       const comboProducts = combo.combo_products || [];
       if (comboProducts.length === 0) {
@@ -225,9 +230,9 @@ export async function POST(req: Request) {
       const unitShare =
         expandedUnits > 0 ? Number(combo.price) / expandedUnits : 0;
 
-      subtotal += Number(combo.price) * item.quantity;
+      subtotal += (Number(combo.price) + comboExtrasTotal) * item.quantity;
 
-      comboProducts.forEach((comboProduct) => {
+      comboProducts.forEach((comboProduct, index) => {
         const defaultVariant =
           comboProduct.products?.product_variants?.find(
             (variant) => variant.is_default,
@@ -244,8 +249,11 @@ export async function POST(req: Request) {
           variant_id: defaultVariant.id,
           quantity,
           unit_price: Math.round(unitShare),
-          total: Math.round(unitShare * quantity),
-          extras: [{ type: "extra", name: `Combo: ${combo.name}`, price: 0 }],
+          total: Math.round(unitShare * quantity + (index === 0 ? comboExtrasTotal * item.quantity : 0)),
+          extras:
+            index === 0
+              ? [{ type: "extra", name: `Combo: ${combo.name}`, price: 0 }, ...comboExtrasArr]
+              : [{ type: "extra", name: `Combo: ${combo.name}`, price: 0 }],
         });
       });
     });

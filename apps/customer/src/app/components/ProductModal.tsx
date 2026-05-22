@@ -295,7 +295,7 @@ export default function ProductModal({
             </Section>
           )}
 
-          {!isCombo && extras.length > 0 && (
+          {extras.length > 0 && (
             <Section title="Agregar extras" hint="Opcional">
               <div className="flex flex-wrap gap-2">
                 {extras.map((extra) => {

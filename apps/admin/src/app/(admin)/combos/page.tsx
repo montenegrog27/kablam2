@@ -20,6 +20,7 @@ export default function CombosPage() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [categoryId, setCategoryId] = useState<string>("");
+  const [isFeatured, setIsFeatured] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<
     Record<string, number>
   >({});
@@ -113,6 +114,7 @@ export default function CombosPage() {
     setDescription("");
     setPrice("");
     setCategoryId("");
+    setIsFeatured(false);
     setSelectedProducts({});
     setImageFile(null);
     setImagePreview(null);
@@ -125,6 +127,7 @@ export default function CombosPage() {
     setDescription(combo.description || "");
     setPrice(String(combo.price));
     setCategoryId(combo.category_id || "");
+    setIsFeatured(!!combo.is_featured);
     setImagePreview(combo.image_url || null);
     setImageFile(null);
     const sel: Record<string, number> = {};
@@ -175,6 +178,7 @@ export default function CombosPage() {
           description,
           price: Number(price),
           category_id: categoryId || null,
+          is_featured: isFeatured,
           image_url: imageUrl,
         })
         .eq("id", editingCombo.id);
@@ -205,6 +209,7 @@ export default function CombosPage() {
           name,
           description,
           price: Number(price),
+          is_featured: isFeatured,
           image_url: imageUrl,
         })
         .select()
@@ -380,6 +385,23 @@ export default function CombosPage() {
             </select>
           </div>
 
+          <label className="flex items-start gap-3 rounded-lg border border-gray-700 bg-gray-800 px-3 py-3 cursor-pointer hover:border-gray-600">
+            <input
+              type="checkbox"
+              checked={isFeatured}
+              onChange={(e) => setIsFeatured(e.target.checked)}
+              className="mt-0.5 accent-blue-500"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-100">
+                Destacado
+              </span>
+              <span className="block text-xs text-gray-400 mt-0.5">
+                Mostrar este combo en la seccion Destacados de customer.
+              </span>
+            </span>
+          </label>
+
           <div>
             <label className="block text-xs text-gray-400 mb-2">
               Productos del combo
@@ -482,6 +504,11 @@ export default function CombosPage() {
                   {combo.categories?.name && (
                     <span className="inline-block mt-1 text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">
                       {combo.categories.name}
+                    </span>
+                  )}
+                  {combo.is_featured && (
+                    <span className="inline-block mt-1 ml-1 text-xs bg-yellow-900/70 text-yellow-200 px-2 py-0.5 rounded">
+                      Destacado
                     </span>
                   )}
                 </div>
