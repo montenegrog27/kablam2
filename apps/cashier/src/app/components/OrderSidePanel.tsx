@@ -68,10 +68,11 @@ export default function OrderSidePanel({
   const isView = mode === "view";
   const isEdit = mode === "edit";
   const isBuilder = mode === "builder";
+  const noCashSession = !session?.id;
   const canEditClosedCashOrder =
     userRecord && ["owner", "admin"].includes(userRecord.role);
   const selectedOrderBelongsToOpenSession =
-    !selectedOrder?.cash_session_id || selectedOrder.cash_session_id === session.id;
+    !selectedOrder?.cash_session_id || selectedOrder.cash_session_id === session?.id;
   const canEditSelectedOrder =
     !selectedOrder || selectedOrderBelongsToOpenSession || canEditClosedCashOrder;
 
@@ -463,7 +464,7 @@ export default function OrderSidePanel({
     orderType === "delivery" && !customerPhone?.trim();
 
   const isCheckoutBlocked =
-    cart.length === 0 || isPhoneMissingForCoupon || isPhoneRequiredForDelivery;
+    noCashSession || cart.length === 0 || isPhoneMissingForCoupon || isPhoneRequiredForDelivery;
 
   const removePaymentLine = (index: number) => {
     setPayments(payments.filter((_, i) => i !== index));
@@ -500,6 +501,11 @@ export default function OrderSidePanel({
   };
   // ================= SAVE =================
   const handleSave = async () => {
+    if (noCashSession) {
+      alert("Modo owner: para confirmar o editar pedidos tenes que abrir una caja.");
+      return;
+    }
+
     if (isEdit && !canEditSelectedOrder) {
       alert("No se puede editar un pedido de una caja cerrada.");
       return;

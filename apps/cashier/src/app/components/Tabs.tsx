@@ -271,11 +271,11 @@ export default function CashierTabs({ session }: any) {
           </div>
         )}
 
-        {tab === "orders" && can("cashier.orders.view") && session && (
+        {tab === "orders" && can("cashier.orders.view") && (session || isOwnerMode) && (
           <SalesTab session={session} />
         )}
 
-        {tab === "orders" && can("cashier.orders.view") && !session && (
+        {tab === "orders" && can("cashier.orders.view") && !session && !isOwnerMode && (
           <div className="h-full flex items-center justify-center text-gray-400">
             Para tomar pedidos necesitás abrir una caja.
           </div>
