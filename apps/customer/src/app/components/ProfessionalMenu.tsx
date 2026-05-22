@@ -102,6 +102,7 @@ export default function ProfessionalMenu({
       show_in_menu: true,
       categories: combo.categories || [],
       combo_products: combo.combo_products || [],
+      combo_removable_ingredients: combo.combo_removable_ingredients || [],
       product_extras: combo.product_extras || [],
       product_variants: variants,
       modifier_group_products: [],

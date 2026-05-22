@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Package, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
+import { ListMinus, Package, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
 
 type ItemType = "product" | "combo";
 
@@ -13,7 +13,10 @@ export default function ProductExtrasPage() {
   const [ingredients, setIngredients] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [extras, setExtras] = useState<any[]>([]);
+  const [removableIngredients, setRemovableIngredients] = useState<any[]>([]);
   const [newExtraIngredient, setNewExtraIngredient] = useState("");
+  const [newRemovableIngredient, setNewRemovableIngredient] = useState("");
+  const [selectedComboProductId, setSelectedComboProductId] = useState("");
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -25,7 +28,10 @@ export default function ProductExtrasPage() {
   useEffect(() => {
     setSelectedItem(null);
     setExtras([]);
+    setRemovableIngredients([]);
     setNewExtraIngredient("");
+    setNewRemovableIngredient("");
+    setSelectedComboProductId("");
   }, [mode]);
 
   const loadInitialData = async () => {
@@ -64,7 +70,7 @@ export default function ProductExtrasPage() {
         .limit(200),
       supabase
         .from("combos")
-        .select("id, name, image_url, price")
+        .select("id, name, image_url, price, combo_products(id, product_id, quantity, products(id, name, product_ingredients_display(id, ingredient_id, is_essential, is_visible, ingredients(id, name))))")
         .eq("tenant_id", userRecord.tenant_id)
         .eq("is_active", true)
         .order("name")
@@ -94,6 +100,9 @@ export default function ProductExtrasPage() {
 
   const loadExtras = async (item: any) => {
     setSelectedItem(item);
+    setSelectedComboProductId(item.combo_products?.[0]?.product_id || "");
+    setNewExtraIngredient("");
+    setNewRemovableIngredient("");
 
     const { data: extrasData } = await supabase
       .from(tableName)
@@ -102,6 +111,25 @@ export default function ProductExtrasPage() {
       .eq("is_active", true);
 
     setExtras(extrasData || []);
+
+    if (mode === "product") {
+      const { data: removableData } = await supabase
+        .from("product_ingredients_display")
+        .select("*, ingredients(*)")
+        .eq("product_id", item.id)
+        .eq("is_visible", true)
+        .eq("is_essential", false);
+
+      setRemovableIngredients(removableData || []);
+    } else {
+      const { data: removableData } = await supabase
+        .from("combo_removable_ingredients")
+        .select("*, ingredients(*), products(id, name)")
+        .eq("combo_id", item.id)
+        .eq("is_active", true);
+
+      setRemovableIngredients(removableData || []);
+    }
   };
 
   const handleAddExtra = async (event: React.FormEvent) => {
@@ -142,8 +170,125 @@ export default function ProductExtrasPage() {
     loadExtras(selectedItem);
   };
 
+  const getSelectedComboProduct = () =>
+    selectedItem?.combo_products?.find((item: any) => item.product_id === selectedComboProductId);
+
+  const getRemovableIngredientSource = () => {
+    if (mode === "product") return ingredients;
+    const comboProduct = getSelectedComboProduct();
+    const configured = comboProduct?.products?.product_ingredients_display || [];
+    return configured
+      .filter((item: any) => item.is_visible)
+      .map((item: any) => item.ingredients)
+      .filter(Boolean);
+  };
+
+  const handleAddRemovable = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedItem || !newRemovableIngredient) {
+      alert("SeleccionÃ¡ un ingrediente");
+      return;
+    }
+
+    if (mode === "product") {
+      const existing = removableIngredients.find(
+        (item) => item.ingredient_id === newRemovableIngredient,
+      );
+      if (existing) {
+        alert("Este ingrediente ya se puede quitar");
+        return;
+      }
+
+      const { data: existingRows } = await supabase
+        .from("product_ingredients_display")
+        .select("id")
+        .eq("product_id", selectedItem.id)
+        .eq("ingredient_id", newRemovableIngredient)
+        .limit(1);
+
+      const existingRow = existingRows?.[0];
+      const { error } = existingRow
+        ? await supabase
+            .from("product_ingredients_display")
+            .update({ is_visible: true, is_essential: false })
+            .eq("id", existingRow.id)
+        : await supabase.from("product_ingredients_display").insert({
+            product_id: selectedItem.id,
+            ingredient_id: newRemovableIngredient,
+            is_visible: true,
+            is_essential: false,
+          });
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    } else {
+      if (!selectedComboProductId) {
+        alert("SeleccionÃ¡ el producto del combo");
+        return;
+      }
+
+      const exists = removableIngredients.find(
+        (item) =>
+          item.product_id === selectedComboProductId &&
+          item.ingredient_id === newRemovableIngredient,
+      );
+      if (exists) {
+        alert("Este ingrediente ya se puede quitar en ese producto");
+        return;
+      }
+
+      const { error } = await supabase.from("combo_removable_ingredients").upsert(
+        {
+          combo_id: selectedItem.id,
+          product_id: selectedComboProductId,
+          ingredient_id: newRemovableIngredient,
+          is_active: true,
+        },
+        { onConflict: "combo_id,product_id,ingredient_id" },
+      );
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    }
+
+    setNewRemovableIngredient("");
+    loadExtras(selectedItem);
+  };
+
+  const handleDeleteRemovable = async (item: any) => {
+    if (!confirm("Â¿Quitar esta opciÃ³n?")) return;
+
+    if (mode === "product") {
+      await supabase
+        .from("product_ingredients_display")
+        .update({ is_essential: true })
+        .eq("id", item.id);
+    } else {
+      await supabase
+        .from("combo_removable_ingredients")
+        .update({ is_active: false })
+        .eq("id", item.id);
+    }
+
+    loadExtras(selectedItem);
+  };
+
   const unassignedIngredients = ingredients.filter(
     (ingredient) => !extras.find((extra) => extra.ingredient_id === ingredient.id),
+  );
+  const removableIngredientSource = getRemovableIngredientSource();
+  const unassignedRemovableIngredients = removableIngredientSource.filter(
+    (ingredient: any) =>
+      !removableIngredients.find(
+        (item) =>
+          item.ingredient_id === ingredient.id &&
+          (mode === "product" || item.product_id === selectedComboProductId),
+      ),
   );
 
   if (loading) {
@@ -287,6 +432,101 @@ export default function ProductExtrasPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div className="mt-6 border-t border-gray-700 pt-5">
+                <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-200">
+                  <ListMinus size={16} /> Ingredientes que puede quitar
+                </h3>
+                <p className="text-xs leading-5 text-gray-400">
+                  {mode === "product"
+                    ? "Estos ingredientes se mostraran como opcion 'Sin ...' en customer."
+                    : "ElegÃ­ el producto interno del combo y que ingredientes se pueden quitar."}
+                </p>
+
+                <form onSubmit={handleAddRemovable} className="mt-4 space-y-3">
+                  {mode === "combo" && (
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-400">
+                        Producto del combo
+                      </span>
+                      <select
+                        value={selectedComboProductId}
+                        onChange={(event) => {
+                          setSelectedComboProductId(event.target.value);
+                          setNewRemovableIngredient("");
+                        }}
+                        className="w-full rounded-lg border border-gray-700 bg-gray-900 p-2 text-sm text-white"
+                      >
+                        <option value="">Elegir producto...</option>
+                        {(selectedItem.combo_products || []).map((comboProduct: any) => (
+                          <option key={comboProduct.id} value={comboProduct.product_id}>
+                            {comboProduct.quantity}x {comboProduct.products?.name || "Producto"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-gray-400">
+                      Ingrediente
+                    </span>
+                    <select
+                      value={newRemovableIngredient}
+                      onChange={(event) => setNewRemovableIngredient(event.target.value)}
+                      className="w-full rounded-lg border border-gray-700 bg-gray-900 p-2 text-sm text-white"
+                    >
+                      <option value="">Elegir ingrediente...</option>
+                      {unassignedRemovableIngredients.map((ingredient: any) => (
+                        <option key={ingredient.id} value={ingredient.id}>
+                          {ingredient.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    type="submit"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-600"
+                  >
+                    <Plus size={16} /> Permitir quitar
+                  </button>
+                </form>
+
+                <div className="mt-4">
+                  {removableIngredients.length === 0 ? (
+                    <p className="rounded-lg bg-gray-900 py-5 text-center text-sm text-gray-400">
+                      No hay ingredientes quitables configurados
+                    </p>
+                  ) : (
+                    <div className="max-h-72 space-y-2 overflow-y-auto">
+                      {removableIngredients.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between rounded-lg bg-gray-900 p-3"
+                        >
+                          <div>
+                            <span className="font-medium text-white">
+                              Sin {item.ingredients?.name}
+                            </span>
+                            {mode === "combo" && (
+                              <div className="mt-1 text-xs text-gray-400">
+                                {item.products?.name || "Producto del combo"}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteRemovable(item)}
+                            className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="mt-5 border-t border-gray-700 pt-4 text-xs leading-5 text-gray-400">

@@ -64,7 +64,12 @@ export type CartItem = {
   extras: Modifier[];
   allowHalf?: boolean;
   halves?: { first: string; second: string };
-  removedIngredients?: Array<{ id: string; name: string }>;
+  removedIngredients?: Array<{
+    id: string;
+    name: string;
+    productId?: string;
+    productName?: string;
+  }>;
   categories?: Category[];
 };
 
@@ -73,6 +78,7 @@ export type Product = {
   itemType?: "product" | "combo";
   comboId?: string;
   combo_products?: Combo["combo_products"];
+  combo_removable_ingredients?: Combo["combo_removable_ingredients"];
   name: string;
   description?: string;
   featured_order?: number;
@@ -133,6 +139,20 @@ export type Combo = {
         price: number;
         is_default: boolean;
       }>;
+    };
+  }>;
+  combo_removable_ingredients?: Array<{
+    id: string;
+    product_id: string;
+    ingredient_id: string;
+    is_active: boolean;
+    products?: {
+      id: string;
+      name: string;
+    };
+    ingredients?: {
+      id: string;
+      name: string;
     };
   }>;
 };

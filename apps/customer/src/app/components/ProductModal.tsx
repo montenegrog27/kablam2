@@ -35,7 +35,9 @@ export default function ProductModal({
   const [variant, setVariant] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedExtras, setSelectedExtras] = useState<Record<string, string[]>>({});
-  const [removedIngredients, setRemovedIngredients] = useState<Array<{ id: string; name: string }>>([]);
+  const [removedIngredients, setRemovedIngredients] = useState<
+    Array<{ id: string; name: string; productId?: string; productName?: string }>
+  >([]);
   const [halves, setHalves] = useState<{ first: string; second: string } | null>(null);
 
   const fontFamily = getBrandFontFamily(branding);
@@ -69,6 +71,32 @@ export default function ProductModal({
 
   const removableIngredients = allVisibleIngredients.filter((item) => !item.is_essential);
   const extras: ProductExtra[] = product?.product_extras?.filter((extra) => extra.is_active) || [];
+  const comboRemovableGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        productId: string;
+        productName: string;
+        ingredients: NonNullable<typeof product>["combo_removable_ingredients"];
+      }
+    >();
+
+    (product?.combo_removable_ingredients || [])
+      .filter((item) => item.is_active)
+      .forEach((item) => {
+        const productId = item.product_id;
+        const productName = item.products?.name || "Producto";
+        const current = groups.get(productId) || {
+          productId,
+          productName,
+          ingredients: [],
+        };
+        current.ingredients?.push(item);
+        groups.set(productId, current);
+      });
+
+    return Array.from(groups.values());
+  }, [product]);
 
   if (!open || !product) return null;
 
@@ -129,6 +157,24 @@ export default function ProductModal({
         {
           id: ingredientId,
           name: ingredient.ingredients?.name || ingredientId,
+        },
+      ];
+    });
+  };
+
+  const toggleComboIngredient = (productId: string, productName: string, ingredientId: string, ingredientName: string) => {
+    const id = `${productId}:${ingredientId}`;
+
+    setRemovedIngredients((current) => {
+      const exists = current.some((item) => item.id === id);
+      if (exists) return current.filter((item) => item.id !== id);
+      return [
+        ...current,
+        {
+          id,
+          name: ingredientName,
+          productId,
+          productName,
         },
       ];
     });
@@ -291,6 +337,50 @@ export default function ProductModal({
                     </button>
                   );
                 })}
+              </div>
+            </Section>
+          )}
+
+          {isCombo && comboRemovableGroups.length > 0 && (
+            <Section title="Quitar ingredientes" hint="Opcional">
+              <div className="space-y-3">
+                {comboRemovableGroups.map((group) => (
+                  <div key={group.productId} className="rounded-2xl bg-gray-50 p-3">
+                    <div className="mb-2 text-xs font-black uppercase tracking-wider text-gray-500">
+                      {group.productName}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(group.ingredients || []).map((ingredient) => {
+                        const ingredientName = ingredient.ingredients?.name || "Ingrediente";
+                        const selected = removedIngredients.some(
+                          (item) => item.id === `${group.productId}:${ingredient.ingredient_id}`,
+                        );
+                        return (
+                          <button
+                            key={ingredient.id}
+                            onClick={() =>
+                              toggleComboIngredient(
+                                group.productId,
+                                group.productName,
+                                ingredient.ingredient_id,
+                                ingredientName,
+                              )
+                            }
+                            className="rounded-full border px-4 py-2 text-sm font-bold transition"
+                            style={{
+                              borderColor: selected ? "#ef4444" : "#e5e7eb",
+                              background: selected ? "#fef2f2" : "#fff",
+                              color: selected ? "#b91c1c" : "#374151",
+                              textDecoration: selected ? "line-through" : "none",
+                            }}
+                          >
+                            Sin {ingredientName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </Section>
           )}

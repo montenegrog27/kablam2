@@ -285,6 +285,20 @@ export type ComboRow = {
       cost_per_unit: number | null;
     } | null;
   }>;
+  combo_removable_ingredients?: Array<{
+    id: string;
+    product_id: string;
+    ingredient_id: string;
+    is_active: boolean;
+    products: {
+      id: string;
+      name: string;
+    } | null;
+    ingredients: {
+      id: string;
+      name: string;
+    } | null;
+  }>;
   combo_products: Array<{
     id: string;
     product_id: string;
@@ -361,6 +375,20 @@ export async function loadCombos(
           sale_price,
           cost_per_unit
         )
+      ),
+      combo_removable_ingredients(
+        id,
+        product_id,
+        ingredient_id,
+        is_active,
+        products(
+          id,
+          name
+        ),
+        ingredients(
+          id,
+          name
+        )
       )
     `,
     )
@@ -418,6 +446,26 @@ export async function loadCombos(
                 },
           };
         }),
+      combo_removable_ingredients: (c.combo_removable_ingredients || [])
+        .filter((item) => item.is_active)
+        .map((item) => ({
+          id: item.id,
+          product_id: item.product_id,
+          ingredient_id: item.ingredient_id,
+          is_active: item.is_active,
+          products: item.products
+            ? {
+                id: item.products.id,
+                name: item.products.name,
+              }
+            : undefined,
+          ingredients: item.ingredients
+            ? {
+                id: item.ingredients.id,
+                name: item.ingredients.name,
+              }
+            : undefined,
+        })),
       combo_products: (c.combo_products || []).map((cp) => ({
         id: cp.id,
         product_id: cp.product_id,

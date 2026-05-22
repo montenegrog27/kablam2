@@ -8,7 +8,12 @@ type OrderItemInput = {
   variantId: string;
   quantity: number;
   extras?: Array<{ id: string; name: string; price: number }>;
-  removedIngredients?: Array<{ id: string; name: string }>;
+  removedIngredients?: Array<{
+    id: string;
+    name: string;
+    productId?: string;
+    productName?: string;
+  }>;
 };
 
 type VariantRow = {
@@ -191,7 +196,12 @@ export async function POST(req: Request) {
       // Build extras array from selected modifiers + removed ingredients
       const extrasArr: Array<{ type: string; name: string; price?: number }> = [];
       (item.extras || []).forEach((e) => extrasArr.push({ type: "extra", name: e.name, price: e.price }));
-      (item.removedIngredients || []).forEach((r) => extrasArr.push({ type: "sin", name: r.name }));
+      (item.removedIngredients || []).forEach((r) =>
+        extrasArr.push({
+          type: "sin",
+          name: r.productName ? `${r.productName}: ${r.name}` : r.name,
+        }),
+      );
 
       const itemTotal = variant.price * item.quantity;
 
@@ -217,6 +227,14 @@ export async function POST(req: Request) {
         comboExtrasArr.push({ type: "extra", name: extra.name, price: extra.price });
         return sum + Number(extra.price || 0);
       }, 0);
+      (item.removedIngredients || []).forEach((removed) => {
+        comboExtrasArr.push({
+          type: "sin",
+          name: removed.productName
+            ? `${removed.productName}: ${removed.name}`
+            : removed.name,
+        });
+      });
 
       const comboProducts = combo.combo_products || [];
       if (comboProducts.length === 0) {
