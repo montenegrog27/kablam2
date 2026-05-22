@@ -96,9 +96,11 @@ import CashClosuresTab from "./CashClosuresTab";
 import CustomerChatList from "./CustomerChatList";
 import { useBranch } from "../(cashier)/context/BranchContext";
 import { usePermissions } from "../../hooks/usePermissions";
-import { MapPin, Settings, X, Check } from "lucide-react";
+import { LogOut, MapPin, Settings, X, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function CashierTabs({ session }: any) {
+  const router = useRouter();
   const [tab, setTab] = useState("orders");
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showBranchSelector, setShowBranchSelector] = useState(false);
@@ -136,6 +138,11 @@ export default function CashierTabs({ session }: any) {
   const toggleRiderWorking = async (riderId: string, current: boolean) => {
     setRiders((prev) => prev.map((r) => r.id === riderId ? { ...r, is_working_today: !current } : r));
     await supabase.from("riders").update({ is_working_today: !current }).eq("id", riderId);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace("/login");
   };
 
   return (
@@ -184,6 +191,13 @@ export default function CashierTabs({ session }: any) {
           {showSettings && (
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border z-50 min-w-40 py-1">
               <button onClick={() => { setShowSettings(false); loadRiders(); setShowRiderModal(true); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition">Riders</button>
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2 border-t border-gray-100 px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 dark:border-gray-700 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                <LogOut size={15} />
+                Cerrar sesion
+              </button>
             </div>
           )}
         </div>
