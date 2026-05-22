@@ -183,6 +183,8 @@ export default function BranchesPage() {
           web_closed_message: branchSettings.web_closed_message,
           favicon_url: branchSettings.favicon_url,
           meta_title: branchSettings.meta_title,
+          meta_pixel_id: branchSettings.meta_pixel_id,
+          ga4_measurement_id: branchSettings.ga4_measurement_id,
           meta_pixel_script: branchSettings.meta_pixel_script,
           ga4_script: branchSettings.ga4_script,
         },
@@ -204,6 +206,8 @@ export default function BranchesPage() {
             "ALTER TABLE branch_settings\n" +
             "ADD COLUMN IF NOT EXISTS favicon_url TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS meta_title TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS meta_pixel_id TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS ga4_measurement_id TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS meta_pixel_script TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS ga4_script TEXT;",
         );
@@ -654,17 +658,17 @@ export default function BranchesPage() {
 
               <div>
                 <label className="block text-sm text-gray-400 mb-1">
-                  Pixel de Meta (Facebook/Meta)
+                  Meta Pixel ID
                 </label>
-                <textarea
+                <input
                   placeholder="Fragmento de código del Meta Pixel"
-                  className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 font-mono text-xs h-24 w-full"
-                  value={branchSettings.meta_pixel_script || ""}
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                  value={branchSettings.meta_pixel_id || ""}
                   onChange={(e) =>
                     updateLocalSettings(
                       branch.id,
-                      "meta_pixel_script",
-                      e.target.value,
+                      "meta_pixel_id",
+                      e.target.value.replace(/\D/g, ""),
                     )
                   }
                 />
@@ -675,14 +679,14 @@ export default function BranchesPage() {
 
               <div>
                 <label className="block text-sm text-gray-400 mb-1">
-                  Google Analytics 4 (GA4)
+                  GA4 Measurement ID
                 </label>
-                <textarea
+                <input
                   placeholder="Fragmento de código de GA4"
-                  className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 font-mono text-xs h-24 w-full"
-                  value={branchSettings.ga4_script || ""}
+                  className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm uppercase text-gray-100 placeholder-gray-500"
+                  value={branchSettings.ga4_measurement_id || ""}
                   onChange={(e) =>
-                    updateLocalSettings(branch.id, "ga4_script", e.target.value)
+                    updateLocalSettings(branch.id, "ga4_measurement_id", e.target.value.trim().toUpperCase())
                   }
                 />
                 <div className="text-xs text-gray-400 mt-1">
