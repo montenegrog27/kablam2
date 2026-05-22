@@ -110,6 +110,12 @@ const debugLog = (...args: unknown[]) => {
   if (DEBUG_LOGS) console.log(...args);
 };
 
+type WhatsAppMediaType = "image" | "video" | "audio" | "document" | "sticker";
+
+function isMediaType(type: string): type is WhatsAppMediaType {
+  return ["image", "video", "audio", "document", "sticker"].includes(type);
+}
+
 export async function POST(req: Request) {
 
   const supabase = createClient(
@@ -124,6 +130,9 @@ const {
   orderId,
   type = "text",
   text,
+  mediaUrl,
+  caption,
+  fileName,
   templateName,
   params = []
 } = body;
@@ -188,6 +197,40 @@ const {
       text: { body: text }
     };
 
+  }
+
+  // =============================
+  // MEDIA MESSAGE
+  // =============================
+
+  if (isMediaType(type)) {
+    if (!mediaUrl) {
+      return NextResponse.json(
+        { error: "mediaUrl is required for media messages" },
+        { status: 400 },
+      );
+    }
+
+    const mediaPayload =
+      type === "document"
+        ? {
+            link: mediaUrl,
+            filename: fileName || "archivo",
+            ...(caption ? { caption } : {}),
+          }
+        : type === "audio" || type === "sticker"
+          ? { link: mediaUrl }
+          : {
+              link: mediaUrl,
+              ...(caption ? { caption } : {}),
+            };
+
+    payload = {
+      messaging_product: "whatsapp",
+      to: customer.phone,
+      type,
+      [type]: mediaPayload,
+    };
   }
 
   // =============================
@@ -265,7 +308,7 @@ const {
 
   if (result.error) {
     console.error(result.error);
-    return NextResponse.json({ error: result.error.message });
+    return NextResponse.json({ error: result.error.message }, { status: 400 });
   }
 
   const messageId = result.messages?.[0]?.id;
@@ -290,16 +333,22 @@ if (orderId && messageId) {
   // guardar mensaje
   // =============================
 
-  await supabase.from("messages").insert({
+  const { data: insertedMessage, error: insertError } = await supabase.from("messages").insert({
     tenant_id: conversation.tenant_id,
     branch_id: conversation.branch_id,
     conversation_id: conversation.id,
     sender_type: "cashier",
-    message: text || templateName,
+    message: text || caption || templateName || null,
     media_type: type,
+    media_url: mediaUrl || null,
     whatsapp_message_id: messageId
-  });
+  }).select().single();
 
-  return NextResponse.json({ success: true });
+  if (insertError) {
+    console.error(insertError);
+    return NextResponse.json({ error: "message could not be saved" }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true, messageId, message: insertedMessage });
 
 }

@@ -25,6 +25,8 @@ type Message = {
   media_url?: string;
   created_at: string;
   status?: string;
+  error?: string;
+  retry?: () => void;
 };
 
 type Props = {
@@ -61,7 +63,9 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
@@ -95,6 +99,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     else loadConversations();
     loadUnreadCounts();
     loadOrdersFilter();
+    setNotificationsEnabled(typeof Notification !== "undefined" && Notification.permission === "granted");
   }, [branchId]);
 
   useEffect(() => {
@@ -103,10 +108,12 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `branch_id=eq.${branchId}` },
         (payload) => {
           const msg = payload.new as Message & { conversation_id: string };
+          const isIncomingCustomerMessage = msg.sender_type === "customer";
           if (activeConv && msg.conversation_id === activeConv.id) {
             setMessages((prev) => { const e = prev.find((m) => m.id === msg.id); return e ? prev : [...prev, msg]; });
-          } else {
+          } else if (isIncomingCustomerMessage) {
             setUnreadMap((p) => ({ ...p, [msg.conversation_id]: (p[msg.conversation_id] || 0) + 1 }));
+            notifyNewMessage(msg);
           }
           // Siempre mover la conversación al tope (como WhatsApp)
           setConversations((prev) => prev.map((c) => c.id === msg.conversation_id
@@ -222,6 +229,46 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     } catch {}
   };
 
+  const requestNotifications = async () => {
+    if (typeof Notification === "undefined") return;
+    const permission = await Notification.requestPermission();
+    setNotificationsEnabled(permission === "granted");
+  };
+
+  const playNotificationSound = () => {
+    try {
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextCtor) return;
+      const ctx = new AudioContextCtor();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      oscillator.frequency.value = 820;
+      gain.gain.value = 0.04;
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
+      oscillator.stop(ctx.currentTime + 0.2);
+    } catch {}
+  };
+
+  const notifyNewMessage = (msg: Message & { conversation_id: string }) => {
+    playNotificationSound();
+
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+
+    const conv = conversations.find((c) => c.id === msg.conversation_id);
+    const title = conv?.customers.name || conv?.customers.phone || "Nuevo mensaje";
+    const body = msg.message || getMediaLabel(msg.media_type);
+
+    new Notification(`WhatsApp - ${title}`, {
+      body,
+      tag: `wa-${msg.conversation_id}`,
+      silent: true,
+    });
+  };
+
   const uploadFile = async (file: File): Promise<string | null> => {
     const ext = file.name.split(".").pop();
     const path = `chat/${branchId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -235,30 +282,92 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
 
   const sendMessage = async () => {
     if (!text.trim() || !activeConv) return;
-    const tmp = { id: crypto.randomUUID(), sender_type: "cashier" as const, message: text, media_type: "text", created_at: new Date().toISOString() };
+    const outgoingText = text.trim();
+    const tmp = { id: crypto.randomUUID(), sender_type: "cashier" as const, message: outgoingText, media_type: "text", created_at: new Date().toISOString(), status: "pending" };
     setMessages((p) => [...p, tmp as any]); setText("");
     try {
-      const { data: num } = await supabase.from("whatsapp_numbers").select("phone_number_id, access_token").eq("branch_id", branchId).single();
-      if (num) {
-        const res = await fetch("/api/whatsapp/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId: activeConv.id, type: "text", text }) });
-        const d = await res.json();
-        if (d?.messageId) setMessages((p) => p.map((m) => m.id === tmp.id ? { ...m, status: "sent" } : m));
+      const res = await fetch("/api/whatsapp/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId: activeConv.id, type: "text", text: outgoingText }) });
+      const d = await res.json();
+      if (!res.ok || d?.error) throw new Error(d?.error || "No se pudo enviar");
+      if (d?.message) {
+        setMessages((p) => [...p.filter((m) => m.id !== tmp.id && m.id !== d.message.id), d.message]);
+      } else {
+        setMessages((p) => p.map((m) => m.id === tmp.id ? { ...m, status: "sent" } : m));
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setMessages((p) => p.map((m) => m.id === tmp.id ? { ...m, status: "error", error: "No se pudo enviar", retry: () => { setText(outgoingText); } } : m));
+    }
   };
 
   const sendMedia = async (file: File) => {
     if (!activeConv) return; setShowUploadMenu(false);
     const t = file.type.split("/")[0];
-    const type = t === "video" ? "video" : t === "audio" ? "audio" : file.type === "image/webp" ? "sticker" : "image";
-    const tmp = { id: crypto.randomUUID(), sender_type: "cashier" as const, message: null, media_type: type, media_url: URL.createObjectURL(file), created_at: new Date().toISOString() };
+    const type = t === "video" ? "video" : t === "audio" ? "audio" : file.type === "image/webp" ? "sticker" : t === "image" ? "image" : "document";
+    const tmp = { id: crypto.randomUUID(), sender_type: "cashier" as const, message: null, media_type: type, media_url: URL.createObjectURL(file), created_at: new Date().toISOString(), status: "pending" };
     setMessages((p) => [...p, tmp as any]);
     const url = await uploadFile(file);
+    if (!url) {
+      setMessages((p) => p.map((m) => m.id === tmp.id ? { ...m, status: "error", error: "No se pudo subir el archivo", retry: () => sendMedia(file) } : m));
+      return;
+    }
+
     if (url) {
       try {
         const { data: num } = await supabase.from("whatsapp_numbers").select("phone_number_id, access_token").eq("branch_id", branchId).single();
         if (num) await fetch("/api/whatsapp/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId: activeConv.id, type: "text", text: `📎 ${url}` }) });
       } catch (e) { console.error(e); }
+    }
+  };
+
+  const sendMediaPro = async (file: File) => {
+    if (!activeConv) return;
+    setShowUploadMenu(false);
+
+    const family = file.type.split("/")[0];
+    const type = family === "video" ? "video" : family === "audio" ? "audio" : file.type === "image/webp" ? "sticker" : family === "image" ? "image" : "document";
+    const tmp = {
+      id: crypto.randomUUID(),
+      sender_type: "cashier" as const,
+      message: type === "document" ? file.name : null,
+      media_type: type,
+      media_url: URL.createObjectURL(file),
+      created_at: new Date().toISOString(),
+      status: "pending",
+    };
+
+    setMessages((p) => [...p, tmp as any]);
+
+    const publicUrl = await uploadFile(file);
+    if (!publicUrl) {
+      setMessages((p) => p.map((m) => m.id === tmp.id ? { ...m, status: "error", error: "No se pudo subir el archivo", retry: () => sendMediaPro(file) } : m));
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: activeConv.id,
+          type,
+          mediaUrl: publicUrl,
+          fileName: file.name,
+          caption: type === "document" ? file.name : undefined,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data?.error) throw new Error(data?.error || "No se pudo enviar");
+
+      if (data?.message) {
+        setMessages((p) => [...p.filter((m) => m.id !== tmp.id && m.id !== data.message.id), data.message]);
+      } else {
+        setMessages((p) => p.map((m) => m.id === tmp.id ? { ...m, status: "sent", media_url: publicUrl } : m));
+      }
+    } catch (error) {
+      console.error(error);
+      setMessages((p) => p.map((m) => m.id === tmp.id ? { ...m, status: "error", error: "No se pudo enviar", retry: () => sendMediaPro(file) } : m));
     }
   };
 
@@ -272,7 +381,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
       recorder.onstop = async () => {
         clearInterval(recordingTimerRef.current!); stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        sendMedia(new File([blob], `audio-${Date.now()}.webm`, { type: "audio/webm" }));
+        sendMediaPro(new File([blob], `audio-${Date.now()}.webm`, { type: "audio/webm" }));
         setRecording(false); setRecordingTime(0);
       };
       recorder.start();
@@ -280,7 +389,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   };
   const stopRecording = () => { if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop(); };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) sendMedia(f); e.target.value = ""; };
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) sendMediaPro(f); e.target.value = ""; };
   const triggerUpload = (t: string) => {
     uploadTypeRef.current = t;
     if (t === "camera") { fileInputRef.current!.accept = "image/*"; fileInputRef.current!.capture = "environment" as any; }

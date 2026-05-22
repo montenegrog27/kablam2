@@ -90,24 +90,21 @@ export default function ProfessionalMenu({
 
     const product: Product = {
       id: combo.id,
-      itemType: "combo",
-      comboId: combo.id,
       name: combo.name,
       description: combo.description,
+      itemType: "combo",
+      comboId: combo.id,
       allow_half: false,
       is_hero: false,
-      is_featured: combo.is_featured || false,
-      featured_order: combo.featured_order || 0,
+      is_featured: false,
       is_suggestable: false,
       show_in_menu: true,
       categories: combo.categories || [],
-      combo_products: combo.combo_products || [],
-      combo_removable_ingredients: combo.combo_removable_ingredients || [],
-      product_extras: combo.product_extras || [],
       product_variants: variants,
       modifier_group_products: [],
       product_ingredients_display: [],
-    };
+      product_extras: [],
+    } as Product;
     return product;
   });
 

@@ -11,6 +11,59 @@ const debugLog = (...args: unknown[]) => {
   if (DEBUG_LOGS) console.log(...args);
 };
 
+const MEDIA_BUCKETS = ["whatsapp-media", "media", "uploads"];
+
+function extensionFromMime(mimeType: string, fallback = "bin") {
+  const clean = mimeType.split(";")[0]?.trim().toLowerCase();
+  const map: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "video/mp4": "mp4",
+    "audio/ogg": "ogg",
+    "audio/mpeg": "mp3",
+    "audio/webm": "webm",
+    "application/pdf": "pdf",
+  };
+  return map[clean] || clean?.split("/")[1] || fallback;
+}
+
+function safeFileName(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 90);
+}
+
+async function uploadIncomingMedia(
+  bytes: ArrayBuffer,
+  contentType: string,
+  tenantId: string,
+  branchId: string,
+  fileName = "media",
+) {
+  const ext = fileName.includes(".") ? fileName.split(".").pop() : extensionFromMime(contentType);
+  const baseName = safeFileName(fileName.replace(/\.[^.]+$/, "") || "media");
+  const path = `incoming/${tenantId}/${branchId}/${Date.now()}-${crypto.randomUUID()}-${baseName}.${ext}`;
+
+  for (const bucket of MEDIA_BUCKETS) {
+    const { error } = await supabase.storage.from(bucket).upload(path, Buffer.from(bytes), {
+      contentType,
+      upsert: false,
+    });
+
+    if (!error) {
+      return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+    }
+
+    debugLog("Incoming media upload failed on bucket:", bucket, error.message);
+  }
+
+  return null;
+}
+
 // ===============================
 // HELPERS
 // ===============================
@@ -33,7 +86,13 @@ async function sendText(number: any, to: string, body: string) {
   });
 }
 
-async function downloadMedia(mediaId: string, token: string, fileName = "media") {
+async function downloadMedia(
+  mediaId: string,
+  token: string,
+  tenantId: string,
+  branchId: string,
+  fileName = "media",
+) {
   try {
     debugLog("downloadMedia: starting for", mediaId);
     const meta = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
@@ -60,17 +119,20 @@ async function downloadMedia(mediaId: string, token: string, fileName = "media")
     const arrayBuffer = await res.arrayBuffer();
     debugLog("downloadMedia: arrayBuffer size:", arrayBuffer.byteLength);
 
-    // Limit data URL to 8MB
-    if (arrayBuffer.byteLength > 8 * 1024 * 1024) {
+    // Meta media files are persisted in Storage, so the DB keeps only the URL.
+    if (arrayBuffer.byteLength > 64 * 1024 * 1024) {
       console.error("📥 downloadMedia: file too large for data URL:", arrayBuffer.byteLength);
       return null;
     }
 
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString("base64");
-    const result = `data:${contentType};base64,${base64}`;
-    debugLog("downloadMedia: success, data URL length:", result.length);
-    return result;
+    const publicUrl = await uploadIncomingMedia(arrayBuffer, contentType, tenantId, branchId, fileName);
+    if (!publicUrl) {
+      console.error("downloadMedia: could not upload media to storage");
+      return null;
+    }
+
+    debugLog("downloadMedia: uploaded to storage");
+    return publicUrl;
   } catch (err) {
     console.error("📥 downloadMedia error:", err);
     return null;
@@ -356,27 +418,33 @@ export async function POST(req: Request) {
       if (message.text) text = message.text.body;
   if (message.image) {
     mediaType = "image";
-    mediaUrl = await downloadMedia(message.image.id, number.access_token);
+    mediaUrl = await downloadMedia(message.image.id, number.access_token, tenantId, branchId, "image");
   }
 
   if (message.video) {
     mediaType = "video";
-    mediaUrl = await downloadMedia(message.video.id, number.access_token);
+    mediaUrl = await downloadMedia(message.video.id, number.access_token, tenantId, branchId, "video");
   }
 
   if (message.document) {
     mediaType = "document";
-    mediaUrl = await downloadMedia(message.document.id, number.access_token);
+    mediaUrl = await downloadMedia(
+      message.document.id,
+      number.access_token,
+      tenantId,
+      branchId,
+      message.document.filename || "document",
+    );
   }
 
   if (message.audio) {
     mediaType = "audio";
-    mediaUrl = await downloadMedia(message.audio.id, number.access_token);
+    mediaUrl = await downloadMedia(message.audio.id, number.access_token, tenantId, branchId, "audio");
   }
 
   if (message.sticker) {
     mediaType = "sticker";
-    mediaUrl = await downloadMedia(message.sticker.id, number.access_token);
+    mediaUrl = await downloadMedia(message.sticker.id, number.access_token, tenantId, branchId, "sticker");
   }
 
   if (message.location) {
@@ -507,27 +575,33 @@ export async function POST(req: Request) {
 
   if (message.image) {
     mediaType = "image";
-    mediaUrl = await downloadMedia(message.image.id, number.access_token);
+    mediaUrl = await downloadMedia(message.image.id, number.access_token, tenantId, branchId, "image");
   }
 
   if (message.video) {
     mediaType = "video";
-    mediaUrl = await downloadMedia(message.video.id, number.access_token);
+    mediaUrl = await downloadMedia(message.video.id, number.access_token, tenantId, branchId, "video");
   }
 
   if (message.document) {
     mediaType = "document";
-    mediaUrl = await downloadMedia(message.document.id, number.access_token);
+    mediaUrl = await downloadMedia(
+      message.document.id,
+      number.access_token,
+      tenantId,
+      branchId,
+      message.document.filename || "document",
+    );
   }
 
   if (message.audio) {
     mediaType = "audio";
-    mediaUrl = await downloadMedia(message.audio.id, number.access_token);
+    mediaUrl = await downloadMedia(message.audio.id, number.access_token, tenantId, branchId, "audio");
   }
 
   if (message.sticker) {
     mediaType = "sticker";
-    mediaUrl = await downloadMedia(message.sticker.id, number.access_token);
+    mediaUrl = await downloadMedia(message.sticker.id, number.access_token, tenantId, branchId, "sticker");
   }
 
   if (message.location) {

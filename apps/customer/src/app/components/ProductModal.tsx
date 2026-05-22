@@ -82,8 +82,8 @@ export default function ProductModal({
     >();
 
     (product?.combo_removable_ingredients || [])
-      .filter((item) => item.is_active)
-      .forEach((item) => {
+      .filter((item: any) => item.is_active)
+      .forEach((item: any) => {
         const productId = item.product_id;
         const productName = item.products?.name || "Producto";
         const current = groups.get(productId) || {
@@ -250,7 +250,7 @@ export default function ProductModal({
           {isCombo && product.combo_products && product.combo_products.length > 0 && (
             <Section title="Incluye" hint={`${product.combo_products.length} items`}>
               <div className="space-y-2">
-                {product.combo_products.map((comboProduct) => (
+                {product.combo_products.map((comboProduct: any) => (
                   <div key={comboProduct.id} className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
                     <span className="font-semibold text-gray-800">{comboProduct.products?.name || "Producto"}</span>
                     <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-gray-500 shadow-sm">
@@ -348,7 +348,7 @@ export default function ProductModal({
                   <div key={group.productId} className="rounded-2xl bg-gray-50 p-3">
         
                     <div className="flex flex-wrap gap-2">
-                      {(group.ingredients || []).map((ingredient) => {
+                      {(group.ingredients || []).map((ingredient: any) => {
                         const ingredientName = ingredient.ingredients?.name || "Ingrediente";
                         const selected = removedIngredients.some(
                           (item) => item.id === `${group.productId}:${ingredient.ingredient_id}`,

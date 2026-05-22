@@ -75,12 +75,10 @@ export type CartItem = {
 
 export type Product = {
   id: string;
-  itemType?: "product" | "combo";
-  comboId?: string;
-  combo_products?: Combo["combo_products"];
-  combo_removable_ingredients?: Combo["combo_removable_ingredients"];
   name: string;
   description?: string;
+  itemType?: "product" | "combo";
+  comboId?: string;
   featured_order?: number;
   allow_half?: boolean;
   is_hero?: boolean;
@@ -92,6 +90,7 @@ export type Product = {
   modifier_group_products?: { modifier_groups: ModifierGroup }[];
   product_ingredients_display?: IngredientDisplay[];
   product_extras?: ProductExtra[];
+  [key: string]: any;
 };
 
 export type Branding = {
