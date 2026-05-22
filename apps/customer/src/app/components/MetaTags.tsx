@@ -44,6 +44,8 @@ export default function MetaTags({ branding }: MetaTagsProps) {
         shortcutLink.rel = "shortcut icon";
         shortcutLink.href = faviconUrl;
         document.head.appendChild(shortcutLink);
+      } else {
+        existingShortcutIcon.href = faviconUrl;
       }
     }
 

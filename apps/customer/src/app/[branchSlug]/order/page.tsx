@@ -2,7 +2,39 @@ import { loadMenuServer, loadCombos } from "@/lib/loadMenu";
 import MenuPageClient from "./MenuPageClient";
 import { createSupabaseServer } from "@kablam/supabase/server";
 import { getCustomerSession } from "@/lib/customer-session";
+import { buildCustomerMetadata } from "@/lib/metadata";
 import type { Product, Combo } from "@/types/menu";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ branchSlug: string }>;
+}) {
+  const supabase = await createSupabaseServer();
+  const { branchSlug } = await params;
+
+  const { data: branch } = await supabase
+    .from("branches")
+    .select("id,name")
+    .eq("slug", branchSlug)
+    .maybeSingle();
+
+  if (!branch) {
+    return buildCustomerMetadata({ fallbackTitle: "Kablam" });
+  }
+
+  const { data: settings } = await supabase
+    .from("branch_settings")
+    .select("meta_title, favicon_url")
+    .eq("branch_id", branch.id)
+    .maybeSingle();
+
+  return buildCustomerMetadata({
+    title: settings?.meta_title,
+    fallbackTitle: branch.name,
+    faviconUrl: settings?.favicon_url,
+  });
+}
 
 export default async function OrderPage({
   params,

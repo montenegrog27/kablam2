@@ -64,13 +64,13 @@ export default function ProductExtrasPage() {
         .order("name"),
       supabase
         .from("products")
-        .select("id, name, image_url, product_variants(name, price)")
+        .select("id, name, image_url, product_variants(id, name, price, is_default, product_recipes(id, ingredient_id, ingredients(id, name)))")
         .eq("tenant_id", userRecord.tenant_id)
         .order("name")
         .limit(200),
       supabase
         .from("combos")
-        .select("id, name, image_url, price, combo_products(id, product_id, quantity, products(id, name, product_ingredients_display(id, ingredient_id, is_essential, is_visible, ingredients(id, name))))")
+        .select("id, name, image_url, price, combo_products(id, product_id, quantity, products(id, name, product_variants(id, name, is_default, product_recipes(id, ingredient_id, ingredients(id, name))))))")
         .eq("tenant_id", userRecord.tenant_id)
         .eq("is_active", true)
         .order("name")
@@ -173,14 +173,28 @@ export default function ProductExtrasPage() {
   const getSelectedComboProduct = () =>
     selectedItem?.combo_products?.find((item: any) => item.product_id === selectedComboProductId);
 
+  const getRecipeIngredients = (product: any) => {
+    const rows = (product?.product_variants || []).flatMap(
+      (variant: any) => variant.product_recipes || [],
+    );
+    const byId = new Map<string, any>();
+
+    rows.forEach((row: any) => {
+      const ingredient = row.ingredients;
+      if (ingredient?.id && !byId.has(ingredient.id)) {
+        byId.set(ingredient.id, ingredient);
+      }
+    });
+
+    return Array.from(byId.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "es"),
+    );
+  };
+
   const getRemovableIngredientSource = () => {
-    if (mode === "product") return ingredients;
+    if (mode === "product") return getRecipeIngredients(selectedItem);
     const comboProduct = getSelectedComboProduct();
-    const configured = comboProduct?.products?.product_ingredients_display || [];
-    return configured
-      .filter((item: any) => item.is_visible)
-      .map((item: any) => item.ingredients)
-      .filter(Boolean);
+    return getRecipeIngredients(comboProduct?.products);
   };
 
   const handleAddRemovable = async (event: React.FormEvent) => {
@@ -470,7 +484,7 @@ export default function ProductExtrasPage() {
 
                   <label className="block">
                     <span className="mb-1 block text-xs text-gray-400">
-                      Ingrediente
+                      Ingrediente de la receta
                     </span>
                     <select
                       value={newRemovableIngredient}
@@ -485,6 +499,12 @@ export default function ProductExtrasPage() {
                       ))}
                     </select>
                   </label>
+
+                  {removableIngredientSource.length === 0 && (
+                    <p className="rounded-lg bg-yellow-500/10 px-3 py-2 text-xs leading-5 text-yellow-200">
+                      Este {mode === "product" ? "producto" : "producto del combo"} no tiene ingredientes cargados en receta.
+                    </p>
+                  )}
 
                   <button
                     type="submit"

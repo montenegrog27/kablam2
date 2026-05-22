@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { createSupabaseServer } from "@kablam/supabase/server";
 import { getBrandFontFamily, getFontCss, getGoogleFontFamily } from "@/lib/fonts";
+import { buildCustomerMetadata } from "@/lib/metadata";
 import { normalizeHost, resolveTenantFromHost } from "../lib/tenant-resolution";
 
 type Branch = {
@@ -35,6 +36,48 @@ function getIcon(icon: string) {
 
 function isExternalUrl(url: string) {
   return url.startsWith("http://") || url.startsWith("https://");
+}
+
+async function getTenantHubBranding() {
+  const supabase = await createSupabaseServer();
+  const headersList = await headers();
+  const host = headersList.get("host") ?? "";
+  const tenant = await resolveTenantFromHost(supabase, host);
+
+  if (!tenant) return null;
+
+  const { data: branches } = await supabase
+    .from("branches")
+    .select("id,name,slug")
+    .eq("tenant_id", tenant.id)
+    .eq("active", true)
+    .order("name");
+
+  const activeBranches = (branches || []) as Branch[];
+  const brandingBranch =
+    activeBranches.find((branch) => branch.slug === "santafe1583") || activeBranches[0];
+
+  if (!brandingBranch) {
+    return { tenant, branch: null, settings: null };
+  }
+
+  const { data: settings } = await supabase
+    .from("branch_settings")
+    .select("meta_title, favicon_url")
+    .eq("branch_id", brandingBranch.id)
+    .maybeSingle();
+
+  return { tenant, branch: brandingBranch, settings };
+}
+
+export async function generateMetadata() {
+  const branding = await getTenantHubBranding();
+
+  return buildCustomerMetadata({
+    title: branding?.settings?.meta_title,
+    fallbackTitle: branding?.tenant?.name,
+    faviconUrl: branding?.settings?.favicon_url,
+  });
 }
 
 export default async function Landing() {
