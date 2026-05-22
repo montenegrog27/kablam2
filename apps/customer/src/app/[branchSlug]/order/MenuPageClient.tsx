@@ -71,23 +71,6 @@ export default function MenuPageClient({
           productos={products}
           combos={combos}
           onAgregar={agregarAlCarrito}
-          onAgregarCombo={(combo) => {
-            setCarrito((prev) => [
-              ...prev,
-              {
-                uid: `combo-${combo.id}-${Date.now()}`,
-                itemType: "combo",
-                comboId: combo.id,
-                variantId: "",
-                productId: combo.id,
-                name: combo.name,
-                price: combo.price,
-                quantity: 1,
-                variant: { id: combo.id + "-variant", name: combo.name, price: combo.price, is_default: true },
-                extras: [],
-              },
-            ]);
-          }}
           branding={branding}
         />
       </div>

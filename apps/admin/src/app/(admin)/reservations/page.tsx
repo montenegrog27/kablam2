@@ -22,6 +22,7 @@ type ReservationEvent = {
   id?: string;
   tenant_id?: string;
   branch_id?: string;
+  slug?: string;
   enabled: boolean;
   title: string;
   description: string;
@@ -61,6 +62,7 @@ type Reservation = {
 
 const DEFAULT_EVENT: ReservationEvent = {
   enabled: true,
+  slug: "",
   title: "Nuevo evento",
   description: "Elegí tu horario y guardá tu lugar.",
   hero_image_url: "",
@@ -107,10 +109,34 @@ function formatTime(value?: string) {
   return value?.slice(0, 5) || "-";
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function customerOrigin() {
+  if (typeof window === "undefined") return "";
+  const configured = process.env.NEXT_PUBLIC_CUSTOMER_URL;
+  if (configured) return configured.replace(/\/$/, "");
+
+  const origin = window.location.origin;
+  if (origin.includes("localhost:3000")) return origin.replace(":3000", ":3002");
+  if (origin.includes("-admin.")) return origin.replace("-admin.", "-customer.");
+  if (origin.includes("-admin-")) return origin.replace("-admin-", "-customer-");
+  if (origin.includes("admin.")) return origin.replace("admin.", "customer.");
+  return origin;
+}
+
 function cleanEvent(row: any): ReservationEvent {
   return {
     ...DEFAULT_EVENT,
     ...row,
+    slug: row.slug || slugify(row.title || ""),
     start_time: formatTime(row.start_time || DEFAULT_EVENT.start_time),
     end_time: formatTime(row.end_time || DEFAULT_EVENT.end_time),
     capacity_per_slot: row.capacity_per_slot ?? "",
@@ -135,10 +161,10 @@ export default function ReservationsPage() {
   const selectedBranch = branches.find((branch) => branch.id === branchId);
   const selectedEvent = events.find((event) => event.id === eventId) || events[0];
   const hubUrl = selectedBranch
-    ? `${typeof window === "undefined" ? "" : window.location.origin.replace(":3000", ":3002")}/${selectedBranch.slug}/reservas`
+    ? `${customerOrigin()}/${selectedBranch.slug}/reservas`
     : "";
   const eventUrl = selectedBranch && selectedEvent?.id && !selectedEvent._draft
-    ? `${hubUrl}/${selectedEvent.id}`
+    ? `${hubUrl}/${selectedEvent.slug || selectedEvent.id}`
     : "";
 
   const loadInitial = useCallback(async () => {
@@ -240,6 +266,7 @@ export default function ReservationsPage() {
       ...DEFAULT_EVENT,
       id: `draft-${crypto.randomUUID()}`,
       title: `Evento ${events.length + 1}`,
+      slug: `evento-${events.length + 1}`,
       location_name: selectedBranch?.name || "",
       _draft: true,
       sort_order: events.length,
@@ -263,6 +290,7 @@ export default function ReservationsPage() {
     const payload: any = {
       tenant_id: tenantId,
       branch_id: branchId,
+      slug: selectedEvent.slug || slugify(selectedEvent.title || "reservas"),
       enabled: Boolean(selectedEvent.enabled),
       title: selectedEvent.title || "Reservas",
       description: selectedEvent.description || null,
@@ -411,6 +439,7 @@ export default function ReservationsPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Titulo"><input className="input" value={selectedEvent.title || ""} onChange={(e) => updateEvent("title", e.target.value)} /></Field>
+                <Field label="URL del evento"><input className="input" value={selectedEvent.slug || ""} onChange={(e) => updateEvent("slug", slugify(e.target.value))} placeholder="sobremesa-del-mediodia" /></Field>
                 <Field label="Imagen hero"><input className="input" value={selectedEvent.hero_image_url || ""} onChange={(e) => updateEvent("hero_image_url", e.target.value)} placeholder="https://..." /></Field>
                 <Field label="Lugar"><input className="input" value={selectedEvent.location_name || ""} onChange={(e) => updateEvent("location_name", e.target.value)} /></Field>
                 <Field label="Direccion"><input className="input" value={selectedEvent.location_address || ""} onChange={(e) => updateEvent("location_address", e.target.value)} /></Field>

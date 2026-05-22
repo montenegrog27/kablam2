@@ -13,6 +13,8 @@ export default async function ReservationEventPage({
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
   const { branchSlug, eventId } = await params;
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
 
   const { data: branch } = await supabase
     .from("branches")
@@ -32,25 +34,19 @@ export default async function ReservationEventPage({
     );
   }
 
-  const [{ data: event }, { data: branding }, { data: reservations }] = await Promise.all([
-    supabase
-      .from("reservation_events")
-      .select("*")
-      .eq("id", eventId)
-      .eq("branch_id", branch.id)
-      .eq("enabled", true)
-      .maybeSingle(),
+  const eventQuery = supabase
+    .from("reservation_events")
+    .select("*")
+    .eq("branch_id", branch.id)
+    .eq("enabled", true);
+
+  const [{ data: event }, { data: branding }] = await Promise.all([
+    (isUuid ? eventQuery.eq("id", eventId) : eventQuery.eq("slug", eventId)).maybeSingle(),
     supabase
       .from("branch_settings")
       .select("*")
       .eq("branch_id", branch.id)
       .maybeSingle(),
-    supabaseService
-      .from("reservations")
-      .select("party_size,reservation_date,reservation_time,status,reservation_event_id")
-      .eq("branch_id", branch.id)
-      .eq("reservation_event_id", eventId)
-      .not("status", "in", "(cancelled,no_show)"),
   ]);
 
   if (!event) {
@@ -64,11 +60,18 @@ export default async function ReservationEventPage({
     );
   }
 
+  const { data: reservations } = await supabaseService
+    .from("reservations")
+    .select("party_size,reservation_date,reservation_time,status,reservation_event_id")
+    .eq("branch_id", branch.id)
+    .eq("reservation_event_id", event.id)
+    .not("status", "in", "(cancelled,no_show)");
+
   return (
     <ReservationPageClient
       branchSlug={branchSlug}
       branchName={branch.name}
-      eventId={eventId}
+      eventId={event.id}
       settings={JSON.parse(JSON.stringify(event))}
       branding={branding ? JSON.parse(JSON.stringify(branding)) : undefined}
       reservations={JSON.parse(JSON.stringify(reservations || []))}

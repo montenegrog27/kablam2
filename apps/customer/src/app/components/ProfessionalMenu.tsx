@@ -14,7 +14,6 @@ type Props = {
   productos: Product[];
   combos?: Combo[];
   onAgregar: (product: Product) => void;
-  onAgregarCombo?: (combo: Combo) => void;
   branding?: Branding;
 };
 
@@ -22,7 +21,6 @@ export default function ProfessionalMenu({
   productos,
   combos,
   onAgregar,
-  onAgregarCombo,
   branding,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -82,6 +80,8 @@ export default function ProfessionalMenu({
 
     const product: Product = {
       id: combo.id,
+      itemType: "combo",
+      comboId: combo.id,
       name: combo.name,
       description: combo.description,
       allow_half: false,
@@ -90,6 +90,7 @@ export default function ProfessionalMenu({
       is_suggestable: false,
       show_in_menu: true,
       categories: combo.categories || [],
+      combo_products: combo.combo_products || [],
       product_variants: variants,
       modifier_group_products: [],
       product_ingredients_display: [],
@@ -210,13 +211,6 @@ export default function ProfessionalMenu({
   };
 
   const handleAddProduct = (product: Product) => {
-    const combo = combos?.find((item) => item.id === product.id);
-
-    if (combo && onAgregarCombo) {
-      onAgregarCombo(combo);
-      return;
-    }
-
     onAgregar(product);
   };
 

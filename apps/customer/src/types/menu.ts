@@ -70,6 +70,9 @@ export type CartItem = {
 
 export type Product = {
   id: string;
+  itemType?: "product" | "combo";
+  comboId?: string;
+  combo_products?: Combo["combo_products"];
   name: string;
   description?: string;
   featured_order?: number;

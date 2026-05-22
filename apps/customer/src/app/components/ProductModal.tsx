@@ -1,23 +1,27 @@
 "use client";
 
-import { useState, useId, useEffect } from "react";
-import { X, Minus } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { Check, Minus, Plus, X } from "lucide-react";
 import type {
-  ProductModalProps,
-  ProductVariant,
+  IngredientDisplay,
   Modifier,
   ModifierGroup,
-  IngredientDisplay,
   ProductExtra,
+  ProductModalProps,
+  ProductVariant,
 } from "../../types/menu";
 import { getBrandFontFamily } from "@/lib/fonts";
 
 function getDefaultVariant(product: NonNullable<ProductModalProps["product"]>) {
   return (
-    product.product_variants?.find((v) => v.is_default) ||
+    product.product_variants?.find((variant) => variant.is_default) ||
     product.product_variants?.[0] ||
     null
   );
+}
+
+function formatPrice(value: number) {
+  return new Intl.NumberFormat("es-AR").format(Math.round(value || 0));
 }
 
 export default function ProductModal({
@@ -29,532 +33,432 @@ export default function ProductModal({
 }: ProductModalProps) {
   const uid = useId();
   const [variant, setVariant] = useState<ProductVariant | null>(null);
-  const [selectedExtras, setSelectedExtras] = useState<
-    Record<string, string[]>
-  >({});
-  const [removedIngredients, setRemovedIngredients] = useState<
-    Array<{ id: string; name: string }>
-  >([]);
-  const [halves, setHalves] = useState<{
-    first: string;
-    second: string;
-  } | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [selectedExtras, setSelectedExtras] = useState<Record<string, string[]>>({});
+  const [removedIngredients, setRemovedIngredients] = useState<Array<{ id: string; name: string }>>([]);
+  const [halves, setHalves] = useState<{ first: string; second: string } | null>(null);
+
   const fontFamily = getBrandFontFamily(branding);
-  const primaryColor =
-    branding?.primary_color || branding?.brand_color || "#000000";
-  const _accentColor =
-    branding?.accent_color || branding?.secondary_color || "#666666";
+  const primaryColor = branding?.primary_color || branding?.brand_color || "#111827";
 
   useEffect(() => {
-    if (open && product) {
-      setVariant(getDefaultVariant(product));
-      setSelectedExtras({});
-      setRemovedIngredients([]);
-      setHalves(product.allow_half ? { first: "", second: "" } : null);
-    }
-  }, [open, product?.id]);
+    if (!open || !product) return;
+    setVariant(getDefaultVariant(product));
+    setQuantity(1);
+    setSelectedExtras({});
+    setRemovedIngredients([]);
+    setHalves(product.allow_half ? { first: "", second: "" } : null);
+  }, [open, product]);
+
+  const isCombo = product?.itemType === "combo";
+
+  const modifierGroups: ModifierGroup[] = useMemo(
+    () =>
+      product?.modifier_group_products?.map((item) => ({
+        id: item.modifier_groups.id,
+        name: item.modifier_groups.name,
+        modifiers: item.modifier_groups.modifiers || [],
+      })) || [],
+    [product],
+  );
+
+  const allVisibleIngredients: IngredientDisplay[] = useMemo(
+    () => product?.product_ingredients_display?.filter((item) => item.is_visible) || [],
+    [product],
+  );
+
+  const removableIngredients = allVisibleIngredients.filter((item) => !item.is_essential);
+  const extras: ProductExtra[] = product?.product_extras?.filter((extra) => extra.is_active) || [];
 
   if (!open || !product) return null;
 
-  const modifierGroups: ModifierGroup[] =
-    product.modifier_group_products?.map((mgp) => ({
-      id: mgp.modifier_groups.id,
-      name: mgp.modifier_groups.name,
-      modifiers: mgp.modifier_groups.modifiers || [],
-    })) || [];
+  const selectedModifiers = modifierGroups.flatMap((group) => {
+    const selectedIds = selectedExtras[group.id] || [];
+    return selectedIds
+      .map((id) => group.modifiers.find((modifier) => modifier.id === id))
+      .filter(Boolean) as Modifier[];
+  });
 
-  const allVisibleIngredients: IngredientDisplay[] =
-    product.product_ingredients_display?.filter((pi) => pi.is_visible) || [];
+  const selectedProductExtras = extras
+    .filter((extra) => selectedExtras.extras?.includes(extra.id))
+    .map((extra) => ({
+      id: extra.id,
+      name: extra.ingredients?.name || extra.id,
+      price: extra.ingredients?.sale_price || extra.ingredients?.cost_per_unit || 0,
+    }));
 
-  // Separar ingredientes esenciales (no se pueden quitar) y removibles
-  const essentialIngredients = allVisibleIngredients.filter(
-    (ing) => ing.is_essential,
-  );
-  const removableIngredients = allVisibleIngredients.filter(
-    (ing) => !ing.is_essential,
-  );
-
-  const extras: ProductExtra[] =
-    product.product_extras?.filter((ex) => ex.is_active) || [];
+  const modifiersTotal = selectedModifiers.reduce((sum, modifier) => sum + Number(modifier.price || 0), 0);
+  const extrasTotal = selectedProductExtras.reduce((sum, extra) => sum + Number(extra.price || 0), 0);
+  const unitTotal = Number(variant?.price || 0) + modifiersTotal + extrasTotal;
+  const total = unitTotal * quantity;
+  const image = variant?.image_url || product.product_variants?.[0]?.image_url || null;
 
   const toggleModifier = (groupId: string, modifierId: string) => {
-    setSelectedExtras((prev) => {
-      const group = prev[groupId] || [];
-      if (group.includes(modifierId)) {
-        return { ...prev, [groupId]: group.filter((id) => id !== modifierId) };
-      }
-      return { ...prev, [groupId]: [...group, modifierId] };
+    setSelectedExtras((current) => {
+      const selected = current[groupId] || [];
+      return {
+        ...current,
+        [groupId]: selected.includes(modifierId)
+          ? selected.filter((id) => id !== modifierId)
+          : [...selected, modifierId],
+      };
     });
   };
 
   const toggleExtra = (extraId: string) => {
-    setSelectedExtras((prev) => {
-      const group = prev["extras"] || [];
-      if (group.includes(extraId)) {
-        return { ...prev, extras: group.filter((id) => id !== extraId) };
-      }
-      return { ...prev, extras: [...group, extraId] };
+    setSelectedExtras((current) => {
+      const selected = current.extras || [];
+      return {
+        ...current,
+        extras: selected.includes(extraId)
+          ? selected.filter((id) => id !== extraId)
+          : [...selected, extraId],
+      };
     });
   };
 
   const toggleIngredient = (ingredientId: string) => {
-    const ingredient = allVisibleIngredients.find(
-      (ing) => ing.ingredient_id === ingredientId,
-    );
-    if (ingredient?.is_essential) return;
+    const ingredient = allVisibleIngredients.find((item) => item.ingredient_id === ingredientId);
+    if (!ingredient || ingredient.is_essential) return;
 
-    setRemovedIngredients((prev) => {
-      const exists = prev.find((i) => i.id === ingredientId);
-      if (exists) {
-        return prev.filter((i) => i.id !== ingredientId);
-      }
+    setRemovedIngredients((current) => {
+      const exists = current.some((item) => item.id === ingredientId);
+      if (exists) return current.filter((item) => item.id !== ingredientId);
       return [
-        ...prev,
+        ...current,
         {
           id: ingredientId,
-          name: ingredient?.ingredients?.name || ingredientId,
+          name: ingredient.ingredients?.name || ingredientId,
         },
       ];
     });
   };
 
-  const getAllSelectedModifiers = (): Modifier[] => {
-    const all: Modifier[] = [];
-    modifierGroups.forEach((group) => {
-      const selectedIds = selectedExtras[group.id] || [];
-      selectedIds.forEach((id) => {
-        const mod = group.modifiers.find((m) => m.id === id);
-        if (mod) all.push(mod);
-      });
-    });
-    return all;
-  };
-
-  const getAllSelectedExtras = (): Modifier[] => {
-    const selectedIds = selectedExtras["extras"] || [];
-    return extras
-      .filter((ex) => selectedIds.includes(ex.id))
-      .map((ex) => ({
-        id: ex.id,
-        name: ex.ingredients?.name || ex.id,
-        price: ex.ingredients?.sale_price || ex.ingredients?.cost_per_unit || 0,
-      }));
-  };
-
-  const modifiersTotal = getAllSelectedModifiers().reduce(
-    (sum, e) => sum + e.price,
-    0,
-  );
-
-  const extrasTotal = getAllSelectedExtras().reduce((sum, ex) => {
-    return sum + (ex.price || 0);
-  }, 0);
-
-  const total = (variant?.price || 0) + modifiersTotal + extrasTotal;
-  const image =
-    variant?.image_url || product.product_variants?.[0]?.image_url || null;
-
   const handleAddToCart = () => {
     if (!variant) return;
-    console.log(
-      "ProductModal: Adding to cart, product categories:",
-      product.categories,
-    );
+
     onAddToCart({
       uid: `${variant.id}-${uid}`,
+      itemType: isCombo ? "combo" : "product",
+      comboId: isCombo ? product.comboId || product.id : undefined,
       variantId: variant.id,
-      productId: product.id,
+      productId: isCombo ? undefined : product.id,
       name: product.name,
-      price: total,
-      quantity: 1,
+      price: unitTotal,
+      quantity,
       variant,
-      extras: [...getAllSelectedModifiers(), ...getAllSelectedExtras()],
+      extras: [...selectedModifiers, ...selectedProductExtras],
       allowHalf: product.allow_half,
       halves: halves || undefined,
-      removedIngredients:
-        removedIngredients.length > 0 ? removedIngredients : undefined,
+      removedIngredients: removedIngredients.length > 0 ? removedIngredients : undefined,
       categories: product.categories,
     });
     onClose();
   };
 
+  const addLabel = isCombo ? "Agregar combo" : product.allow_half ? "Agregar pizza" : "Agregar producto";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center">
       <div
-        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 duration-300 sm:scale-100"
+        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-w-lg sm:rounded-3xl"
         style={{ fontFamily }}
       >
-        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-          <div className="flex-1 pr-4">
-            <h2 className="text-xl font-bold text-gray-900">{product.name}</h2>
-          </div>
+        <div className="relative border-b border-gray-100">
+          {image ? (
+            <div className="h-48 overflow-hidden bg-gray-100 sm:h-56">
+              <img src={image} alt={product.name} className="h-full w-full object-cover" />
+            </div>
+          ) : (
+            <div className="h-24 bg-gray-50" />
+          )}
+
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow-lg transition hover:bg-white"
+            aria-label="Cerrar"
           >
-            <X size={20} className="text-gray-600" />
+            <X size={20} />
           </button>
+
+          <div className="bg-white px-5 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  {isCombo ? "Combo" : "Producto"}
+                </p>
+                <h2 className="mt-1 text-2xl font-black leading-tight text-gray-950">{product.name}</h2>
+              </div>
+              <div className="rounded-2xl bg-gray-950 px-3 py-2 text-right text-white">
+                <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">Desde</p>
+                <p className="text-lg font-black">${formatPrice(unitTotal)}</p>
+              </div>
+            </div>
+            {product.description && (
+              <p className="mt-3 text-sm leading-6 text-gray-500">{product.description}</p>
+            )}
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-24">
-          {image && (
-            <div className="relative overflow-hidden rounded-xl shadow-lg">
-              <img
-                src={image}
-                alt={product.name}
-                className="w-full h-56 object-cover"
-              />
-              <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/20 to-transparent"></div>
-            </div>
-          )}
-
-          {product.description && (
-            <p className="text-sm text-gray-600">{product.description}</p>
-          )}
-
-          {product.product_variants?.length > 1 && !product.allow_half && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-gray-700">Elegir variante</p>
-                <span className="text-xs text-gray-500">
-                  {product.product_variants.length} opciones
-                </span>
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 pb-32">
+          {isCombo && product.combo_products && product.combo_products.length > 0 && (
+            <Section title="Incluye" hint={`${product.combo_products.length} items`}>
+              <div className="space-y-2">
+                {product.combo_products.map((comboProduct) => (
+                  <div key={comboProduct.id} className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
+                    <span className="font-semibold text-gray-800">{comboProduct.products?.name || "Producto"}</span>
+                    <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-gray-500 shadow-sm">
+                      x{comboProduct.quantity}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="grid gap-2">
-                {product.product_variants.map((v) => {
-                  const isSelected = variant?.id === v.id;
+            </Section>
+          )}
+
+          {!isCombo && product.product_variants?.length > 1 && !product.allow_half && (
+            <Section title="Elegir opcion" hint={`${product.product_variants.length} disponibles`}>
+              <div className="space-y-2">
+                {product.product_variants.map((option) => {
+                  const selected = variant?.id === option.id;
                   return (
                     <button
-                      key={v.id}
-                      onClick={() => setVariant(v)}
-                      className={`w-full flex justify-between items-center border-2 rounded-xl p-4 transition-all duration-200 ${
-                        isSelected
-                          ? `border-[${primaryColor}] bg-[${primaryColor}]/5`
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                      style={isSelected ? { borderColor: primaryColor } : {}}
+                      key={option.id}
+                      onClick={() => setVariant(option)}
+                      className="flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition"
+                      style={{
+                        borderColor: selected ? primaryColor : "#e5e7eb",
+                        background: selected ? `${primaryColor}0D` : "#fff",
+                      }}
                     >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            isSelected
-                              ? `border-[${primaryColor}] bg-[${primaryColor}]`
-                              : "border-gray-300"
-                          }`}
-                          style={
-                            isSelected
-                              ? {
-                                  borderColor: primaryColor,
-                                  backgroundColor: primaryColor,
-                                }
-                              : {}
-                          }
-                        >
-                          {isSelected && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
-                          )}
-                        </div>
+                      <span className="font-semibold text-gray-850">{option.name}</span>
+                      <span className="flex items-center gap-3">
+                        <span className="font-black text-gray-900">${formatPrice(option.price)}</span>
                         <span
-                          className={`font-medium ${
-                            isSelected ? "text-gray-900" : "text-gray-700"
-                          }`}
+                          className="flex h-5 w-5 items-center justify-center rounded-full border"
+                          style={{ borderColor: selected ? primaryColor : "#d1d5db", background: selected ? primaryColor : "#fff" }}
                         >
-                          {v.name}
+                          {selected && <Check size={13} className="text-white" />}
                         </span>
-                      </div>
-                      <span
-                        className={`font-bold ${
-                          isSelected ? "text-gray-900" : "text-gray-600"
-                        }`}
-                      >
-                        ${v.price}
                       </span>
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </Section>
           )}
 
-          {product.allow_half && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-gray-700">
-                  Armá tu pizza por mitades
-                </p>
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                  2 selecciones
-                </span>
+          {!isCombo && product.allow_half && (
+            <Section title="Arma tu pizza por mitades" hint="2 selecciones">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <HalfSelect
+                  label="Primera mitad"
+                  value={halves?.first || ""}
+                  options={product.product_variants || []}
+                  onChange={(value) => setHalves((current) => (current ? { ...current, first: value } : null))}
+                />
+                <HalfSelect
+                  label="Segunda mitad"
+                  value={halves?.second || ""}
+                  options={product.product_variants || []}
+                  onChange={(value) => setHalves((current) => (current ? { ...current, second: value } : null))}
+                />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                    <p className="text-sm font-medium text-gray-700">
-                      Primera mitad
-                    </p>
-                  </div>
-                  <select
-                    value={halves?.first || ""}
-                    onChange={(e) =>
-                      setHalves((prev) =>
-                        prev ? { ...prev, first: e.target.value } : null,
-                      )
-                    }
-                    className="w-full border-2 border-gray-200 rounded-xl p-3 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors duration-200"
-                  >
-                    <option value="" disabled className="text-gray-400">
-                      Seleccionar variante
-                    </option>
-                    {product.product_variants?.map((v) => (
-                      <option key={v.id} value={v.id} className="text-gray-800">
-                        {v.name} (+${v.price})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <p className="text-sm font-medium text-gray-700">
-                      Segunda mitad
-                    </p>
-                  </div>
-                  <select
-                    value={halves?.second || ""}
-                    onChange={(e) =>
-                      setHalves((prev) =>
-                        prev ? { ...prev, second: e.target.value } : null,
-                      )
-                    }
-                    className="w-full border-2 border-gray-200 rounded-xl p-3 bg-white focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-colors duration-200"
-                  >
-                    <option value="" disabled className="text-gray-400">
-                      Seleccionar variante
-                    </option>
-                    {product.product_variants?.map((v) => (
-                      <option key={v.id} value={v.id} className="text-gray-800">
-                        {v.name} (+${v.price})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                El precio final se calcula con la opcion base seleccionada y las mitades elegidas.
               </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">
-                    Precio base por mitad:
-                  </span>
-                  <span className="font-bold text-gray-900">
-                    ${variant?.price || 0}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  El precio total será la suma de ambas mitades seleccionadas.
-                </p>
-              </div>
-            </div>
+            </Section>
           )}
 
-          {/* Sección de ingredientes personalizables (se pueden quitar) - Tags "sin [ingrediente]" */}
-          {removableIngredients.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-gray-700">
-                  Quitar ingredientes
-                </p>
-                <span className="text-xs text-gray-500">
-                  {removableIngredients.length} opciones
-                </span>
-              </div>
+          {!isCombo && removableIngredients.length > 0 && (
+            <Section title="Quitar ingredientes" hint="Opcional">
               <div className="flex flex-wrap gap-2">
-                {removableIngredients.map((ing) => {
-                  const isRemoved = removedIngredients.some(
-                    (i) => i.id === ing.ingredient_id,
-                  );
+                {removableIngredients.map((ingredient) => {
+                  const selected = removedIngredients.some((item) => item.id === ingredient.ingredient_id);
                   return (
                     <button
-                      key={ing.id}
-                      onClick={() => toggleIngredient(ing.ingredient_id)}
-                      className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
-                        isRemoved
-                          ? "bg-red-100 border-red-300 text-red-700 line-through opacity-60"
-                          : "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200"
-                      }`}
+                      key={ingredient.id}
+                      onClick={() => toggleIngredient(ingredient.ingredient_id)}
+                      className="rounded-full border px-4 py-2 text-sm font-bold transition"
+                      style={{
+                        borderColor: selected ? "#ef4444" : "#e5e7eb",
+                        background: selected ? "#fef2f2" : "#fff",
+                        color: selected ? "#b91c1c" : "#374151",
+                        textDecoration: selected ? "line-through" : "none",
+                      }}
                     >
-                      sin {ing.ingredients?.name}
+                      Sin {ingredient.ingredients?.name}
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </Section>
           )}
 
-          {/* Sección de extras - Tags "extra [ingrediente]" */}
-          {extras.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-gray-700">Agregar extras</p>
-                <span className="text-xs text-gray-500">
-                  {extras.length} opciones
-                </span>
-              </div>
+          {!isCombo && extras.length > 0 && (
+            <Section title="Agregar extras" hint="Opcional">
               <div className="flex flex-wrap gap-2">
                 {extras.map((extra) => {
-                  const isSelected = selectedExtras["extras"]?.includes(
-                    extra.id,
-                  );
-                  const price =
-                    extra.ingredients?.sale_price ||
-                    extra.ingredients?.cost_per_unit ||
-                    0;
+                  const selected = selectedExtras.extras?.includes(extra.id);
+                  const price = extra.ingredients?.sale_price || extra.ingredients?.cost_per_unit || 0;
                   return (
                     <button
                       key={extra.id}
                       onClick={() => toggleExtra(extra.id)}
-                      className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 border ${
-                        isSelected
-                          ? "border-2 text-white"
-                          : "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200"
-                      }`}
-                      style={
-                        isSelected
-                          ? {
-                              borderColor: primaryColor,
-                              backgroundColor: primaryColor,
-                            }
-                          : {}
-                      }
+                      className="rounded-full border px-4 py-2 text-sm font-bold transition"
+                      style={{
+                        borderColor: selected ? primaryColor : "#e5e7eb",
+                        background: selected ? primaryColor : "#fff",
+                        color: selected ? "#fff" : "#374151",
+                      }}
                     >
-                      extra {extra.ingredients?.name} +${price}
+                      Extra {extra.ingredients?.name}
+                      {price ? ` +$${formatPrice(price)}` : ""}
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </Section>
           )}
 
-          {modifierGroups.map((group) => {
-            const selectedCount = selectedExtras[group.id]?.length || 0;
-            return (
-              <div key={group.id} className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">{group.name}</p>
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                    {selectedCount} de {group.modifiers.length} seleccionados
-                  </span>
-                </div>
-                <div className="grid gap-2">
+          {!isCombo &&
+            modifierGroups.map((group) => (
+              <Section
+                key={group.id}
+                title={group.name}
+                hint={`${selectedExtras[group.id]?.length || 0} seleccionados`}
+              >
+                <div className="space-y-2">
                   {group.modifiers.map((modifier) => {
-                    const isSelected = selectedExtras[group.id]?.includes(
-                      modifier.id,
-                    );
+                    const selected = selectedExtras[group.id]?.includes(modifier.id);
                     return (
                       <button
                         key={modifier.id}
                         onClick={() => toggleModifier(group.id, modifier.id)}
-                        className={`w-full flex justify-between items-center border-2 rounded-xl p-4 transition-all duration-200 ${
-                          isSelected
-                            ? `border-[${primaryColor}] bg-[${primaryColor}]/5`
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                        style={isSelected ? { borderColor: primaryColor } : {}}
+                        className="flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition"
+                        style={{
+                          borderColor: selected ? primaryColor : "#e5e7eb",
+                          background: selected ? `${primaryColor}0D` : "#fff",
+                        }}
                       >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                              isSelected
-                                ? `border-[${primaryColor}] bg-[${primaryColor}]`
-                                : "border-gray-300"
-                            }`}
-                            style={
-                              isSelected
-                                ? {
-                                    borderColor: primaryColor,
-                                    backgroundColor: primaryColor,
-                                  }
-                                : {}
-                            }
+                        <span className="font-semibold text-gray-800">{modifier.name}</span>
+                        <span className="flex items-center gap-3">
+                          <span className="font-black text-gray-900">+${formatPrice(modifier.price)}</span>
+                          <span
+                            className="flex h-5 w-5 items-center justify-center rounded-md border"
+                            style={{ borderColor: selected ? primaryColor : "#d1d5db", background: selected ? primaryColor : "#fff" }}
                           >
-                            {isSelected && (
-                              <div className="w-2 h-2 rounded-full bg-white"></div>
-                            )}
-                          </div>
-                          <div className="text-left">
-                            <span
-                              className={`font-medium ${
-                                isSelected ? "text-gray-900" : "text-gray-700"
-                              }`}
-                            >
-                              {modifier.name}
-                            </span>
-                          </div>
-                        </div>
-                        <span
-                          className={`font-bold ${
-                            isSelected ? "text-gray-900" : "text-gray-600"
-                          }`}
-                        >
-                          +${modifier.price}
+                            {selected && <Check size={13} className="text-white" />}
+                          </span>
                         </span>
                       </button>
                     );
                   })}
                 </div>
-              </div>
-            );
-          })}
+              </Section>
+            ))}
         </div>
 
-        <div className="sticky bottom-0 border-t border-gray-200 bg-white px-4 pt-1 pb-3 space-y-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
-          {/* Desglose de precios */}
-          {(modifiersTotal > 0 || extrasTotal > 0) && (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600">
-                <span>Precio base</span>
-                <span>${variant?.price || 0}</span>
-              </div>
-              {modifiersTotal > 0 && (
-                <div className="flex justify-between text-gray-600">
-                  <span>Modificadores</span>
-                  <span>+${modifiersTotal}</span>
-                </div>
-              )}
-              {extrasTotal > 0 && (
-                <div className="flex justify-between text-gray-600">
-                  <span>Extras</span>
-                  <span>+${extrasTotal}</span>
-                </div>
-              )}
-              <div className="border-t border-gray-200 pt-2"></div>
+        <div className="sticky bottom-0 border-t border-gray-200 bg-white px-5 py-4 shadow-[0_-16px_40px_-28px_rgba(0,0,0,.45)]">
+          {(modifiersTotal > 0 || extrasTotal > 0 || quantity > 1) && (
+            <div className="mb-3 space-y-1 rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
+              <PriceRow label="Base" value={variant?.price || 0} />
+              {modifiersTotal > 0 && <PriceRow label="Opciones" value={modifiersTotal} prefix="+" />}
+              {extrasTotal > 0 && <PriceRow label="Extras" value={extrasTotal} prefix="+" />}
+              {quantity > 1 && <PriceRow label={`Cantidad x${quantity}`} value={total} />}
             </div>
           )}
 
-          {/* Total */}
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="font-bold text-lg text-gray-900">Total</p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 items-center rounded-2xl border border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setQuantity((value) => Math.max(1, value - 1))}
+                className="flex h-12 w-11 items-center justify-center text-gray-700"
+                aria-label="Restar"
+              >
+                <Minus size={18} />
+              </button>
+              <span className="w-8 text-center text-lg font-black text-gray-950">{quantity}</span>
+              <button
+                onClick={() => setQuantity((value) => Math.min(20, value + 1))}
+                className="flex h-12 w-11 items-center justify-center text-gray-700"
+                aria-label="Sumar"
+              >
+                <Plus size={18} />
+              </button>
             </div>
-            <div className="text-right">
-              <p className="font-bold text-2xl text-gray-900">${total}</p>
-              {variant && (
-                <p className="text-xs text-gray-500">
-                  {product.allow_half ? "Precio por mitad" : "Precio unitario"}
-                </p>
-              )}
-            </div>
-          </div>
 
-          {/* Botón agregar */}
-          <button
-            onClick={handleAddToCart}
-            className="w-full py-3 rounded-xl font-bold text-white transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
-            style={{ backgroundColor: primaryColor }}
-          >
-            Agregar al carrito • ${total}
-          </button>
+            <button
+              onClick={handleAddToCart}
+              disabled={!variant}
+              className="flex min-h-12 flex-1 items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left font-black text-white transition active:scale-[0.99] disabled:opacity-40"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <span>{addLabel}</span>
+              <span>${formatPrice(total)}</span>
+            </button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-base font-black text-gray-950">{title}</h3>
+        {hint && <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-500">{hint}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function HalfSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: ProductVariant[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 outline-none focus:border-gray-400"
+      >
+        <option value="" disabled>Seleccionar</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name} (+${formatPrice(option.price)})
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function PriceRow({ label, value, prefix = "" }: { label: string; value: number; prefix?: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span>{label}</span>
+      <span className="font-bold text-gray-900">{prefix}${formatPrice(value)}</span>
     </div>
   );
 }

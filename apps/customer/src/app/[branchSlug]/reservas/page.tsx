@@ -86,7 +86,7 @@ export default async function ReservationsHubPage({
             {activeEvents.map((event: any) => (
               <a
                 key={event.id}
-                href={`/${branchSlug}/reservas/${event.id}`}
+                href={`/${branchSlug}/reservas/${event.slug || event.id}`}
                 className="group block overflow-hidden rounded-3xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl"
                 style={{ borderColor: `${primaryColor}18`, background: "rgba(255,255,255,.55)" }}
               >

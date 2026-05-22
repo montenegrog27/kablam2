@@ -48,6 +48,7 @@ create table if not exists public.reservation_events (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   branch_id uuid not null references public.branches(id) on delete cascade,
+  slug text,
   enabled boolean not null default true,
   title text not null default 'Reservas',
   description text,
@@ -74,6 +75,9 @@ create table if not exists public.reservation_events (
 alter table public.reservations
   add column if not exists reservation_event_id uuid references public.reservation_events(id) on delete set null;
 
+alter table public.reservation_events
+  add column if not exists slug text;
+
 create index if not exists reservations_branch_date_idx
   on public.reservations(branch_id, reservation_date, reservation_time);
 
@@ -82,6 +86,10 @@ create index if not exists reservations_tenant_created_idx
 
 create index if not exists reservation_events_branch_date_idx
   on public.reservation_events(branch_id, event_date, start_time);
+
+create unique index if not exists reservation_events_branch_slug_idx
+  on public.reservation_events(branch_id, slug)
+  where slug is not null;
 
 create index if not exists reservations_event_idx
   on public.reservations(reservation_event_id);
