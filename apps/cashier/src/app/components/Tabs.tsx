@@ -109,8 +109,10 @@ export default function CashierTabs({ session }: any) {
   const [showRiderModal, setShowRiderModal] = useState(false);
   const [riders, setRiders] = useState<any[]>([]);
   const [savingRiders, setSavingRiders] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const { currentBranch, allBranches, changeBranch } = useBranch();
   const { can, loading: permissionsLoading } = usePermissions();
+  const isOwnerMode = userRole === "owner" && !session;
 
   const allTabs = [
     { id: "orders", label: "Pedidos", perm: "cashier.orders.view" },
@@ -128,6 +130,24 @@ export default function CashierTabs({ session }: any) {
       setTab(tabs[0].id);
     }
   }, [permissionsLoading, tabs, tab]);
+
+  useEffect(() => {
+    const loadUserRole = async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData.user;
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      setUserRole(data?.role || null);
+    };
+
+    loadUserRole();
+  }, []);
 
   const loadRiders = async () => {
     if (!currentBranch?.id) return;
@@ -228,6 +248,11 @@ export default function CashierTabs({ session }: any) {
             </button>
           ))}
         </div>
+        {isOwnerMode && (
+          <div className="rounded-lg border border-red-500 bg-red-600 px-4 py-2 text-sm font-black uppercase tracking-wide text-white shadow-sm">
+            MODO OWNER
+          </div>
+        )}
         {can("cashier.close_cash.view") && session && (
           <button
             onClick={() => setShowCloseModal(true)}
@@ -241,7 +266,7 @@ export default function CashierTabs({ session }: any) {
       {/* CONTENT */}
       <div className="flex-1 overflow-hidden">
         {!permissionsLoading && tabs.length === 0 && (
-          <div className="h-full flex items-center justify-center text-gray-400">
+          <div className="h-full flex items-center justify-center px-6 text-center">
             Tu usuario no tiene permisos asignados para cashier.
           </div>
         )}

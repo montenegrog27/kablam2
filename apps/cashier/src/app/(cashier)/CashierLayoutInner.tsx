@@ -90,11 +90,12 @@ export default function CashierLayoutInner({ children }: any) {
     }
   };
 
+  const isOwner = userRecord?.role === "owner";
   const legacyRoleRequiresCash =
-    ["owner", "admin"].includes(userRecord?.role) ||
+    userRecord?.role === "admin" ||
     (userRecord?.role === "cashier" && !userRecord?.role_id);
   const permissionRequiresCash =
-    can("cashier.menu.view") || can("cashier.close_cash.view");
+    !isOwner && (can("cashier.menu.view") || can("cashier.close_cash.view"));
   const requiresCashSession = legacyRoleRequiresCash || permissionRequiresCash;
 
   if (loading || permissionsLoading) {
