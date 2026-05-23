@@ -202,7 +202,7 @@ export default function ProductModal({
     onClose();
   };
 
-  const addLabel = isCombo ? "Agregar combo" : product.allow_half ? "Agregar pizza" : "Agregar producto";
+  const addLabel = isCombo ? "Agregar" : product.allow_half ? "Agregar pizza" : "Agregar";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center">
