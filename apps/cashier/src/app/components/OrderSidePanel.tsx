@@ -234,12 +234,22 @@ export default function OrderSidePanel({
   // ================= LOAD =================
 
   const loadProducts = async () => {
-    if (!branchId) return;
-    const { data } = await supabase
-      .from("products")
-      .select("*, product_variants(*)")
-      .eq("branch_id", branchId);
-    setProducts(data || []);
+    if (!branchId || !tenantId) return;
+    const [{ data: prods }, { data: combos }] = await Promise.all([
+      supabase.from("products").select("*, product_variants(*)").eq("branch_id", branchId),
+      supabase.from("combos").select("*, categories(name)").eq("tenant_id", tenantId).eq("is_active", true),
+    ]);
+    // Convert combos to product-like objects with a generated variant
+    const comboProducts = (combos || []).map((combo: any) => ({
+      id: combo.id,
+      name: combo.name,
+      description: combo.description,
+      category_id: combo.category_id,
+      categories: combo.categories ? [{ id: combo.category_id, name: combo.categories?.name }] : [],
+      is_combo: true,
+      product_variants: [{ id: combo.id + "-variant", name: "Combo", price: combo.price, is_default: true }],
+    }));
+    setProducts([...(prods || []), ...comboProducts]);
   };
 
   const loadCategories = async () => {
