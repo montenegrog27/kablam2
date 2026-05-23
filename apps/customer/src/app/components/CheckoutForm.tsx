@@ -556,13 +556,13 @@ export default function CheckoutForm({
                       />
                     </div>
 
-                    <button
+                    {/* <button
                       type="button"
                       onClick={() => { setShowMapModal(true); if (branchLat && branchLng) { setMapLat(branchLat); setMapLng(branchLng); } }}
                       className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
                     >
                       <MapIcon size={15} /> Indicar en el mapa
-                    </button>
+                    </button> */}
 
                     {customerLat && customerLng && shippingCost > 0 && (
                       <div className="text-sm text-gray-600 flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 rounded-xl">
