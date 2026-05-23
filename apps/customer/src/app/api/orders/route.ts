@@ -304,7 +304,7 @@ export async function POST(req: Request) {
         .from("customers")
         .insert({
           tenant_id: branch.tenant_id,
-          name: customer.name,
+          name: customer.name || "Cliente",
           phone: phoneNormalized,
           address: customer.address || null,
         })
@@ -314,7 +314,24 @@ export async function POST(req: Request) {
       debugLog("CUSTOMER INSERT ERROR:", error);
       debugLog("CUSTOMER INSERT RESULT:", data);
 
-      customerDB = data;
+      if (error || !data) {
+        // If phone already exists for another tenant, try to find and reuse
+        const { data: existingByPhone } = await supabase
+          .from("customers")
+          .select("*")
+          .eq("phone", phoneNormalized)
+          .maybeSingle();
+        if (existingByPhone) {
+          customerDB = existingByPhone;
+        } else {
+          return Response.json({
+            success: false,
+            error: `Customer creation failed: ${error?.message || "Unknown error"}`,
+          });
+        }
+      } else {
+        customerDB = data;
+      }
     } else {
       // Actualizar nombre/dirección si cambió
       const updates: Record<string, string> = {};
@@ -328,7 +345,7 @@ export async function POST(req: Request) {
     if (!customerDB) {
       return Response.json({
         success: false,
-        error: "Customer creation failed",
+        error: "No se pudo crear o encontrar el cliente",
       });
     }
     /* =========================
