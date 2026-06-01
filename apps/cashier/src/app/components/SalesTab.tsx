@@ -20,10 +20,13 @@ export default function SalesTab({ session }: any) {
   const loadOrders = async () => {
     if (!branchId) return;
 
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
     const { data: ordersData } = await supabase
       .from("orders")
       .select("*")
       .eq("branch_id", branchId)
+      .gte("created_at", since)
       .not("status", "in", "(delivered,cancelled)")
       .order("created_at", { ascending: false });
 

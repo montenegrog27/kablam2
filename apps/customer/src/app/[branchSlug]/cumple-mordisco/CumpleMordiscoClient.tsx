@@ -99,6 +99,8 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const selectedLot = verification?.lots.find((lot) => lot.key === selectedLotKey) || verification?.lots[0];
   const isFounder = verification?.benefit.key === "founder";
   const qr = useMemo(() => qrCells(invitation?.invitation_code || "MORDISCO"), [invitation]);
+  const hasDiscount = Number(verification?.benefit.discount || 0) > 0;
+  const savings = selectedLot ? Math.max(selectedLot.basePrice - selectedLot.finalPrice, 0) : 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -287,10 +289,10 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 Primer Aniversario Mordisco
               </h1>
               <p className="mt-6 max-w-2xl text-xl font-medium leading-relaxed text-white/82 md:text-2xl">
-                Hace un año empezo una hamburgueseria. Hoy celebramos una comunidad.
+                Veni a festejar nuestro primer año con nosotros.
               </p>
               <p className="mt-6 max-w-xl text-base leading-7 text-white/68">
-                Una noche especial. Hamburguesas edicion limitada. Invitados especiales.
+                Una noche especial. Hamburguesas edicion limitada, sorteos, juegos y Dj en vivo.
                 Y el comienzo de una nueva etapa para Mordisco.
               </p>
               <div className="mt-6 grid max-w-2xl gap-2 sm:grid-cols-3">
@@ -299,14 +301,14 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 <EventPill label="Ubicacion" value={eventInfo.eventLocation} />
               </div>
               <a href="#beneficios" className="mt-8 inline-flex rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:scale-[1.02]">
-                Conseguir invitacion
+                Conseguir invitación
               </a>
             </div>
 
             <div className="rounded-[28px] border border-white/16 bg-black/36 p-5 shadow-2xl backdrop-blur-xl">
               <div className="rounded-[22px] border border-white/10 bg-white/[0.07] p-5">
                 <p className="text-xs uppercase tracking-[0.24em] text-white/50">Acceso privado</p>
-                <p className="mt-4 text-3xl font-black">No es una entrada. Es tu lugar en la historia.</p>
+                <p className="mt-4 text-3xl font-black">No es una entrada. Es tu lugar en nuestra historia.</p>
                 <div className="mt-8 grid grid-cols-3 gap-2 text-center">
                   {["Edicion limitada", "Sorteos", "Comunidad"].map((item) => (
                     <div key={item} className="rounded-2xl bg-white/10 p-3 text-xs font-semibold text-white/75">
@@ -368,6 +370,40 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
 
               <p className="mt-5 text-xl font-semibold leading-relaxed text-white/90">{verification.message}</p>
 
+              <div className="mt-5 overflow-hidden rounded-[22px] border border-[#d7b56d]/35 bg-gradient-to-br from-[#d7b56d]/20 via-white/[0.07] to-black/20">
+                <div className="grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d7b56d]">Beneficio desbloqueado</p>
+                    <p className="mt-2 text-2xl font-black leading-tight">
+                      {hasDiscount
+                        ? `Por ser ${verification.benefit.label}, tenés ${verification.benefit.discount}% OFF en tu invitación.`
+                        : "Tenés acceso al Primer Aniversario Mordisco."}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-white/62">
+                      {hasDiscount
+                        ? "Este precio especial se aplica automáticamente en todos los lotes disponibles para tu categoría."
+                        : "Elegí el lote disponible que prefieras y reservá tu lugar para el evento."}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-white p-4 text-black shadow-xl sm:min-w-40">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/45">Tu descuento</p>
+                    <p className="mt-1 text-3xl font-black">{hasDiscount ? `${verification.benefit.discount}%` : "Acceso"}</p>
+                    {selectedLot && (
+                      <p className="mt-2 text-xs font-semibold text-black/55">
+                        {hasDiscount ? `Ahorrás ${currency.format(savings)}` : `Desde ${currency.format(selectedLot.finalPrice)}`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {selectedLot && (
+                  <div className="grid grid-cols-3 border-t border-white/10 bg-black/20 text-center">
+                    <PriceStep label="Precio lote" value={currency.format(selectedLot.basePrice)} />
+                    <PriceStep label="Beneficio" value={hasDiscount ? `-${verification.benefit.discount}%` : "General"} />
+                    <PriceStep label="Pagás" value={currency.format(selectedLot.finalPrice)} strong />
+                  </div>
+                )}
+              </div>
+
               <div className="mt-6 grid grid-cols-2 gap-3">
                 <Metric label="Pedidos" value={verification.customer.orderCount.toString()} />
                 <Metric label="Gasto total" value={currency.format(verification.customer.totalSpent)} />
@@ -405,7 +441,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 </div>
                 <div className="mt-5 flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/45">Incluye ingreso y sorteos</p>
+                    {/* <p className="text-xs uppercase tracking-[0.2em] text-white/45">Incluye ingreso y sorteos</p> */}
                     <p className="text-2xl font-black">{selectedLot ? currency.format(selectedLot.finalPrice) : "-"}</p>
                   </div>
                   <button onClick={purchase} disabled={loading || !selectedLot} className="rounded-full bg-white px-5 py-3 text-sm font-black text-black">
@@ -469,6 +505,15 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
       <p className="text-xs text-white/45">{label}</p>
       <p className="mt-1 text-sm font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function PriceStep({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="p-3">
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/42">{label}</p>
+      <p className={`mt-1 text-sm ${strong ? "font-black text-[#d7b56d]" : "font-bold text-white"}`}>{value}</p>
     </div>
   );
 }
