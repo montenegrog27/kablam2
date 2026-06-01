@@ -202,12 +202,27 @@ async function lotsForTier(
     countSoldByLot(service, tenantId, branchId),
   ]);
 
-  return lots.map((lot) => ({
+  const hydratedLots = lots.map((lot) => {
+    const sold = soldByLot.get(lot.key) || 0;
+    const isSoldOut = lot.capacity > 0 && sold >= lot.capacity;
+    return {
+      ...lot,
+      discount,
+      sold,
+      available: lot.capacity > 0 ? Math.max(lot.capacity - sold, 0) : null,
+      finalPrice: Math.round(lot.basePrice * (1 - discount / 100)),
+      progress: lot.capacity > 0 ? Math.min(100, Math.round((sold / lot.capacity) * 100)) : 0,
+      isSoldOut,
+      isOpen: false,
+      isLocked: false,
+    };
+  });
+
+  const openIndex = hydratedLots.findIndex((lot) => !lot.isSoldOut);
+  return hydratedLots.map((lot, index) => ({
     ...lot,
-    discount,
-    sold: soldByLot.get(lot.key) || 0,
-    available: lot.capacity > 0 ? Math.max(lot.capacity - (soldByLot.get(lot.key) || 0), 0) : null,
-    finalPrice: Math.round(lot.basePrice * (1 - discount / 100)),
+    isOpen: index === openIndex,
+    isLocked: openIndex >= 0 ? index > openIndex : false,
   }));
 }
 
@@ -540,11 +555,13 @@ async function purchaseInvitation(body: {
   );
   const settings = await loadSettings(service, branch.tenant_id, branch.id);
   const tier = getTier(stats.orderCount, stats.topPercentile, settings);
-  const lots = await loadLots(service, branch.tenant_id, branch.id);
-  const selectedLot = lots.find((lot) => lot.key === body.lotKey) || lots[0] || LOTS[0];
-  const soldByLot = await countSoldByLot(service, branch.tenant_id, branch.id);
-  const sold = soldByLot.get(selectedLot.key) || 0;
-  if (selectedLot.capacity > 0 && sold >= selectedLot.capacity) {
+  const lots = await lotsForTier(service, branch.tenant_id, branch.id, tier.discount);
+  const selectedLot = lots.find((lot) => lot.key === body.lotKey) || lots.find((lot) => lot.isOpen) || lots[0] || LOTS[0];
+  const openLot = lots.find((lot) => lot.isOpen);
+  if (openLot && selectedLot.key !== openLot.key) {
+    return NextResponse.json({ error: "Este lote todavia no esta habilitado" }, { status: 409 });
+  }
+  if ("isSoldOut" in selectedLot && selectedLot.isSoldOut) {
     return NextResponse.json({ error: "Este lote ya no tiene cupo disponible" }, { status: 409 });
   }
   const discount = Number(tier.discount || body.discount || 0);

@@ -20,6 +20,10 @@ type Lot = {
   available: number | null;
   discount: number;
   finalPrice: number;
+  progress?: number;
+  isOpen?: boolean;
+  isLocked?: boolean;
+  isSoldOut?: boolean;
 };
 
 type Verification = {
@@ -138,7 +142,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       if (!response.ok || data.error) throw new Error(data.error || "No pudimos verificar tus beneficios");
       setVerification(data);
       if (data.settings) setEventInfo(data.settings);
-      setSelectedLotKey(data.lots?.find((lot: Lot) => lot.available !== 0)?.key || data.lots?.[0]?.key || "lote_1");
+      setSelectedLotKey(data.lots?.find((lot: Lot) => lot.isOpen)?.key || data.lots?.find((lot: Lot) => lot.available !== 0)?.key || data.lots?.[0]?.key || "lote_1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pudimos verificar tus beneficios");
     } finally {
@@ -611,24 +615,7 @@ function BenefitExperience({
             </div>
           </div>
 
-          <div className="fade-up mt-6 rounded-[30px] border border-white/14 bg-white/[0.08] p-4 shadow-2xl backdrop-blur-xl">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-white/45">Credencial para compartir</p>
-            <div className="mt-4 overflow-hidden rounded-[26px] border border-white/12 bg-[radial-gradient(circle_at_top_left,rgba(255,59,48,0.42),transparent_34%),linear-gradient(135deg,#160605,#050403)] p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[2.8rem] font-black uppercase leading-none text-white">{levelName}</p>
-                  <p className="mt-2 text-sm font-bold text-[#d7b56d]">Primer Aniversario Mordisco</p>
-                </div>
-                <div className="rounded-full border border-white/16 bg-white/10 px-3 py-2 text-xs font-black text-white">
-                  {hasDiscount ? `${verification.benefit.discount}% OFF` : "VIP"}
-                </div>
-              </div>
-              <div className="mt-10">
-                <p className="text-xl font-black text-white">{verification.customer.name || "Invitado Mordisco"}</p>
-                <p className="mt-1 text-sm font-semibold text-white/56">{impressiveBadge?.label || verification.benefit.label}</p>
-              </div>
-            </div>
-          </div>
+
 
           <div className="fade-up mt-6 rounded-[26px] border border-white/10 bg-white/[0.06] p-4">
             <div className="flex items-center justify-between gap-3">
@@ -639,32 +626,17 @@ function BenefitExperience({
               {selectedLot && <p className="text-right text-2xl font-black text-[#d7b56d]">{currency.format(selectedLot.finalPrice)}</p>}
             </div>
             <div className="mt-4 grid gap-3">
-              {verification.lots.map((lot) => (
-                <button
+              {verification.lots.map((lot, index) => (
+                <LotStepCard
                   key={lot.key}
-                  onClick={() => setSelectedLotKey(lot.key)}
-                  disabled={lot.available === 0}
-                  className={`rounded-2xl border p-4 text-left transition hover:scale-[1.01] active:scale-[0.99] ${
-                    selectedLotKey === lot.key ? "border-[#ff3b30] bg-[#ff3b30]/14" : "border-white/10 bg-black/25"
-                  } disabled:cursor-not-allowed disabled:opacity-45`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-black">{lot.name}</p>
-                      <p className="mt-1 text-xs text-white/50">Precio base {currency.format(lot.basePrice)}</p>
-                      <p className="mt-1 text-xs text-white/45">
-                        {lot.available === null ? "Cupo limitado" : lot.available > 0 ? `${lot.available} lugares disponibles` : "Lote agotado"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      {lot.discount > 0 && <p className="text-xs font-black text-[#ff8b80]">-{lot.discount}%</p>}
-                      <p className="text-xl font-black">{currency.format(lot.finalPrice)}</p>
-                    </div>
-                  </div>
-                </button>
+                  lot={lot}
+                  index={index}
+                  selected={selectedLotKey === lot.key}
+                  onSelect={() => setSelectedLotKey(lot.key)}
+                />
               ))}
             </div>
-            <button onClick={purchase} disabled={loading || !selectedLot} className="mt-5 w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black transition hover:scale-[1.01] disabled:opacity-50">
+            <button onClick={purchase} disabled={loading || !selectedLot || !selectedLot.isOpen} className="mt-5 w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black transition hover:scale-[1.01] disabled:opacity-50">
               {loading ? "Generando invitación..." : "Comprar invitación"}
             </button>
           </div>
@@ -703,6 +675,67 @@ function PriceMoment({ label, value, highlight = false, muted = false, strike = 
         {value}
       </p>
     </div>
+  );
+}
+
+function LotStepCard({ lot, index, selected, onSelect }: { lot: Lot; index: number; selected: boolean; onSelect: () => void }) {
+  const soldOut = Boolean(lot.isSoldOut || lot.available === 0);
+  const locked = Boolean(lot.isLocked);
+  const open = Boolean(lot.isOpen);
+  const disabled = soldOut || locked;
+  const progress = lot.capacity > 0 ? Math.min(100, Math.max(0, lot.progress ?? Math.round((lot.sold / lot.capacity) * 100))) : 0;
+  const status = soldOut
+    ? "Agotado"
+    : locked
+      ? "Se habilita al agotar el lote anterior"
+      : open
+        ? "Lote habilitado ahora"
+        : "Disponible";
+
+  return (
+    <button
+      onClick={onSelect}
+      disabled={disabled}
+      className={`relative overflow-hidden rounded-2xl border p-4 text-left transition hover:scale-[1.01] active:scale-[0.99] ${
+        selected && open ? "border-[#ff3b30] bg-[#ff3b30]/14" : "border-white/10 bg-black/25"
+      } ${disabled ? "cursor-not-allowed opacity-62" : ""}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/55">
+              Lote {index + 1}
+            </span>
+            {soldOut && <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-black">🔒 Agotado</span>}
+            {locked && <span className="rounded-full border border-white/12 bg-white/8 px-2 py-1 text-[10px] font-black uppercase text-white/50">🔒 Próximo</span>}
+            {open && !soldOut && <span className="rounded-full bg-[#ff3b30] px-2 py-1 text-[10px] font-black uppercase text-white">Abierto</span>}
+          </div>
+          <p className="mt-3 text-base font-black text-white">{lot.name}</p>
+          <p className="mt-1 text-xs font-semibold text-white/45">{status}</p>
+        </div>
+        <div className="text-right">
+          {lot.discount > 0 && <p className="text-xs font-black text-[#ff8b80]">-{lot.discount}%</p>}
+          <p className="text-xl font-black text-white">{currency.format(lot.finalPrice)}</p>
+          <p className="text-[11px] font-semibold text-white/42">Base {currency.format(lot.basePrice)}</p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="mb-2 flex items-center justify-between text-[11px] font-bold text-white/45">
+          <span>{lot.capacity > 0 ? `${lot.sold} / ${lot.capacity} vendidos` : `${lot.sold} vendidos`}</span>
+          <span>{lot.capacity > 0 ? `${progress}%` : "Sin cupo limite"}</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ${soldOut ? "bg-white/40" : "bg-gradient-to-r from-[#ff3b30] to-[#d7b56d]"}`}
+            style={{ width: lot.capacity > 0 ? `${progress}%` : open ? "100%" : "0%" }}
+          />
+        </div>
+        <p className="mt-2 text-[11px] font-semibold text-white/42">
+          {lot.available === null ? "Cupo ilimitado" : soldOut ? "Este lote ya se completo" : `${lot.available} lugares disponibles`}
+        </p>
+      </div>
+    </button>
   );
 }
 
