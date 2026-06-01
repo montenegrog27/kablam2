@@ -43,7 +43,7 @@ export default function CumpleMordiscoEntry({ branchSlug }: { branchSlug: string
               className="mb-5 h-44 rounded-[22px] bg-cover bg-center"
               style={{
                 backgroundImage:
-                  "linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.65)), url('https://images.unsplash.com/photo-1571091718767-18b5b1457add?auto=format&fit=crop&w=900&q=85')",
+                  "linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.65)), url('https://res.cloudinary.com/dsbrnqc5z/image/upload/v1780278318/WhatsApp_Image_2026-05-31_at_22.44.47_jxwoxl.jpg')",
               }}
             />
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#d7b56d]">Cumple Mordisco</p>
