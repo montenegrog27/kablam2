@@ -12,7 +12,7 @@ import {
   DollarSign, Receipt, FileText, Truck as TruckIcon, BarChart3, Star, Shield,
   Calculator, Link as LinkIcon,
   CalendarCheck,
-  Upload,
+  Upload, Cake,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -43,6 +43,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/branches", label: "Sucursales", icon: Store },
       { href: "/customers", label: "Clientes", icon: Users },
+      { href: "/anniversary", label: "Cumple Mordisco", icon: Cake },
       { href: "/categories", label: "Categorías", icon: Tags },
       { href: "/products", label: "Productos", icon: Package },
       { href: "/variant-types", label: "Tipos de Variante", icon: Variable },

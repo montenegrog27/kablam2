@@ -14,7 +14,11 @@ type OrderRow = {
   branches?: { name?: string | null } | null;
 };
 
-const GENERAL_PRICE = 30000;
+const LOTS = [
+  { key: "lote_1", name: "Lote 1", basePrice: 20000, capacity: 0, position: 1, isActive: true },
+  { key: "lote_2", name: "Lote 2", basePrice: 25000, capacity: 0, position: 2, isActive: true },
+  { key: "lote_3", name: "Lote 3", basePrice: 30000, capacity: 0, position: 3, isActive: true },
+];
 
 function createServiceClient() {
   return createClient(
@@ -38,7 +42,6 @@ function getTier(orderCount: number, topPercentile: number) {
       label: "Fundadores",
       badge: "Badge Fundador",
       discount: 50,
-      price: GENERAL_PRICE * 0.5,
       description: "Maximo beneficio por ser de los clientes mas frecuentes.",
     };
   }
@@ -49,7 +52,6 @@ function getTier(orderCount: number, topPercentile: number) {
       label: "Comunidad Mordisco",
       badge: "Comunidad Mordisco",
       discount: 25,
-      price: GENERAL_PRICE * 0.75,
       description: "Precio especial para clientes que ya son parte de la casa.",
     };
   }
@@ -59,9 +61,66 @@ function getTier(orderCount: number, topPercentile: number) {
     label: "Invitado General",
     badge: "Primer Cumple",
     discount: 0,
-    price: GENERAL_PRICE,
     description: "Acceso general al primer aniversario.",
   };
+}
+
+async function loadLots(service: ReturnType<typeof createServiceClient>, tenantId: string, branchId: string) {
+  const { data, error } = await service
+    .from("anniversary_lots")
+    .select("lot_key, name, base_price, capacity, position, is_active")
+    .eq("tenant_id", tenantId)
+    .or(`branch_id.eq.${branchId},branch_id.is.null`)
+    .order("position", { ascending: true });
+
+  if (error || !data || data.length === 0) return LOTS;
+
+  return data
+    .filter((lot) => lot.is_active)
+    .map((lot) => ({
+      key: lot.lot_key,
+      name: lot.name,
+      basePrice: Number(lot.base_price || 0),
+      capacity: Number(lot.capacity || 0),
+      position: Number(lot.position || 0),
+      isActive: Boolean(lot.is_active),
+    }));
+}
+
+async function countSoldByLot(service: ReturnType<typeof createServiceClient>, tenantId: string, branchId: string) {
+  const { data } = await service
+    .from("anniversary_invitations")
+    .select("lot_key")
+    .eq("tenant_id", tenantId)
+    .eq("branch_id", branchId)
+    .neq("status", "cancelled");
+
+  const counts = new Map<string, number>();
+  (data || []).forEach((row: { lot_key?: string | null }) => {
+    if (!row.lot_key) return;
+    counts.set(row.lot_key, (counts.get(row.lot_key) || 0) + 1);
+  });
+  return counts;
+}
+
+async function lotsForTier(
+  service: ReturnType<typeof createServiceClient>,
+  tenantId: string,
+  branchId: string,
+  discount: number,
+) {
+  const [lots, soldByLot] = await Promise.all([
+    loadLots(service, tenantId, branchId),
+    countSoldByLot(service, tenantId, branchId),
+  ]);
+
+  return lots.map((lot) => ({
+    ...lot,
+    discount,
+    sold: soldByLot.get(lot.key) || 0,
+    available: lot.capacity > 0 ? Math.max(lot.capacity - (soldByLot.get(lot.key) || 0), 0) : null,
+    finalPrice: Math.round(lot.basePrice * (1 - discount / 100)),
+  }));
 }
 
 function monthsSince(value: string | null) {
@@ -185,6 +244,7 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
   const tier = getTier(orderCount, topPercentile);
   const messages = buildMessages(customer?.name || name, orderCount, firstOrderAt, topPercentile);
   const message = messages[randomMessageSeed(phone) % messages.length];
+  const lots = await lotsForTier(service, branch.tenant_id, branch.id, tier.discount);
 
   return NextResponse.json({
     ok: true,
@@ -202,16 +262,64 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
       topPercentile,
     },
     benefit: tier,
+    lots,
     message,
   });
+}
+
+async function sendPaymentWhatsapp({
+  branchSlug,
+  branchName,
+  name,
+  phone,
+  code,
+  lotName,
+  price,
+}: {
+  branchSlug: string;
+  branchName: string;
+  name: string;
+  phone: string;
+  code: string;
+  lotName: string;
+  price: number;
+}) {
+  if (!process.env.WHATSAPP_TOKEN) return { skipped: true, reason: "WHATSAPP_TOKEN missing" };
+
+  const message = `Hola ${name}! Tu invitacion ${code} para el Primer Aniversario Mordisco quedo pre-reservada.\n\nAcceso: ${lotName}\nTotal a abonar: $${price.toLocaleString("es-AR")}\n\nPara confirmar tu entrada, abona al alias:\n*mordisco.arg*\n\nCuando hagas la transferencia, responde este mensaje con el comprobante.`;
+  const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+    },
+    body: JSON.stringify({
+      slug: "mordiscoburgers",
+      branchId: branchSlug,
+      phone,
+      message,
+    }),
+  });
+
+  const text = await response.text();
+  return {
+    ok: response.ok,
+    status: response.status,
+    branchName,
+    response: text,
+  };
 }
 
 async function purchaseInvitation(body: {
   branchSlug: string;
   name: string;
-  dni: string;
+  dni?: string;
   phone: string;
   benefitKey?: string;
+  lotKey?: string;
+  lotName?: string;
+  basePrice?: number;
+  discount?: number;
   price?: number;
 }) {
   const service = createServiceClient();
@@ -220,15 +328,28 @@ async function purchaseInvitation(body: {
 
   const phone = normalizePhone(body.phone);
   const code = invitationCode(phone);
-  const price = Number(body.price || GENERAL_PRICE);
+  const lots = await loadLots(service, branch.tenant_id, branch.id);
+  const selectedLot = lots.find((lot) => lot.key === body.lotKey) || lots[0] || LOTS[0];
+  const soldByLot = await countSoldByLot(service, branch.tenant_id, branch.id);
+  const sold = soldByLot.get(selectedLot.key) || 0;
+  if (selectedLot.capacity > 0 && sold >= selectedLot.capacity) {
+    return NextResponse.json({ error: "Este lote ya no tiene cupo disponible" }, { status: 409 });
+  }
+  const discount = Number(body.discount || 0);
+  const basePrice = Number(body.basePrice || selectedLot.basePrice);
+  const price = Number(body.price || Math.round(basePrice * (1 - discount / 100)));
   const payload = {
     tenant_id: branch.tenant_id,
     branch_id: branch.id,
     invitation_code: code,
     customer_name: body.name,
-    dni: body.dni,
+    dni: body.dni || null,
     whatsapp: phone,
     benefit_tier: body.benefitKey || "general",
+    lot_key: body.lotKey || selectedLot.key,
+    lot_name: body.lotName || selectedLot.name,
+    base_price: basePrice,
+    discount_percent: discount,
     price,
     status: "issued",
   };
@@ -239,14 +360,37 @@ async function purchaseInvitation(body: {
     .select("*")
     .single();
 
+  const savedInvitation = data || {
+    ...payload,
+    id: code,
+    created_at: new Date().toISOString(),
+    persisted: false,
+  };
+
+  const whatsappResult = await sendPaymentWhatsapp({
+    branchSlug: branch.slug || body.branchSlug,
+    branchName: branch.name || "Mordisco",
+    name: body.name,
+    phone,
+    code,
+    lotName: payload.lot_name,
+    price,
+  });
+
+  if (data?.id) {
+    await service
+      .from("anniversary_invitations")
+      .update({
+        last_whatsapp_sent_at: whatsappResult && "ok" in whatsappResult && whatsappResult.ok ? new Date().toISOString() : null,
+        last_whatsapp_message: `Pago al alias mordisco.arg - ${payload.lot_name} - ${price}`,
+      })
+      .eq("id", data.id);
+  }
+
   return NextResponse.json({
     ok: true,
-    invitation: data || {
-      ...payload,
-      id: code,
-      created_at: new Date().toISOString(),
-      persisted: false,
-    },
+    invitation: savedInvitation,
+    whatsapp: whatsappResult,
     warning: error?.message || null,
   });
 }
@@ -256,7 +400,7 @@ export async function POST(req: NextRequest) {
   const action = String(body.action || "verify");
 
   if (action === "purchase") {
-    if (!body.name || !body.dni || !body.phone || !body.branchSlug) {
+    if (!body.name || !body.phone || !body.branchSlug) {
       return NextResponse.json({ error: "Faltan datos para generar la invitacion" }, { status: 400 });
     }
     return purchaseInvitation(body);

@@ -8,8 +8,18 @@ type Benefit = {
   label: string;
   badge: string;
   discount: number;
-  price: number;
   description: string;
+};
+
+type Lot = {
+  key: string;
+  name: string;
+  basePrice: number;
+  capacity: number;
+  sold: number;
+  available: number | null;
+  discount: number;
+  finalPrice: number;
 };
 
 type Verification = {
@@ -27,15 +37,16 @@ type Verification = {
     topPercentile: number;
   };
   benefit: Benefit;
+  lots: Lot[];
   message: string;
 };
 
 type Invitation = {
   invitation_code: string;
   customer_name: string;
-  dni: string;
   whatsapp: string;
   benefit_tier: string;
+  lot_name?: string;
   price: number;
 };
 
@@ -56,24 +67,22 @@ function qrCells(seed: string) {
     const value = chars[index % chars.length] || 7;
     const row = Math.floor(index / 11);
     const col = index % 11;
-    const finder =
-      (row < 3 && col < 3) ||
-      (row < 3 && col > 7) ||
-      (row > 7 && col < 3);
-    return finder || ((value + row * 3 + col * 5 + index) % 4 !== 0);
+    const finder = (row < 3 && col < 3) || (row < 3 && col > 7) || (row > 7 && col < 3);
+    return finder || (value + row * 3 + col * 5 + index) % 4 !== 0;
   });
 }
 
 export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: string }) {
   const inviteRef = useRef<HTMLDivElement | null>(null);
   const [name, setName] = useState("");
-  const [dni, setDni] = useState("");
   const [phone, setPhone] = useState("");
+  const [selectedLotKey, setSelectedLotKey] = useState("lote_1");
   const [loading, setLoading] = useState(false);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [error, setError] = useState("");
 
+  const selectedLot = verification?.lots.find((lot) => lot.key === selectedLotKey) || verification?.lots[0];
   const isFounder = verification?.benefit.key === "founder";
   const qr = useMemo(() => qrCells(invitation?.invitation_code || "MORDISCO"), [invitation]);
 
@@ -90,6 +99,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || "No pudimos verificar tus beneficios");
       setVerification(data);
+      setSelectedLotKey(data.lots?.find((lot: Lot) => lot.available !== 0)?.key || data.lots?.[0]?.key || "lote_1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pudimos verificar tus beneficios");
     } finally {
@@ -98,9 +108,9 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   };
 
   const purchase = async () => {
-    if (!verification) return;
-    if (!name || !dni || !phone) {
-      setError("Completá nombre, DNI y WhatsApp para generar la invitación.");
+    if (!verification || !selectedLot) return;
+    if (!name || !phone) {
+      setError("Completa nombre y WhatsApp para generar la invitacion.");
       return;
     }
 
@@ -114,30 +124,31 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           action: "purchase",
           branchSlug,
           name,
-          dni,
           phone,
           benefitKey: verification.benefit.key,
-          price: verification.benefit.price,
+          lotKey: selectedLot.key,
+          lotName: selectedLot.name,
+          basePrice: selectedLot.basePrice,
+          discount: selectedLot.discount,
+          price: selectedLot.finalPrice,
         }),
       });
       const data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || "No pudimos generar la invitación");
+      if (!response.ok || data.error) throw new Error(data.error || "No pudimos generar la invitacion");
       setInvitation(data.invitation);
       setTimeout(() => inviteRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No pudimos generar la invitación");
+      setError(err instanceof Error ? err.message : "No pudimos generar la invitacion");
     } finally {
       setLoading(false);
     }
   };
 
-  const downloadInvitation = () => {
-    window.print();
-  };
+  const downloadInvitation = () => window.print();
 
   const shareBenefit = async () => {
     const text = invitation
-      ? `Tengo mi invitación ${invitation.invitation_code} para el Primer Aniversario Mordisco.`
+      ? `Tengo mi invitacion ${invitation.invitation_code} para el Primer Aniversario Mordisco.`
       : "Voy al Primer Aniversario Mordisco.";
     if (navigator.share) {
       await navigator.share({ title: "Cumple Mordisco", text, url: window.location.href });
@@ -164,7 +175,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
               Mordisco
             </Link>
             <a href="#beneficios" className="rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-semibold backdrop-blur">
-              Conseguir invitación
+              Conseguir invitacion
             </a>
           </nav>
 
@@ -177,17 +188,14 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 Primer Aniversario Mordisco
               </h1>
               <p className="mt-6 max-w-2xl text-xl font-medium leading-relaxed text-white/82 md:text-2xl">
-                Nuestro primer año.
+                Hace un ano empezo una hamburgueseria. Hoy celebramos una comunidad.
               </p>
               <p className="mt-6 max-w-xl text-base leading-7 text-white/68">
-                Una noche especial. Hamburguesas edición limitada. Invitados especiales.
+                Una noche especial. Hamburguesas edicion limitada. Invitados especiales.
                 Y el comienzo de una nueva etapa para Mordisco.
               </p>
-              <a
-                href="#beneficios"
-                className="mt-8 inline-flex rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:scale-[1.02]"
-              >
-                Conseguir invitación
+              <a href="#beneficios" className="mt-8 inline-flex rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:scale-[1.02]">
+                Conseguir invitacion
               </a>
             </div>
 
@@ -196,7 +204,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 <p className="text-xs uppercase tracking-[0.24em] text-white/50">Acceso privado</p>
                 <p className="mt-4 text-3xl font-black">No es una entrada. Es tu lugar en la historia.</p>
                 <div className="mt-8 grid grid-cols-3 gap-2 text-center">
-                  {["Edición limitada", "Sorteos", "Comunidad"].map((item) => (
+                  {["Edicion limitada", "Sorteos", "Comunidad"].map((item) => (
                     <div key={item} className="rounded-2xl bg-white/10 p-3 text-xs font-semibold text-white/75">
                       {item}
                     </div>
@@ -210,26 +218,22 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
 
       <section id="beneficios" className="mx-auto grid max-w-6xl gap-8 px-5 py-16 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Verificación</p>
-          <h2 className="mt-4 text-4xl font-black tracking-tight">Tu acceso para el Primer Aniversario</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Verificacion</p>
+          <h2 className="mt-4 text-4xl font-black tracking-tight">Primero descubrimos tu badge</h2>
           <p className="mt-5 text-white/62">
-            ¿Ya sos cliente? Los clientes de Mordisco tienen beneficios especiales.
-            Ingresá tu WhatsApp y verificaremos automáticamente si formás parte de la comunidad.
+            Ingresa tu WhatsApp y verificaremos automaticamente si formas parte de la comunidad Mordisco.
+            Despues elegis tu lote con el beneficio aplicado.
           </p>
         </div>
 
         <div className="rounded-[28px] border border-white/12 bg-white/[0.06] p-5 shadow-2xl backdrop-blur-xl">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="md:col-span-2">
+          <div className="grid gap-3">
+            <label>
               <span className="mb-1 block text-xs font-semibold text-white/55">Nombre completo</span>
               <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 outline-none" />
             </label>
             <label>
-              <span className="mb-1 block text-xs font-semibold text-white/55">DNI</span>
-              <input value={dni} onChange={(e) => setDni(e.target.value.replace(/\D/g, ""))} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 outline-none" />
-            </label>
-            <label>
-              <span className="mb-1 block text-xs font-semibold text-white/55">Número de WhatsApp</span>
+              <span className="mb-1 block text-xs font-semibold text-white/55">Numero de WhatsApp</span>
               <input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 outline-none" />
             </label>
           </div>
@@ -250,6 +254,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/50">{verification.benefit.badge}</p>
                   <h3 className="mt-3 text-2xl font-black">{verification.benefit.label}</h3>
+                  <p className="mt-2 text-sm text-white/55">{verification.benefit.description}</p>
                 </div>
                 <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-black">
                   {verification.benefit.discount > 0 ? `-${verification.benefit.discount}%` : "General"}
@@ -266,19 +271,40 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
               </div>
 
               <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-                <p className="text-sm font-semibold text-white/55">Incluye</p>
-                <ul className="mt-3 space-y-2 text-sm text-white/75">
-                  <li>Ingreso al evento</li>
-                  <li>Sorteos toda la noche</li>
-                  <li>Hamburguesas edición limitada</li>
-                </ul>
+                <p className="text-sm font-semibold text-white/55">Elegí tu lote</p>
+                <div className="mt-4 grid gap-3">
+                  {verification.lots.map((lot) => (
+                    <button
+                      key={lot.key}
+                      onClick={() => setSelectedLotKey(lot.key)}
+                      disabled={lot.available === 0}
+                      className={`rounded-2xl border p-4 text-left transition ${
+                        selectedLotKey === lot.key ? "border-[#d7b56d] bg-[#d7b56d]/15" : "border-white/10 bg-black/25"
+                      } disabled:cursor-not-allowed disabled:opacity-45`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-black">{lot.name}</p>
+                          <p className="mt-1 text-xs text-white/50">Precio base {currency.format(lot.basePrice)}</p>
+                          <p className="mt-1 text-xs text-white/45">
+                            {lot.available === null ? "Cupo limitado" : lot.available > 0 ? `${lot.available} lugares disponibles` : "Lote agotado"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          {lot.discount > 0 && <p className="text-xs font-black text-[#d7b56d]">-{lot.discount}%</p>}
+                          <p className="text-xl font-black">{currency.format(lot.finalPrice)}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
                 <div className="mt-5 flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/45">Precio</p>
-                    <p className="text-3xl font-black">{currency.format(verification.benefit.price)}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/45">Incluye ingreso y sorteos</p>
+                    <p className="text-2xl font-black">{selectedLot ? currency.format(selectedLot.finalPrice) : "-"}</p>
                   </div>
-                  <button onClick={purchase} disabled={loading} className="rounded-full bg-white px-5 py-3 text-sm font-black text-black">
-                    Comprar invitación
+                  <button onClick={purchase} disabled={loading || !selectedLot} className="rounded-full bg-white px-5 py-3 text-sm font-black text-black">
+                    Comprar invitacion
                   </button>
                 </div>
               </div>
@@ -290,10 +316,10 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       {invitation && (
         <section ref={inviteRef} className="mx-auto max-w-3xl px-5 pb-20">
           <div className="rounded-[32px] border border-[#d7b56d]/35 bg-[#120f0b] p-6 shadow-2xl">
-            <p className="text-center text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Invitación emitida</p>
+            <p className="text-center text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Invitacion emitida</p>
             <h2 className="mt-4 text-center text-4xl font-black">Nos vemos en el aniversario.</h2>
             <p className="mx-auto mt-4 max-w-md text-center text-white/62">
-              Y gracias por formar parte de este primer año.
+              Y gracias por formar parte de este primer ano.
             </p>
 
             <div className="mt-8 rounded-[24px] bg-white p-5 text-black">
@@ -301,8 +327,8 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-black/45">Cumple Mordisco</p>
                   <p className="mt-2 text-2xl font-black">{invitation.customer_name}</p>
-                  <p className="text-sm text-black/55">DNI {invitation.dni} · WhatsApp {invitation.whatsapp}</p>
-                  <p className="mt-4 text-sm font-bold">Invitación #{invitation.invitation_code}</p>
+                  <p className="text-sm text-black/55">WhatsApp {invitation.whatsapp}</p>
+                  <p className="mt-4 text-sm font-bold">Invitacion #{invitation.invitation_code}</p>
                 </div>
                 <div className="grid h-28 w-28 grid-cols-11 gap-[2px] rounded-xl bg-white p-2 shadow-inner">
                   {qr.map((filled, index) => (
@@ -312,12 +338,12 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
               </div>
               <div className="mt-5 rounded-2xl bg-black px-4 py-3 text-white">
                 <p className="text-xs text-white/55">Acceso</p>
-                <p className="text-lg font-black">{currency.format(invitation.price)} · {invitation.benefit_tier}</p>
+                <p className="text-lg font-black">{currency.format(invitation.price)} · {invitation.lot_name || invitation.benefit_tier}</p>
               </div>
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <button onClick={downloadInvitation} className="rounded-full bg-white px-4 py-3 text-sm font-black text-black">Descargar invitación</button>
+              <button onClick={downloadInvitation} className="rounded-full bg-white px-4 py-3 text-sm font-black text-black">Descargar invitacion</button>
               <button onClick={shareBenefit} className="rounded-full border border-white/20 px-4 py-3 text-sm font-black">Compartir beneficio</button>
               <Link href={`/${branchSlug}/order`} className="rounded-full border border-white/20 px-4 py-3 text-center text-sm font-black">Volver al inicio</Link>
             </div>
