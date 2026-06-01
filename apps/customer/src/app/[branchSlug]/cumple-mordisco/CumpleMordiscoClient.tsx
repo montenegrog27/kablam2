@@ -101,6 +101,10 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const qr = useMemo(() => qrCells(invitation?.invitation_code || "MORDISCO"), [invitation]);
   const hasDiscount = Number(verification?.benefit.discount || 0) > 0;
   const savings = selectedLot ? Math.max(selectedLot.basePrice - selectedLot.finalPrice, 0) : 0;
+  const levelName = verification ? levelDisplayName(verification.benefit.key, verification.benefit.label) : "";
+  const impressiveBadge = verification ? getImpressiveBadge(verification) : null;
+  const story = verification ? buildEmotionalStory(verification) : "";
+  const historyStats = verification ? buildHistoryStats(verification) : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -356,7 +360,22 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           </button>
 
           {verification && (
-            <div className={`mt-6 overflow-hidden rounded-[24px] border p-5 ${isFounder ? "border-[#d7b56d]/70 bg-[#d7b56d]/12" : "border-white/12 bg-black/25"}`}>
+            <>
+              <BenefitExperience
+                verification={verification}
+                selectedLot={selectedLot}
+                selectedLotKey={selectedLotKey}
+                setSelectedLotKey={setSelectedLotKey}
+                purchase={purchase}
+                loading={loading}
+                levelName={levelName}
+                impressiveBadge={impressiveBadge}
+                story={story}
+                historyStats={historyStats}
+                hasDiscount={hasDiscount}
+                savings={savings}
+              />
+            <div className={`hidden mt-6 overflow-hidden rounded-[24px] border p-5 ${isFounder ? "border-[#d7b56d]/70 bg-[#d7b56d]/12" : "border-white/12 bg-black/25"}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/50">{verification.benefit.badge}</p>
@@ -450,6 +469,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 </div>
               </div>
             </div>
+            </>
           )}
         </div>
       </section>
@@ -507,6 +527,268 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-sm font-bold text-white">{value}</p>
     </div>
   );
+}
+
+function BenefitExperience({
+  verification,
+  selectedLot,
+  selectedLotKey,
+  setSelectedLotKey,
+  purchase,
+  loading,
+  levelName,
+  impressiveBadge,
+  story,
+  historyStats,
+  hasDiscount,
+  savings,
+}: {
+  verification: Verification;
+  selectedLot?: Lot;
+  selectedLotKey: string;
+  setSelectedLotKey: (key: string) => void;
+  purchase: () => void;
+  loading: boolean;
+  levelName: string;
+  impressiveBadge: { icon: string; label: string } | null;
+  story: string;
+  historyStats: Array<{ icon: string; value: string; numeric?: number; suffix?: string; label: string }>;
+  hasDiscount: boolean;
+  savings: number;
+}) {
+  return (
+    <div className="anniversary-reveal mt-6 overflow-hidden rounded-[34px] border border-[#ff3b30]/35 bg-[#0c0807] shadow-2xl">
+      <div className="relative overflow-hidden p-5 sm:p-7">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#ff3b30]/30 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 left-1/3 h-56 w-56 rounded-full bg-[#d7b56d]/20 blur-3xl" />
+
+        <div className="relative">
+          <p className="fade-up text-[11px] font-black uppercase tracking-[0.28em] text-white/45">Primer Aniversario Mordisco</p>
+          <p className="fade-up mt-5 text-sm font-semibold text-white/58">Tu nivel de Mordiscolover es:</p>
+          <h3 className="fade-up level-glow mt-1 break-words text-[3.3rem] font-black uppercase leading-[0.82] tracking-normal text-white sm:text-[5rem]">
+            {levelName}
+          </h3>
+
+          {impressiveBadge && (
+            <div className="fade-up mt-6 inline-flex max-w-full items-center gap-3 rounded-full border border-white/14 bg-white px-4 py-3 text-black shadow-[0_18px_60px_rgba(255,255,255,0.18)] transition hover:scale-[1.02]">
+              <span className="text-2xl">{impressiveBadge.icon}</span>
+              <span className="text-sm font-black uppercase tracking-normal">{impressiveBadge.label}</span>
+            </div>
+          )}
+
+          <div className="fade-up mt-6 rounded-[26px] border border-white/10 bg-black/30 p-5 backdrop-blur-xl">
+            <p className="whitespace-pre-line text-lg font-semibold leading-8 text-white/88">{story}</p>
+          </div>
+
+          <div className="fade-up mt-5 overflow-hidden rounded-[28px] border border-[#ff3b30]/35 bg-gradient-to-br from-[#ff3b30]/26 via-[#d7b56d]/12 to-white/[0.04]">
+            <div className="p-5 text-center">
+              <p className="text-xs font-black uppercase tracking-[0.26em] text-[#ffb5ae]">Tu beneficio</p>
+              <p className="mt-2 text-[4.2rem] font-black leading-none text-white drop-shadow-[0_0_26px_rgba(255,59,48,0.45)] sm:text-[5rem]">
+                {hasDiscount ? `${verification.benefit.discount}% OFF` : "ACCESO"}
+              </p>
+              <p className="mt-2 text-sm font-semibold text-white/70">
+                {hasDiscount ? `Precio exclusivo para ${verification.benefit.label}.` : "Acceso especial al aniversario."}
+              </p>
+            </div>
+
+            {selectedLot && (
+              <div className="grid items-center gap-2 border-t border-white/10 bg-black/24 p-5 text-center sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
+                <PriceMoment label="Precio lote" value={currency.format(selectedLot.basePrice)} muted strike={hasDiscount} />
+                <span className="hidden text-2xl font-black text-white/30 sm:block">→</span>
+                <PriceMoment label="Tu precio" value={currency.format(selectedLot.finalPrice)} highlight />
+                <span className="hidden text-2xl font-black text-white/30 sm:block">→</span>
+                <PriceMoment label={hasDiscount ? `Por ser ${levelName}` : "Entrada"} value={hasDiscount ? `Ahorrás ${currency.format(savings)}` : "Disponible"} />
+              </div>
+            )}
+          </div>
+
+          <div className="fade-up mt-6">
+            <p className="mb-3 text-xs font-black uppercase tracking-[0.22em] text-white/42">Tu historia con Mordisco</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {historyStats.map((stat) => (
+                <StoryStat key={stat.label} {...stat} />
+              ))}
+            </div>
+          </div>
+
+          <div className="fade-up mt-6 rounded-[30px] border border-white/14 bg-white/[0.08] p-4 shadow-2xl backdrop-blur-xl">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-white/45">Credencial para compartir</p>
+            <div className="mt-4 overflow-hidden rounded-[26px] border border-white/12 bg-[radial-gradient(circle_at_top_left,rgba(255,59,48,0.42),transparent_34%),linear-gradient(135deg,#160605,#050403)] p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[2.8rem] font-black uppercase leading-none text-white">{levelName}</p>
+                  <p className="mt-2 text-sm font-bold text-[#d7b56d]">Primer Aniversario Mordisco</p>
+                </div>
+                <div className="rounded-full border border-white/16 bg-white/10 px-3 py-2 text-xs font-black text-white">
+                  {hasDiscount ? `${verification.benefit.discount}% OFF` : "VIP"}
+                </div>
+              </div>
+              <div className="mt-10">
+                <p className="text-xl font-black text-white">{verification.customer.name || "Invitado Mordisco"}</p>
+                <p className="mt-1 text-sm font-semibold text-white/56">{impressiveBadge?.label || verification.benefit.label}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="fade-up mt-6 rounded-[26px] border border-white/10 bg-white/[0.06] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-white/42">Proximo paso</p>
+                <p className="mt-1 text-lg font-black text-white">Elegí tu lote</p>
+              </div>
+              {selectedLot && <p className="text-right text-2xl font-black text-[#d7b56d]">{currency.format(selectedLot.finalPrice)}</p>}
+            </div>
+            <div className="mt-4 grid gap-3">
+              {verification.lots.map((lot) => (
+                <button
+                  key={lot.key}
+                  onClick={() => setSelectedLotKey(lot.key)}
+                  disabled={lot.available === 0}
+                  className={`rounded-2xl border p-4 text-left transition hover:scale-[1.01] active:scale-[0.99] ${
+                    selectedLotKey === lot.key ? "border-[#ff3b30] bg-[#ff3b30]/14" : "border-white/10 bg-black/25"
+                  } disabled:cursor-not-allowed disabled:opacity-45`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-black">{lot.name}</p>
+                      <p className="mt-1 text-xs text-white/50">Precio base {currency.format(lot.basePrice)}</p>
+                      <p className="mt-1 text-xs text-white/45">
+                        {lot.available === null ? "Cupo limitado" : lot.available > 0 ? `${lot.available} lugares disponibles` : "Lote agotado"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {lot.discount > 0 && <p className="text-xs font-black text-[#ff8b80]">-{lot.discount}%</p>}
+                      <p className="text-xl font-black">{currency.format(lot.finalPrice)}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button onClick={purchase} disabled={loading || !selectedLot} className="mt-5 w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black transition hover:scale-[1.01] disabled:opacity-50">
+              {loading ? "Generando invitación..." : "Comprar invitación"}
+            </button>
+          </div>
+        </div>
+      </div>
+      <style>{`
+        .anniversary-reveal {
+          animation: reveal-card 520ms ease-out both;
+        }
+        .fade-up {
+          animation: fade-up 620ms ease-out both;
+        }
+        .fade-up:nth-child(2) { animation-delay: 80ms; }
+        .fade-up:nth-child(3) { animation-delay: 140ms; }
+        .level-glow {
+          text-shadow: 0 0 34px rgba(255, 59, 48, 0.42), 0 10px 55px rgba(215, 181, 109, 0.2);
+        }
+        @keyframes reveal-card {
+          from { opacity: 0; transform: translateY(22px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes fade-up {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function PriceMoment({ label, value, highlight = false, muted = false, strike = false }: { label: string; value: string; highlight?: boolean; muted?: boolean; strike?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/42">{label}</p>
+      <p className={`${highlight ? "text-3xl text-[#d7b56d]" : "text-lg text-white"} mt-1 font-black ${muted ? "text-white/45" : ""} ${strike ? "line-through decoration-[#ff3b30] decoration-2" : ""}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StoryStat({ icon, value, numeric, suffix = "", label }: { icon: string; value: string; numeric?: number; suffix?: string; label: string }) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-white/[0.06] p-4 text-center backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.09]">
+      <p className="text-2xl">{icon}</p>
+      <p className="mt-2 text-2xl font-black text-white">
+        {typeof numeric === "number" ? <CountUp value={numeric} suffix={suffix} /> : value}
+      </p>
+      <p className="mt-1 text-xs font-semibold text-white/48">{label}</p>
+    </div>
+  );
+}
+
+function CountUp({ value, suffix = "" }: { value: number; suffix?: string }) {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    let frame = 0;
+    const totalFrames = 34;
+    const timer = window.setInterval(() => {
+      frame += 1;
+      const progress = 1 - Math.pow(1 - frame / totalFrames, 3);
+      setCurrent(value * progress);
+      if (frame >= totalFrames) {
+        setCurrent(value);
+        window.clearInterval(timer);
+      }
+    }, 18);
+    return () => window.clearInterval(timer);
+  }, [value]);
+
+  const formatted = Number.isInteger(value) ? Math.round(current).toString() : current.toFixed(1);
+  return <>{formatted}{suffix}</>;
+}
+
+function levelDisplayName(key: string, label: string) {
+  if (key === "founder") return "Fundador";
+  if (key === "community") return "Comunidad Mordisco";
+  return label === "Invitado General" ? "Invitado Especial" : label;
+}
+
+function monthsWithMordisco(firstOrderAt: string | null) {
+  if (!firstOrderAt) return 0;
+  const start = new Date(firstOrderAt);
+  const now = new Date();
+  return Math.max(1, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
+}
+
+function getImpressiveBadge(verification: Verification) {
+  const months = monthsWithMordisco(verification.customer.firstOrderAt);
+  if (verification.customer.topPercentile <= 10) return { icon: "🔥", label: `Top ${verification.customer.topPercentile}% de clientes` };
+  if (verification.customer.orderCount >= 3) return { icon: "🍔", label: `${verification.customer.orderCount} pedidos realizados` };
+  if (months >= 1) return { icon: "🏆", label: `${months} meses mordiendo` };
+  const year = verification.customer.firstOrderAt ? new Date(verification.customer.firstOrderAt).getFullYear() : new Date().getFullYear();
+  return { icon: "❤️", label: `Cliente desde ${year}` };
+}
+
+function buildEmotionalStory(verification: Verification) {
+  const name = verification.customer.name || "Mordedor";
+  const months = monthsWithMordisco(verification.customer.firstOrderAt);
+  const firstLine = months > 0
+    ? `Hace ${months} meses hiciste tu primer pedido.`
+    : "Hoy abriste tu lugar en esta historia.";
+  const orderLine = verification.customer.orderCount > 0
+    ? `Desde entonces realizaste ${verification.customer.orderCount} pedidos.`
+    : "Esta puede ser tu primera noche siendo parte de Mordisco.";
+  const topLine = verification.customer.topPercentile <= 25
+    ? `Eso te pone dentro del Top ${verification.customer.topPercentile}% de clientes de Mordisco.`
+    : `Eso te convierte en parte de nuestra comunidad.`;
+
+  return `Hola ${name}.\n\n${firstLine}\n${orderLine}\n${topLine}\n\nGracias por ayudarnos a llegar a nuestro primer aniversario.`;
+}
+
+function buildHistoryStats(verification: Verification) {
+  const months = monthsWithMordisco(verification.customer.firstOrderAt);
+  const branch = verification.customer.favoriteBranch?.name || "Mordisco";
+  return [
+    { icon: "🍔", value: String(verification.customer.orderCount), numeric: verification.customer.orderCount, label: "Pedidos" },
+    { icon: "❤️", value: String(months), numeric: months, label: "Meses con nosotros" },
+    { icon: "📍", value: branch, label: "Sucursal favorita" },
+    { icon: "💰", value: currency.format(verification.customer.totalSpent), label: "Gastados" },
+    { icon: "🏆", value: `Top ${verification.customer.topPercentile}%`, label: "Clientes" },
+    { icon: "⚡", value: verification.customer.frequency.toFixed(1), numeric: verification.customer.frequency, label: "Pedidos por mes" },
+  ];
 }
 
 function PriceStep({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
