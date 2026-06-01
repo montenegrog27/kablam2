@@ -43,6 +43,30 @@ CREATE TABLE IF NOT EXISTS anniversary_lots (
 CREATE INDEX IF NOT EXISTS anniversary_lots_tenant_idx
 ON anniversary_lots(tenant_id, branch_id, position);
 
+CREATE TABLE IF NOT EXISTS anniversary_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  branch_id UUID REFERENCES branches(id) ON DELETE CASCADE,
+  event_date TEXT NOT NULL DEFAULT '6 de junio',
+  event_time TEXT NOT NULL DEFAULT '20hs',
+  event_location TEXT NOT NULL DEFAULT 'Terraza Vera - San Juan 635',
+  payment_alias TEXT NOT NULL DEFAULT 'mordisco.arg',
+  payment_deadline_minutes INTEGER NOT NULL DEFAULT 60,
+  general_min_orders INTEGER NOT NULL DEFAULT 0,
+  community_min_orders INTEGER NOT NULL DEFAULT 4,
+  founder_min_orders INTEGER NOT NULL DEFAULT 0,
+  founder_top_percent INTEGER NOT NULL DEFAULT 10,
+  general_discount NUMERIC NOT NULL DEFAULT 0,
+  community_discount NUMERIC NOT NULL DEFAULT 25,
+  founder_discount NUMERIC NOT NULL DEFAULT 50,
+  tier_messages JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS anniversary_settings_tenant_idx
+ON anniversary_settings(tenant_id, branch_id, updated_at DESC);
+
 ALTER TABLE anniversary_invitations
   ALTER COLUMN dni DROP NOT NULL;
 

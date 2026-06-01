@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Benefit = {
   key: string;
@@ -50,16 +50,22 @@ type Invitation = {
   price: number;
 };
 
+type EventInfo = {
+  eventDate: string;
+  eventTime: string;
+  eventLocation: string;
+};
+
 const currency = new Intl.NumberFormat("es-AR", {
   style: "currency",
   currency: "ARS",
   maximumFractionDigits: 0,
 });
 
-const eventInfo = {
-  date: "6 de junio",
-  time: "20hs",
-  location: "Terraza Vera - San Juan 635",
+const defaultEventInfo = {
+  eventDate: "6 de junio",
+  eventTime: "20hs",
+  eventLocation: "Terraza Vera - San Juan 635",
 };
 
 function formatDate(value?: string | null) {
@@ -86,12 +92,30 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const [loading, setLoading] = useState(false);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
+  const [eventInfo, setEventInfo] = useState<EventInfo>(defaultEventInfo);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   const selectedLot = verification?.lots.find((lot) => lot.key === selectedLotKey) || verification?.lots[0];
   const isFounder = verification?.benefit.key === "founder";
   const qr = useMemo(() => qrCells(invitation?.invitation_code || "MORDISCO"), [invitation]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/cumple-mordisco", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "config", branchSlug }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!cancelled && data.settings) setEventInfo(data.settings);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [branchSlug]);
 
   const verify = async () => {
     setLoading(true);
@@ -107,6 +131,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || "No pudimos verificar tus beneficios");
       setVerification(data);
+      if (data.settings) setEventInfo(data.settings);
       setSelectedLotKey(data.lots?.find((lot: Lot) => lot.available !== 0)?.key || data.lots?.[0]?.key || "lote_1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pudimos verificar tus beneficios");
@@ -193,9 +218,9 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
     ctx.fillText("Primer Aniversario Mordisco", 92, 405);
     ctx.font = "700 30px Arial";
     ctx.fillStyle = "#d7b56d";
-    ctx.fillText(`Fecha: ${eventInfo.date}`, 92, 465);
-    ctx.fillText(`Hora: ${eventInfo.time}`, 92, 515);
-    ctx.fillText(`Ubicacion: ${eventInfo.location}`, 92, 565);
+    ctx.fillText(`Fecha: ${eventInfo.eventDate}`, 92, 465);
+    ctx.fillText(`Hora: ${eventInfo.eventTime}`, 92, 515);
+    ctx.fillText(`Ubicacion: ${eventInfo.eventLocation}`, 92, 565);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "900 34px Arial";
@@ -269,9 +294,9 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 Y el comienzo de una nueva etapa para Mordisco.
               </p>
               <div className="mt-6 grid max-w-2xl gap-2 sm:grid-cols-3">
-                <EventPill label="Fecha" value={eventInfo.date} />
-                <EventPill label="Hora" value={eventInfo.time} />
-                <EventPill label="Ubicacion" value={eventInfo.location} />
+                <EventPill label="Fecha" value={eventInfo.eventDate} />
+                <EventPill label="Hora" value={eventInfo.eventTime} />
+                <EventPill label="Ubicacion" value={eventInfo.eventLocation} />
               </div>
               <a href="#beneficios" className="mt-8 inline-flex rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:scale-[1.02]">
                 Conseguir invitacion
@@ -410,9 +435,9 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                   <p className="text-sm text-black/55">WhatsApp {invitation.whatsapp}</p>
                   <p className="mt-4 text-sm font-bold">Invitacion #{invitation.invitation_code}</p>
                   <div className="mt-5 space-y-1 text-sm font-semibold text-black/70">
-                    <p>Fecha: {eventInfo.date}</p>
-                    <p>Hora: {eventInfo.time}</p>
-                    <p>Ubicacion: {eventInfo.location}</p>
+                    <p>Fecha: {eventInfo.eventDate}</p>
+                    <p>Hora: {eventInfo.eventTime}</p>
+                    <p>Ubicacion: {eventInfo.eventLocation}</p>
                   </div>
                 </div>
                 <div className="grid h-28 w-28 grid-cols-11 gap-[2px] rounded-xl bg-white p-2 shadow-inner">

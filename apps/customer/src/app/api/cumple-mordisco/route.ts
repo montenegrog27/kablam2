@@ -14,17 +14,48 @@ type OrderRow = {
   branches?: { name?: string | null } | null;
 };
 
-const EVENT_INFO = {
-  date: "6 de junio",
-  time: "20hs",
-  location: "Terraza Vera - San Juan 635",
-};
-
 const LOTS = [
   { key: "lote_1", name: "Lote 1", basePrice: 20000, capacity: 0, position: 1, isActive: true },
   { key: "lote_2", name: "Lote 2", basePrice: 25000, capacity: 0, position: 2, isActive: true },
   { key: "lote_3", name: "Lote 3", basePrice: 30000, capacity: 0, position: 3, isActive: true },
 ];
+
+const DEFAULT_SETTINGS = {
+  eventDate: "6 de junio",
+  eventTime: "20hs",
+  eventLocation: "Terraza Vera - San Juan 635",
+  paymentAlias: "mordisco.arg",
+  paymentDeadlineMinutes: 60,
+  generalMinOrders: 0,
+  communityMinOrders: 4,
+  founderMinOrders: 0,
+  founderTopPercent: 10,
+  generalDiscount: 0,
+  communityDiscount: 25,
+  founderDiscount: 50,
+  messages: {
+    general: [
+      "Hola {name}. Esta puede ser tu primera noche siendo parte de Mordisco.",
+      "Invitado especial al primer aniversario. Bienvenido a esta historia.",
+      "Tu lugar en el cumple de Mordisco esta esperando.",
+    ],
+    community: [
+      "Hola {name}. Encontramos {orderCount} pedidos realizados con este numero. Gracias por ser parte de Mordisco.",
+      "Mordedor desde hace {months} meses. Gracias por acompanarnos desde casi el comienzo.",
+      "Cliente desde {year}. Estuviste antes de que Mordisco cumpliera su primer ano.",
+      "{orderCount} pedidos realizados. Definitivamente sabemos quien ama las hamburguesas.",
+      "Tus pedidos ayudaron a construir este primer ano. Gracias por ser parte.",
+    ],
+    founder: [
+      "Sos parte del Top {topPercent}% de clientes mas frecuentes.",
+      "No sos un invitado cualquiera. Sos parte de la historia de Mordisco.",
+      "Fundador Mordisco: tus pedidos ayudaron a construir este primer ano.",
+      "A vos, que venis desde {year}, gracias por estar antes del primer cumple.",
+    ],
+  },
+};
+
+type AnniversarySettings = typeof DEFAULT_SETTINGS;
 
 function createServiceClient() {
   return createClient(
@@ -52,23 +83,26 @@ function normalizeArgWhatsapp(value: unknown) {
   return `549${digits}`;
 }
 
-function getTier(orderCount: number, topPercentile: number) {
-  if (orderCount > 0 && topPercentile <= 10) {
+function getTier(orderCount: number, topPercentile: number, settings: AnniversarySettings) {
+  const founderByOrders = orderCount > 0 && Number(settings.founderMinOrders || 0) > 0 && orderCount >= Number(settings.founderMinOrders);
+  const founderByTop = orderCount > 0 && Number(settings.founderTopPercent || 0) > 0 && topPercentile <= Number(settings.founderTopPercent);
+
+  if (founderByOrders || founderByTop) {
     return {
       key: "founder",
       label: "Fundadores",
       badge: "Tu nivel de Mordiscolover es: ",
-      discount: 50,
+      discount: Number(settings.founderDiscount || 0),
       description: "Maximo beneficio por ser de los clientes mas frecuentes.",
     };
   }
 
-  if (orderCount > 3) {
+  if (orderCount >= Number(settings.communityMinOrders || 0)) {
     return {
       key: "community",
       label: "Comunidad Mordisco",
       badge: "Comunidad Mordisco",
-      discount: 25,
+      discount: Number(settings.communityDiscount || 0),
       description: "Precio especial para clientes que ya son parte de la casa.",
     };
   }
@@ -77,9 +111,46 @@ function getTier(orderCount: number, topPercentile: number) {
     key: "general",
     label: "Invitado General",
     badge: "Primer Cumple",
-    discount: 0,
+    discount: Number(settings.generalDiscount || 0),
     description: "Acceso general al primer aniversario.",
   };
+}
+
+function normalizeSettings(row: Record<string, unknown> | null | undefined): AnniversarySettings {
+  if (!row) return DEFAULT_SETTINGS;
+  const rowMessages = row.tier_messages && typeof row.tier_messages === "object" ? row.tier_messages : {};
+  return {
+    eventDate: String(row.event_date || DEFAULT_SETTINGS.eventDate),
+    eventTime: String(row.event_time || DEFAULT_SETTINGS.eventTime),
+    eventLocation: String(row.event_location || DEFAULT_SETTINGS.eventLocation),
+    paymentAlias: String(row.payment_alias || DEFAULT_SETTINGS.paymentAlias),
+    paymentDeadlineMinutes: Number(row.payment_deadline_minutes || DEFAULT_SETTINGS.paymentDeadlineMinutes),
+    generalMinOrders: Number(row.general_min_orders ?? DEFAULT_SETTINGS.generalMinOrders),
+    communityMinOrders: Number(row.community_min_orders ?? DEFAULT_SETTINGS.communityMinOrders),
+    founderMinOrders: Number(row.founder_min_orders ?? DEFAULT_SETTINGS.founderMinOrders),
+    founderTopPercent: Number(row.founder_top_percent ?? DEFAULT_SETTINGS.founderTopPercent),
+    generalDiscount: Number(row.general_discount ?? DEFAULT_SETTINGS.generalDiscount),
+    communityDiscount: Number(row.community_discount ?? DEFAULT_SETTINGS.communityDiscount),
+    founderDiscount: Number(row.founder_discount ?? DEFAULT_SETTINGS.founderDiscount),
+    messages: {
+      ...DEFAULT_SETTINGS.messages,
+      ...(rowMessages as AnniversarySettings["messages"]),
+    },
+  };
+}
+
+async function loadSettings(service: ReturnType<typeof createServiceClient>, tenantId: string, branchId: string) {
+  const { data, error } = await service
+    .from("anniversary_settings")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .or(`branch_id.eq.${branchId},branch_id.is.null`)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) return DEFAULT_SETTINGS;
+  return normalizeSettings(data);
 }
 
 async function loadLots(service: ReturnType<typeof createServiceClient>, tenantId: string, branchId: string) {
@@ -175,10 +246,37 @@ function buildMessages(name: string, orderCount: number, firstOrderAt: string | 
   return messages;
 }
 
+void buildMessages;
+
 function invitationCode(phone: string) {
   const normalized = normalizePhone(phone);
   const random = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `MD-${normalized.slice(-4) || "0000"}-${random}`;
+}
+
+function pickMessage(
+  settings: AnniversarySettings,
+  tierKey: keyof AnniversarySettings["messages"],
+  name: string,
+  orderCount: number,
+  firstOrderAt: string | null,
+  topPercentile: number,
+  favoriteBranchName: string,
+  phone: string,
+) {
+  const displayName = name || "Mordedor";
+  const months = monthsSince(firstOrderAt);
+  const year = firstOrderAt ? new Date(firstOrderAt).getFullYear() : new Date().getFullYear();
+  const messages = settings.messages[tierKey] || DEFAULT_SETTINGS.messages[tierKey] || DEFAULT_SETTINGS.messages.general;
+  const template = messages[randomMessageSeed(phone) % messages.length] || DEFAULT_SETTINGS.messages.general[0];
+
+  return template
+    .replaceAll("{name}", displayName)
+    .replaceAll("{orderCount}", String(orderCount))
+    .replaceAll("{months}", String(months || 1))
+    .replaceAll("{year}", String(year))
+    .replaceAll("{topPercent}", String(topPercentile))
+    .replaceAll("{favoriteBranch}", favoriteBranchName || "Mordisco");
 }
 
 async function getBranch(service: ReturnType<typeof createServiceClient>, branchSlug: string) {
@@ -289,10 +387,10 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
     name,
     phone,
   );
+  const settings = await loadSettings(service, branch.tenant_id, branch.id);
   const { customer, orderCount, totalSpent, firstOrderAt, lastOrderAt, favoriteBranch, frequency, topPercentile } = stats;
-  const tier = getTier(orderCount, topPercentile);
-  const messages = buildMessages(stats.displayName, orderCount, firstOrderAt, topPercentile);
-  const message = messages[randomMessageSeed(phone) % messages.length];
+  const tier = getTier(orderCount, topPercentile, settings);
+  const message = pickMessage(settings, tier.key as keyof AnniversarySettings["messages"], stats.displayName, orderCount, firstOrderAt, topPercentile, favoriteBranch.name, phone);
   const lots = await lotsForTier(service, branch.tenant_id, branch.id, tier.discount);
 
   return NextResponse.json({
@@ -313,6 +411,30 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
     benefit: tier,
     lots,
     message,
+    settings: {
+      eventDate: settings.eventDate,
+      eventTime: settings.eventTime,
+      eventLocation: settings.eventLocation,
+      paymentAlias: settings.paymentAlias,
+      paymentDeadlineMinutes: settings.paymentDeadlineMinutes,
+    },
+  });
+}
+
+async function getPublicConfig(branchSlug: string) {
+  const service = createServiceClient();
+  const branch = await getBranch(service, branchSlug);
+  if (!branch) return NextResponse.json({ settings: DEFAULT_SETTINGS });
+
+  const settings = await loadSettings(service, branch.tenant_id, branch.id);
+  return NextResponse.json({
+    settings: {
+      eventDate: settings.eventDate,
+      eventTime: settings.eventTime,
+      eventLocation: settings.eventLocation,
+      paymentAlias: settings.paymentAlias,
+      paymentDeadlineMinutes: settings.paymentDeadlineMinutes,
+    },
   });
 }
 
@@ -329,6 +451,7 @@ async function sendPaymentWhatsapp({
   orderCount,
   firstOrderAt,
   favoriteBranchName,
+  settings,
 }: {
   branchSlug: string;
   branchName: string;
@@ -342,6 +465,7 @@ async function sendPaymentWhatsapp({
   orderCount: number;
   firstOrderAt: string | null;
   favoriteBranchName: string;
+  settings: AnniversarySettings;
 }) {
   const whatsappToken = process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_API_TOKEN;
   if (!whatsappToken) return { skipped: true, reason: "WHATSAPP_TOKEN missing" };
@@ -359,7 +483,8 @@ async function sendPaymentWhatsapp({
     ? `Por tu categoria *${benefitLabel}*, tu beneficio aplicado es de *${discount}% OFF*.`
     : `Tu categoria es *${benefitLabel}*.`;
 
-  const message = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${EVENT_INFO.date}\nHora: ${EVENT_INFO.time}\nUbicacion: ${EVENT_INFO.location}\n\n*Tu acceso*\n${lotName}\nMonto a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *mordisco.arg*\n\nTenes *1hs* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
+  const deadlineText = settings.paymentDeadlineMinutes === 60 ? "1hs" : `${settings.paymentDeadlineMinutes} minutos`;
+  const message = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${settings.eventDate}\nHora: ${settings.eventTime}\nUbicacion: ${settings.eventLocation}\n\n*Tu acceso*\n${lotName}\nMonto a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *${settings.paymentAlias}*\n\nTenes *${deadlineText}* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
   const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
     method: "POST",
     headers: {
@@ -413,7 +538,8 @@ async function purchaseInvitation(body: {
     body.name,
     phone,
   );
-  const tier = getTier(stats.orderCount, stats.topPercentile);
+  const settings = await loadSettings(service, branch.tenant_id, branch.id);
+  const tier = getTier(stats.orderCount, stats.topPercentile, settings);
   const lots = await loadLots(service, branch.tenant_id, branch.id);
   const selectedLot = lots.find((lot) => lot.key === body.lotKey) || lots[0] || LOTS[0];
   const soldByLot = await countSoldByLot(service, branch.tenant_id, branch.id);
@@ -421,9 +547,9 @@ async function purchaseInvitation(body: {
   if (selectedLot.capacity > 0 && sold >= selectedLot.capacity) {
     return NextResponse.json({ error: "Este lote ya no tiene cupo disponible" }, { status: 409 });
   }
-  const discount = Number(body.discount || 0);
-  const basePrice = Number(body.basePrice || selectedLot.basePrice);
-  const price = Number(body.price || Math.round(basePrice * (1 - discount / 100)));
+  const discount = Number(tier.discount || body.discount || 0);
+  const basePrice = Number(selectedLot.basePrice || body.basePrice || 0);
+  const price = Math.round(basePrice * (1 - discount / 100));
   const payload = {
     tenant_id: branch.tenant_id,
     branch_id: branch.id,
@@ -466,6 +592,7 @@ async function purchaseInvitation(body: {
     orderCount: stats.orderCount,
     firstOrderAt: stats.firstOrderAt,
     favoriteBranchName: stats.favoriteBranch.name,
+    settings,
   });
 
   if (data?.id) {
@@ -489,6 +616,10 @@ async function purchaseInvitation(body: {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const action = String(body.action || "verify");
+
+  if (action === "config") {
+    return getPublicConfig(String(body.branchSlug || ""));
+  }
 
   if (action === "purchase") {
     if (!body.name || !body.phone || !body.branchSlug) {
