@@ -152,7 +152,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
         className="relative min-h-[92vh] overflow-hidden px-5 pb-14 pt-8"
         style={{
           backgroundImage:
-            "linear-gradient(180deg, rgba(8,7,6,0.35), rgba(8,7,6,0.92)), url('https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=1600&q=85')",
+            "linear-gradient(180deg, rgba(8,7,6,0.35), rgba(8,7,6,0.92)), url('https://res.cloudinary.com/dsbrnqc5z/image/upload/v1780278318/WhatsApp_Image_2026-05-31_at_22.44.47_jxwoxl.jpg')",
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -177,7 +177,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 Primer Aniversario Mordisco
               </h1>
               <p className="mt-6 max-w-2xl text-xl font-medium leading-relaxed text-white/82 md:text-2xl">
-                Hace un año empezó una hamburguesería. Hoy celebramos una comunidad.
+                Nuestro primer año.
               </p>
               <p className="mt-6 max-w-xl text-base leading-7 text-white/68">
                 Una noche especial. Hamburguesas edición limitada. Invitados especiales.
