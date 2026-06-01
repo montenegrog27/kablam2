@@ -272,7 +272,7 @@ export async function POST(req: Request) {
         item_type: "combo",
         product_id: combo.id,
         combo_id: combo.id,
-        variant_id: item.variantId || null,
+        variant_id: null,
         quantity: item.quantity,
         unit_price: Number(combo.price),
         total: comboItemTotal,

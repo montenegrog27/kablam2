@@ -672,17 +672,22 @@ export default function OrderSidePanel({
     // INSERT ITEMS
     // ===============================
 
-    const itemsToInsert = cart.map((item) => ({
-      order_id: orderId,
-      item_type: item.variant.is_combo ? "combo" : "product",
-      product_id: item.variant.product_id || item.variant.id,
-      combo_id: item.variant.is_combo ? item.variant.product_id || item.variant.id : null,
-      variant_id: item.variant.variant_id || null,
-      quantity: item.quantity,
-      unit_price: item.variant.price,
-      total: item.variant.price * item.quantity,
-      note: item.note || "",
-    }));
+    const itemsToInsert = cart.map((item) => {
+      const isCombo = item.variant.is_combo === true;
+      const itemId = item.variant.product_id || item.variant.id;
+
+      return {
+        order_id: orderId,
+        item_type: isCombo ? "combo" : "product",
+        product_id: itemId,
+        combo_id: isCombo ? itemId : null,
+        variant_id: isCombo ? null : item.variant.variant_id || null,
+        quantity: item.quantity,
+        unit_price: item.variant.price,
+        total: item.variant.price * item.quantity,
+        note: item.note || "",
+      };
+    });
 
     if (itemsToInsert.length) {
       const { error: itemsError } = await supabase
