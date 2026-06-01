@@ -25,7 +25,7 @@ export default function CumpleMordiscoEntry({ branchSlug }: { branchSlug: string
           href={`/${branchSlug}/cumple-mordisco`}
           className="mx-auto flex max-w-4xl items-center justify-center rounded-full border border-[#d7b56d]/35 bg-[#d7b56d] px-4 py-2.5 text-center text-sm font-black uppercase tracking-[0.12em] text-black"
         >
-          Vení al primer cumple
+          Vení a nuestro 1er cumple!
         </Link>
       </div>
 
@@ -46,10 +46,9 @@ export default function CumpleMordiscoEntry({ branchSlug }: { branchSlug: string
                   "linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.65)), url('https://res.cloudinary.com/dsbrnqc5z/image/upload/v1780278318/WhatsApp_Image_2026-05-31_at_22.44.47_jxwoxl.jpg')",
               }}
             />
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#d7b56d]">Cumple Mordisco</p>
-            <h2 className="mt-3 text-3xl font-black leading-tight">Vení al primer cumple</h2>
+            <h2 className="mt-3 text-3xl font-black leading-tight">Vení a nuestro 1er cumple!</h2>
             <p className="mt-3 text-sm leading-6 text-white/65">
-              Una noche especial para quienes hicieron posible este primer año. Verificá tu WhatsApp y descubrí tu beneficio.
+              Una noche especial para quienes hicieron posible este primer año. Ingresa tu número y descubrí tu beneficio.
             </p>
             <div className="mt-5 grid gap-2">
               <Link
@@ -57,7 +56,7 @@ export default function CumpleMordiscoEntry({ branchSlug }: { branchSlug: string
                 onClick={close}
                 className="rounded-full bg-white px-5 py-3 text-center text-sm font-black text-black"
               >
-                Ingresar
+                Saber más
               </Link>
               <button onClick={close} className="rounded-full border border-white/15 px-5 py-3 text-sm font-bold text-white/70">
                 Ahora no

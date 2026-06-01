@@ -56,6 +56,12 @@ const currency = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 0,
 });
 
+const eventInfo = {
+  date: "6 de junio",
+  time: "20hs",
+  location: "Terraza Vera - San Juan 635",
+};
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleDateString("es-AR", { month: "long", year: "numeric" });
@@ -152,7 +158,67 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
     }
   };
 
-  const downloadInvitation = () => window.print();
+  const downloadInvitation = () => {
+    if (!invitation) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 760;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const gradient = ctx.createLinearGradient(0, 0, 1200, 760);
+    gradient.addColorStop(0, "#ffffff");
+    gradient.addColorStop(1, "#f2ead9");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1200, 760);
+
+    ctx.fillStyle = "#0a0806";
+    ctx.fillRect(42, 42, 1116, 676);
+    ctx.fillStyle = "#d7b56d";
+    ctx.fillRect(42, 42, 1116, 10);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 28px Arial";
+    ctx.fillText("CUMPLE MORDISCO", 92, 118);
+    ctx.font = "900 58px Arial";
+    ctx.fillText(invitation.customer_name || "Invitado Mordisco", 92, 205);
+    ctx.font = "400 30px Arial";
+    ctx.fillStyle = "#cfc7ba";
+    ctx.fillText(`WhatsApp ${invitation.whatsapp}`, 92, 255);
+    ctx.fillText(`Invitacion ${invitation.invitation_code}`, 92, 305);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 40px Arial";
+    ctx.fillText("Primer Aniversario Mordisco", 92, 405);
+    ctx.font = "700 30px Arial";
+    ctx.fillStyle = "#d7b56d";
+    ctx.fillText(`Fecha: ${eventInfo.date}`, 92, 465);
+    ctx.fillText(`Hora: ${eventInfo.time}`, 92, 515);
+    ctx.fillText(`Ubicacion: ${eventInfo.location}`, 92, 565);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 34px Arial";
+    ctx.fillText(`${invitation.lot_name || "Acceso"} · ${currency.format(invitation.price)}`, 92, 645);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(878, 170, 220, 220);
+    ctx.fillStyle = "#111111";
+    qr.forEach((filled, index) => {
+      if (!filled) return;
+      const row = Math.floor(index / 11);
+      const col = index % 11;
+      ctx.fillRect(896 + col * 17, 188 + row * 17, 13, 13);
+    });
+    ctx.fillStyle = "#d7b56d";
+    ctx.font = "700 24px Arial";
+    ctx.fillText("Nos vemos en el aniversario.", 820, 455);
+
+    const link = document.createElement("a");
+    link.download = `cumple-mordisco-${invitation.invitation_code}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
 
   const shareBenefit = async () => {
     const text = invitation
@@ -196,12 +262,17 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 Primer Aniversario Mordisco
               </h1>
               <p className="mt-6 max-w-2xl text-xl font-medium leading-relaxed text-white/82 md:text-2xl">
-                Hace un ano empezo una hamburgueseria. Hoy celebramos una comunidad.
+                Hace un año empezo una hamburgueseria. Hoy celebramos una comunidad.
               </p>
               <p className="mt-6 max-w-xl text-base leading-7 text-white/68">
                 Una noche especial. Hamburguesas edicion limitada. Invitados especiales.
                 Y el comienzo de una nueva etapa para Mordisco.
               </p>
+              <div className="mt-6 grid max-w-2xl gap-2 sm:grid-cols-3">
+                <EventPill label="Fecha" value={eventInfo.date} />
+                <EventPill label="Hora" value={eventInfo.time} />
+                <EventPill label="Ubicacion" value={eventInfo.location} />
+              </div>
               <a href="#beneficios" className="mt-8 inline-flex rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:scale-[1.02]">
                 Conseguir invitacion
               </a>
@@ -227,10 +298,10 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       <section id="beneficios" className="mx-auto grid max-w-6xl gap-8 px-5 py-16 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Verificacion</p>
-          <h2 className="mt-4 text-4xl font-black tracking-tight">Primero descubrimos tu badge</h2>
+          <h2 className="mt-4 text-4xl font-black tracking-tight">Qué tan Mordiscolover sos? Descubrilo!</h2>
           <p className="mt-5 text-white/62">
             Ingresa tu WhatsApp y verificaremos automaticamente si formas parte de la comunidad Mordisco.
-            Despues elegis tu lote con el beneficio aplicado.
+            Despues elegís podes adquirir tu entrada con tu descuento aplicado.
           </p>
         </div>
 
@@ -313,7 +384,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                     <p className="text-2xl font-black">{selectedLot ? currency.format(selectedLot.finalPrice) : "-"}</p>
                   </div>
                   <button onClick={purchase} disabled={loading || !selectedLot} className="rounded-full bg-white px-5 py-3 text-sm font-black text-black">
-                    Comprar invitacion
+                    Adquirir invitación
                   </button>
                 </div>
               </div>
@@ -328,7 +399,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
             <p className="text-center text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Invitacion emitida</p>
             <h2 className="mt-4 text-center text-4xl font-black">Nos vemos en el aniversario.</h2>
             <p className="mx-auto mt-4 max-w-md text-center text-white/62">
-              Y gracias por formar parte de este primer ano.
+              Y gracias por formar parte de este primer año.
             </p>
 
             <div className="mt-8 rounded-[24px] bg-white p-5 text-black">
@@ -338,6 +409,11 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                   <p className="mt-2 text-2xl font-black">{invitation.customer_name}</p>
                   <p className="text-sm text-black/55">WhatsApp {invitation.whatsapp}</p>
                   <p className="mt-4 text-sm font-bold">Invitacion #{invitation.invitation_code}</p>
+                  <div className="mt-5 space-y-1 text-sm font-semibold text-black/70">
+                    <p>Fecha: {eventInfo.date}</p>
+                    <p>Hora: {eventInfo.time}</p>
+                    <p>Ubicacion: {eventInfo.location}</p>
+                  </div>
                 </div>
                 <div className="grid h-28 w-28 grid-cols-11 gap-[2px] rounded-xl bg-white p-2 shadow-inner">
                   {qr.map((filled, index) => (
@@ -368,6 +444,15 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
       <p className="text-xs text-white/45">{label}</p>
       <p className="mt-1 text-sm font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function EventPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/14 bg-black/28 p-4 backdrop-blur">
+      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">{label}</p>
+      <p className="mt-1 text-sm font-black text-white">{value}</p>
     </div>
   );
 }

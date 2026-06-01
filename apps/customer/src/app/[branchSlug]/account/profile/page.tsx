@@ -243,7 +243,7 @@ export default function ProfilePage() {
             />
           </Field>
 
-          <Field label="Cumpleanos" icon={Gift}>
+          <Field label="Cumpleaños" icon={Gift}>
             <input
               type="date"
               value={form.birthDate || ""}

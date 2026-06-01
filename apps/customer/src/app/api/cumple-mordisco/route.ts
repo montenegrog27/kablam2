@@ -14,6 +14,12 @@ type OrderRow = {
   branches?: { name?: string | null } | null;
 };
 
+const EVENT_INFO = {
+  date: "6 de junio",
+  time: "20hs",
+  location: "Terraza Vera - San Juan 635",
+};
+
 const LOTS = [
   { key: "lote_1", name: "Lote 1", basePrice: 20000, capacity: 0, position: 1, isActive: true },
   { key: "lote_2", name: "Lote 2", basePrice: 25000, capacity: 0, position: 2, isActive: true },
@@ -51,7 +57,7 @@ function getTier(orderCount: number, topPercentile: number) {
     return {
       key: "founder",
       label: "Fundadores",
-      badge: "Badge Fundador",
+      badge: "Tu nivel de Mordiscolover es: ",
       discount: 50,
       description: "Maximo beneficio por ser de los clientes mas frecuentes.",
     };
@@ -154,11 +160,11 @@ function buildMessages(name: string, orderCount: number, firstOrderAt: string | 
   const messages = [
     `Hola ${displayName}. Encontramos ${orderCount} pedidos realizados con este numero. Gracias por ser parte de Mordisco.`,
     `Mordedor desde hace ${months || 1} meses. Gracias por acompañarnos desde casi el comienzo.`,
-    `Cliente desde ${year}. Estuviste antes de que Mordisco cumpliera su primer ano.`,
+    `Cliente desde ${year}. Estuviste antes de que Mordisco cumpliera su primer año.`,
     `${orderCount} pedidos realizados. Definitivamente sabemos quien ama las hamburguesas.`,
     `Sos cliente recurrente. Tu proxima hamburguesa probablemente ya te esta esperando.`,
     `Segun nuestros registros... ya mordiste unas cuantas veces.`,
-    "Tus pedidos ayudaron a construir este primer ano. Gracias por ser parte.",
+    "Tus pedidos ayudaron a construir este primer año. Gracias por ser parte.",
     "No sos un invitado cualquiera. Sos parte de la historia de Mordisco.",
   ];
 
@@ -353,7 +359,7 @@ async function sendPaymentWhatsapp({
     ? `Por tu categoria *${benefitLabel}*, tu beneficio aplicado es de *${discount}% OFF*.`
     : `Tu categoria es *${benefitLabel}*.`;
 
-  const message = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer ano con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Tu acceso*\n${lotName}\nMonto a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *mordisco.arg*\n\nTenes *1hs* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
+  const message = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${EVENT_INFO.date}\nHora: ${EVENT_INFO.time}\nUbicacion: ${EVENT_INFO.location}\n\n*Tu acceso*\n${lotName}\nMonto a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *mordisco.arg*\n\nTenes *1hs* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
   const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
     method: "POST",
     headers: {
