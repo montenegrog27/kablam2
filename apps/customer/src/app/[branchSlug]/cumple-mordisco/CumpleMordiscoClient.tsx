@@ -81,6 +81,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const [verification, setVerification] = useState<Verification | null>(null);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const selectedLot = verification?.lots.find((lot) => lot.key === selectedLotKey) || verification?.lots[0];
   const isFounder = verification?.benefit.key === "founder";
@@ -89,6 +90,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const verify = async () => {
     setLoading(true);
     setError("");
+    setNotice("");
     setInvitation(null);
     try {
       const response = await fetch("/api/cumple-mordisco", {
@@ -116,6 +118,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
 
     setLoading(true);
     setError("");
+    setNotice("");
     try {
       const response = await fetch("/api/cumple-mordisco", {
         method: "POST",
@@ -136,6 +139,11 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || "No pudimos generar la invitacion");
       setInvitation(data.invitation);
+      if (data.whatsapp?.skipped) {
+        setNotice("La invitacion se genero, pero no se envio WhatsApp porque falta configurar WHATSAPP_TOKEN.");
+      } else if (data.whatsapp && data.whatsapp.ok === false) {
+        setNotice(`La invitacion se genero, pero WhatsApp no se pudo enviar: ${data.whatsapp.reason || data.whatsapp.status || "error desconocido"}.`);
+      }
       setTimeout(() => inviteRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pudimos generar la invitacion");
@@ -239,6 +247,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           </div>
 
           {error && <p className="mt-4 rounded-2xl bg-red-500/15 px-4 py-3 text-sm text-red-200">{error}</p>}
+          {notice && <p className="mt-4 rounded-2xl bg-amber-500/15 px-4 py-3 text-sm text-amber-100">{notice}</p>}
 
           <button
             onClick={verify}

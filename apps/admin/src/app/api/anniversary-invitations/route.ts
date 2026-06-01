@@ -130,12 +130,17 @@ export async function POST(req: NextRequest) {
 
   if (!invitation) return NextResponse.json({ error: "Invitacion no encontrada" }, { status: 404 });
 
+  const whatsappToken = process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_API_TOKEN;
+  if (!whatsappToken) {
+    return NextResponse.json({ error: "Falta configurar WHATSAPP_TOKEN o WHATSAPP_API_TOKEN" }, { status: 500 });
+  }
+
   const url = "https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send";
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+      Authorization: `Bearer ${whatsappToken}`,
     },
     body: JSON.stringify({
       slug: "mordiscoburgers",

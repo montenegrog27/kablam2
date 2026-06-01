@@ -35,6 +35,17 @@ function normalizePhone(value: unknown) {
     .replace(/^9(\d{10})$/, "$1");
 }
 
+function normalizeArgWhatsapp(value: unknown) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.startsWith("549")) digits = digits.slice(3);
+  else if (digits.startsWith("54")) digits = digits.slice(2);
+  if (digits.startsWith("9")) digits = digits.slice(1);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.startsWith("15")) digits = digits.slice(2);
+  if (digits.length !== 10) return null;
+  return `549${digits}`;
+}
+
 function getTier(orderCount: number, topPercentile: number) {
   if (orderCount > 0 && topPercentile <= 10) {
     return {
@@ -173,22 +184,21 @@ async function getBranch(service: ReturnType<typeof createServiceClient>, branch
   return data;
 }
 
-async function verifyCustomer(branchSlug: string, name: string, phoneInput: string) {
-  const service = createServiceClient();
-  const branch = await getBranch(service, branchSlug);
-  if (!branch) return NextResponse.json({ error: "Sucursal no encontrada" }, { status: 404 });
-
+async function getCustomerAnniversaryStats(
+  service: ReturnType<typeof createServiceClient>,
+  tenantId: string,
+  branchId: string,
+  branchName: string,
+  name: string,
+  phoneInput: string,
+) {
   const phone = normalizePhone(phoneInput);
-  if (phone.length < 8) {
-    return NextResponse.json({ error: "Ingresa un WhatsApp valido" }, { status: 400 });
-  }
-
   const phoneVariants = Array.from(new Set([phone, `54${phone}`, `549${phone}`]));
 
   const { data: customers } = await service
     .from("customers")
     .select("id, name, phone, address, created_at")
-    .eq("tenant_id", branch.tenant_id)
+    .eq("tenant_id", tenantId)
     .in("phone", phoneVariants);
 
   const customer = customers?.[0] || null;
@@ -196,7 +206,7 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
   const { data: orderRows } = await service
     .from("orders")
     .select("id, branch_id, customer_id, customer_phone, customer_name, total, type, status, created_at, branches(name)")
-    .eq("tenant_id", branch.tenant_id)
+    .eq("tenant_id", tenantId)
     .neq("status", "cancelled")
     .or(`customer_phone.in.(${phoneVariants.join(",")})${customer?.id ? `,customer_id.eq.${customer.id}` : ""}`)
     .order("created_at", { ascending: true });
@@ -211,25 +221,25 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
 
   const branchCounts = new Map<string, { id: string; name: string; orders: number }>();
   orders.forEach((order) => {
-    const key = order.branch_id || branch.id;
+    const key = order.branch_id || branchId;
     const current = branchCounts.get(key) || {
       id: key,
-      name: order.branches?.name || branch.name || "Mordisco",
+      name: order.branches?.name || branchName || "Mordisco",
       orders: 0,
     };
     current.orders += 1;
     branchCounts.set(key, current);
   });
   const favoriteBranch = Array.from(branchCounts.values()).sort((a, b) => b.orders - a.orders)[0] || {
-    id: branch.id,
-    name: branch.name || "Mordisco",
+    id: branchId,
+    name: branchName || "Mordisco",
     orders: 0,
   };
 
   const { data: tenantOrders } = await service
     .from("orders")
     .select("customer_id, customer_phone")
-    .eq("tenant_id", branch.tenant_id)
+    .eq("tenant_id", tenantId)
     .neq("status", "cancelled");
 
   const counts = new Map<string, number>();
@@ -241,8 +251,41 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
   const distribution = Array.from(counts.values()).sort((a, b) => b - a);
   const position = Math.max(1, distribution.findIndex((value) => value <= orderCount) + 1 || distribution.length);
   const topPercentile = distribution.length > 0 ? Math.ceil((position / distribution.length) * 100) : 100;
+
+  return {
+    customer,
+    displayName: customer?.name || name,
+    orderCount,
+    totalSpent,
+    firstOrderAt,
+    lastOrderAt,
+    favoriteBranch,
+    frequency,
+    topPercentile,
+  };
+}
+
+async function verifyCustomer(branchSlug: string, name: string, phoneInput: string) {
+  const service = createServiceClient();
+  const branch = await getBranch(service, branchSlug);
+  if (!branch) return NextResponse.json({ error: "Sucursal no encontrada" }, { status: 404 });
+
+  const phone = normalizePhone(phoneInput);
+  if (phone.length < 8) {
+    return NextResponse.json({ error: "Ingresa un WhatsApp valido" }, { status: 400 });
+  }
+
+  const stats = await getCustomerAnniversaryStats(
+    service,
+    branch.tenant_id,
+    branch.id,
+    branch.name || "Mordisco",
+    name,
+    phone,
+  );
+  const { customer, orderCount, totalSpent, firstOrderAt, lastOrderAt, favoriteBranch, frequency, topPercentile } = stats;
   const tier = getTier(orderCount, topPercentile);
-  const messages = buildMessages(customer?.name || name, orderCount, firstOrderAt, topPercentile);
+  const messages = buildMessages(stats.displayName, orderCount, firstOrderAt, topPercentile);
   const message = messages[randomMessageSeed(phone) % messages.length];
   const lots = await lotsForTier(service, branch.tenant_id, branch.id, tier.discount);
 
@@ -250,7 +293,7 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
     ok: true,
     customer: {
       exists: Boolean(customer || orderCount > 0),
-      name: customer?.name || name,
+      name: stats.displayName,
       phone,
       orderCount,
       firstOrderAt,
@@ -275,6 +318,11 @@ async function sendPaymentWhatsapp({
   code,
   lotName,
   price,
+  benefitLabel,
+  discount,
+  orderCount,
+  firstOrderAt,
+  favoriteBranchName,
 }: {
   branchSlug: string;
   branchName: string;
@@ -283,20 +331,39 @@ async function sendPaymentWhatsapp({
   code: string;
   lotName: string;
   price: number;
+  benefitLabel: string;
+  discount: number;
+  orderCount: number;
+  firstOrderAt: string | null;
+  favoriteBranchName: string;
 }) {
-  if (!process.env.WHATSAPP_TOKEN) return { skipped: true, reason: "WHATSAPP_TOKEN missing" };
+  const whatsappToken = process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_API_TOKEN;
+  if (!whatsappToken) return { skipped: true, reason: "WHATSAPP_TOKEN missing" };
 
-  const message = `Hola ${name}! Tu invitacion ${code} para el Primer Aniversario Mordisco quedo pre-reservada.\n\nAcceso: ${lotName}\nTotal a abonar: $${price.toLocaleString("es-AR")}\n\nPara confirmar tu entrada, abona al alias:\n*mordisco.arg*\n\nCuando hagas la transferencia, responde este mensaje con el comprobante.`;
+  const whatsappPhone = normalizeArgWhatsapp(phone);
+  if (!whatsappPhone) return { ok: false, reason: "invalid_whatsapp_phone", phone };
+
+  const sinceText = firstOrderAt
+    ? `cliente desde ${new Date(firstOrderAt).toLocaleDateString("es-AR", { month: "long", year: "numeric" })}`
+    : "parte de esta nueva etapa";
+  const ordersText = orderCount > 0
+    ? `Encontramos ${orderCount} pedidos tuyos en Mordisco.`
+    : "Esta puede ser tu primera noche siendo parte de Mordisco.";
+  const discountText = discount > 0
+    ? `Por tu categoria *${benefitLabel}*, tu beneficio aplicado es de *${discount}% OFF*.`
+    : `Tu categoria es *${benefitLabel}*.`;
+
+  const message = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer ano con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Tu acceso*\n${lotName}\nMonto a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *mordisco.arg*\n\nTenes *1hs* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
   const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+      Authorization: `Bearer ${whatsappToken}`,
     },
     body: JSON.stringify({
       slug: "mordiscoburgers",
       branchId: branchSlug,
-      phone,
+      phone: whatsappPhone,
       message,
     }),
   });
@@ -327,7 +394,20 @@ async function purchaseInvitation(body: {
   if (!branch) return NextResponse.json({ error: "Sucursal no encontrada" }, { status: 404 });
 
   const phone = normalizePhone(body.phone);
+  const whatsappPhone = normalizeArgWhatsapp(body.phone);
+  if (!whatsappPhone) {
+    return NextResponse.json({ error: "Ingresa un WhatsApp valido" }, { status: 400 });
+  }
   const code = invitationCode(phone);
+  const stats = await getCustomerAnniversaryStats(
+    service,
+    branch.tenant_id,
+    branch.id,
+    branch.name || "Mordisco",
+    body.name,
+    phone,
+  );
+  const tier = getTier(stats.orderCount, stats.topPercentile);
   const lots = await loadLots(service, branch.tenant_id, branch.id);
   const selectedLot = lots.find((lot) => lot.key === body.lotKey) || lots[0] || LOTS[0];
   const soldByLot = await countSoldByLot(service, branch.tenant_id, branch.id);
@@ -344,8 +424,8 @@ async function purchaseInvitation(body: {
     invitation_code: code,
     customer_name: body.name,
     dni: body.dni || null,
-    whatsapp: phone,
-    benefit_tier: body.benefitKey || "general",
+    whatsapp: whatsappPhone,
+    benefit_tier: body.benefitKey || tier.key,
     lot_key: body.lotKey || selectedLot.key,
     lot_name: body.lotName || selectedLot.name,
     base_price: basePrice,
@@ -371,10 +451,15 @@ async function purchaseInvitation(body: {
     branchSlug: branch.slug || body.branchSlug,
     branchName: branch.name || "Mordisco",
     name: body.name,
-    phone,
+    phone: whatsappPhone,
     code,
     lotName: payload.lot_name,
     price,
+    benefitLabel: tier.label,
+    discount,
+    orderCount: stats.orderCount,
+    firstOrderAt: stats.firstOrderAt,
+    favoriteBranchName: stats.favoriteBranch.name,
   });
 
   if (data?.id) {
@@ -382,7 +467,7 @@ async function purchaseInvitation(body: {
       .from("anniversary_invitations")
       .update({
         last_whatsapp_sent_at: whatsappResult && "ok" in whatsappResult && whatsappResult.ok ? new Date().toISOString() : null,
-        last_whatsapp_message: `Pago al alias mordisco.arg - ${payload.lot_name} - ${price}`,
+        last_whatsapp_message: `Invitacion ${code} - ${tier.label} - ${payload.lot_name} - ${price} - vence en 1hs`,
       })
       .eq("id", data.id);
   }
