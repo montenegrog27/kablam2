@@ -297,7 +297,7 @@ export default function AnniversaryDashboardPage() {
                 <p className="mb-3 text-sm font-bold text-gray-100">Fundadores</p>
                 <AdminInput label="Desde pedidos" type="number" value={settings.founderMinOrders} onChange={(value) => updateSetting("founderMinOrders", Number(value || 0))} />
                 <div className="mt-3">
-                  <AdminInput label="O Top % clientes" type="number" value={settings.founderTopPercent} onChange={(value) => updateSetting("founderTopPercent", Number(value || 0))} />
+                  <AdminInput label="Y Top % clientes" type="number" value={settings.founderTopPercent} onChange={(value) => updateSetting("founderTopPercent", Number(value || 0))} />
                 </div>
                 <div className="mt-3">
                   <AdminInput label="Descuento %" type="number" value={settings.founderDiscount} onChange={(value) => updateSetting("founderDiscount", Number(value || 0))} />
@@ -305,7 +305,7 @@ export default function AnniversaryDashboardPage() {
               </div>
             </div>
             <p className="mt-3 text-xs text-gray-500">
-              Fundador aplica si cumple los pedidos minimos o si entra en el Top %. Poné 0 para desactivar una condicion.
+              Fundador aplica si cumple los pedidos minimos y tambien entra en el Top %. Pone 0 para desactivar una condicion.
             </p>
           </div>
         </div>

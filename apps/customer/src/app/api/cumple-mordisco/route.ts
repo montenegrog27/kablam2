@@ -84,10 +84,12 @@ function normalizeArgWhatsapp(value: unknown) {
 }
 
 function getTier(orderCount: number, topPercentile: number, settings: AnniversarySettings) {
-  const founderByOrders = orderCount > 0 && Number(settings.founderMinOrders || 0) > 0 && orderCount >= Number(settings.founderMinOrders);
-  const founderByTop = orderCount > 0 && Number(settings.founderTopPercent || 0) > 0 && topPercentile <= Number(settings.founderTopPercent);
+  const founderMinOrders = Number(settings.founderMinOrders || 0);
+  const founderTopPercent = Number(settings.founderTopPercent || 0);
+  const founderByOrders = founderMinOrders <= 0 || orderCount >= founderMinOrders;
+  const founderByTop = founderTopPercent <= 0 || topPercentile <= founderTopPercent;
 
-  if (founderByOrders || founderByTop) {
+  if (orderCount > 0 && founderByOrders && founderByTop) {
     return {
       key: "founder",
       label: "Fundadores",
@@ -233,12 +235,6 @@ function monthsSince(value: string | null) {
   return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
 }
 
-function randomMessageSeed(phone: string) {
-  return normalizePhone(phone)
-    .split("")
-    .reduce((sum, digit) => sum + Number(digit || 0), 0);
-}
-
 function buildMessages(name: string, orderCount: number, firstOrderAt: string | null, topPercentile: number) {
   const displayName = name || "Mordedor";
   const months = monthsSince(firstOrderAt);
@@ -283,7 +279,8 @@ function pickMessage(
   const months = monthsSince(firstOrderAt);
   const year = firstOrderAt ? new Date(firstOrderAt).getFullYear() : new Date().getFullYear();
   const messages = settings.messages[tierKey] || DEFAULT_SETTINGS.messages[tierKey] || DEFAULT_SETTINGS.messages.general;
-  const template = messages[randomMessageSeed(phone) % messages.length] || DEFAULT_SETTINGS.messages.general[0];
+  void phone;
+  const template = messages[Math.floor(Math.random() * messages.length)] || DEFAULT_SETTINGS.messages.general[0];
 
   return template
     .replaceAll("{name}", displayName)

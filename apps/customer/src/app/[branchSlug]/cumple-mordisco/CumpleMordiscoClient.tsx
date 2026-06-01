@@ -107,7 +107,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const savings = selectedLot ? Math.max(selectedLot.basePrice - selectedLot.finalPrice, 0) : 0;
   const levelName = verification ? levelDisplayName(verification.benefit.key, verification.benefit.label) : "";
   const impressiveBadge = verification ? getImpressiveBadge(verification) : null;
-  const story = verification ? buildEmotionalStory(verification) : "";
+  const story = verification ? verification.message || buildEmotionalStory(verification) : "";
   const historyStats = verification ? buildHistoryStats(verification) : [];
 
   useEffect(() => {
@@ -561,6 +561,151 @@ function BenefitExperience({
   savings: number;
 }) {
   return (
+    <div className="anniversary-reveal mt-6 overflow-hidden rounded-[36px] bg-[#070504] text-white shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
+      <div className="relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,59,48,0.26),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.045),transparent_30%)]" />
+        <div className="pointer-events-none absolute left-1/2 top-10 h-48 w-48 -translate-x-1/2 rounded-full border border-white/10" />
+
+        <section className="relative px-5 pb-12 pt-10 text-center sm:px-8 sm:pb-16 sm:pt-14">
+          <p className="fade-up text-[10px] font-black uppercase tracking-[0.34em] text-white/38">Primer Aniversario Mordisco</p>
+          <p className="fade-up mt-10 text-sm font-semibold text-white/54">Tu membresía fue revelada</p>
+          <h3 className="fade-up level-glow mx-auto mt-3 max-w-[11ch] break-words text-[4rem] font-black uppercase leading-[0.78] tracking-normal text-white sm:text-[6.4rem]">
+            {levelName}
+          </h3>
+          {impressiveBadge && (
+            <div className="fade-up mx-auto mt-8 inline-flex max-w-full items-center gap-3 rounded-full bg-white px-5 py-3 text-black shadow-[0_22px_70px_rgba(255,255,255,0.16)] transition duration-300 hover:scale-[1.02]">
+              <span className="text-xl">{impressiveBadge.icon}</span>
+              <span className="text-xs font-black uppercase tracking-[0.12em]">{impressiveBadge.label}</span>
+            </div>
+          )}
+        </section>
+
+        <div className="relative space-y-5 px-4 pb-5 sm:px-6 sm:pb-6">
+          <section className="fade-up rounded-[30px] bg-white/[0.07] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl sm:p-7">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d7b56d]">Tu historia</p>
+            <p className="mt-5 whitespace-pre-line text-xl font-semibold leading-9 text-white/90">{story}</p>
+          </section>
+
+          <section className="fade-up rounded-[30px] bg-[#11100e] p-5 sm:p-6">
+            <div className="mb-5 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-white/36">Comunidad</p>
+                <h4 className="mt-2 text-2xl font-black text-white">Tus señales Mordisco</h4>
+              </div>
+              <p className="hidden max-w-36 text-right text-xs font-semibold leading-5 text-white/40 sm:block">
+                Datos que explican tu lugar en este aniversario.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {historyStats.map((stat) => (
+                <StoryStat key={stat.label} {...stat} />
+              ))}
+            </div>
+          </section>
+
+          <section className="fade-up overflow-hidden rounded-[34px] bg-white text-black shadow-[0_28px_80px_rgba(255,255,255,0.13)]">
+            <div className="bg-[radial-gradient(circle_at_top_left,rgba(255,59,48,0.18),transparent_36%),linear-gradient(180deg,#ffffff,#f4eee4)] p-6 text-center sm:p-8">
+              <p className="text-[11px] font-black uppercase tracking-[0.28em] text-black/42">Beneficio desbloqueado</p>
+              <p className="mt-4 text-[4.8rem] font-black leading-none tracking-normal text-black sm:text-[6.2rem]">
+                {hasDiscount ? `${verification.benefit.discount}%` : "VIP"}
+              </p>
+              <p className="text-3xl font-black leading-none text-[#ff3b30]">{hasDiscount ? "OFF" : "ACCESS"}</p>
+              <p className="mx-auto mt-5 max-w-sm text-sm font-bold leading-6 text-black/58">
+                {hasDiscount
+                  ? `Precio privado por pertenecer a ${verification.benefit.label}. Tu historia con Mordisco ya tiene beneficio aplicado.`
+                  : "Acceso reservado para vivir el primer aniversario desde adentro."}
+              </p>
+            </div>
+
+            {selectedLot && (
+              <div className="grid gap-4 border-t border-black/8 bg-black px-5 py-5 text-center text-white sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
+                <PriceMoment label="Precio lote" value={currency.format(selectedLot.basePrice)} muted strike={hasDiscount} />
+                <span className="hidden text-2xl font-black text-white/24 sm:block">→</span>
+                <PriceMoment label="Tu precio" value={currency.format(selectedLot.finalPrice)} highlight />
+                <span className="hidden text-2xl font-black text-white/24 sm:block">→</span>
+                <PriceMoment label={hasDiscount ? `Por ser ${levelName}` : "Entrada"} value={hasDiscount ? `Ahorrás ${currency.format(savings)}` : "Lugar reservado"} />
+              </div>
+            )}
+          </section>
+
+          <section className="fade-up rounded-[30px] bg-white/[0.065] p-5 backdrop-blur-xl sm:p-6">
+            <div className="mb-5">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-white/36">Reservá tu lugar</p>
+              <div className="mt-2 flex items-end justify-between gap-4">
+                <h4 className="text-2xl font-black text-white">Elegí el lote activo</h4>
+                {selectedLot && <p className="text-right text-2xl font-black text-[#d7b56d]">{currency.format(selectedLot.finalPrice)}</p>}
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {verification.lots.map((lot, index) => (
+                <LotStepCard
+                  key={lot.key}
+                  lot={lot}
+                  index={index}
+                  selected={selectedLotKey === lot.key}
+                  onSelect={() => setSelectedLotKey(lot.key)}
+                />
+              ))}
+            </div>
+
+            <button onClick={purchase} disabled={loading || !selectedLot || !selectedLot.isOpen} className="mt-5 w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black shadow-[0_18px_50px_rgba(255,255,255,0.14)] transition duration-300 hover:scale-[1.01] hover:bg-[#f6ead2] disabled:opacity-50">
+              {loading ? "Generando invitación..." : "Reservar mi lugar"}
+            </button>
+          </section>
+        </div>
+      </div>
+      <style>{`
+        .anniversary-reveal {
+          animation: reveal-card 620ms cubic-bezier(.2,.8,.2,1) both;
+        }
+        .fade-up {
+          animation: fade-up 720ms cubic-bezier(.2,.8,.2,1) both;
+        }
+        .level-glow {
+          text-shadow: 0 0 34px rgba(255, 59, 48, 0.42), 0 10px 55px rgba(215, 181, 109, 0.2);
+        }
+        @keyframes reveal-card {
+          from { opacity: 0; transform: translateY(22px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes fade-up {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function BenefitExperienceLegacy({
+  verification,
+  selectedLot,
+  selectedLotKey,
+  setSelectedLotKey,
+  purchase,
+  loading,
+  levelName,
+  impressiveBadge,
+  story,
+  historyStats,
+  hasDiscount,
+  savings,
+}: {
+  verification: Verification;
+  selectedLot?: Lot;
+  selectedLotKey: string;
+  setSelectedLotKey: (key: string) => void;
+  purchase: () => void;
+  loading: boolean;
+  levelName: string;
+  impressiveBadge: { icon: string; label: string } | null;
+  story: string;
+  historyStats: Array<{ icon: string; value: string; numeric?: number; suffix?: string; label: string }>;
+  hasDiscount: boolean;
+  savings: number;
+}) {
+  return (
     <div className="anniversary-reveal mt-6 overflow-hidden rounded-[34px] border border-[#ff3b30]/35 bg-[#0c0807] shadow-2xl">
       <div className="relative overflow-hidden p-5 sm:p-7">
         <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#ff3b30]/30 blur-3xl" />
@@ -667,6 +812,8 @@ function BenefitExperience({
   );
 }
 
+void BenefitExperienceLegacy;
+
 function PriceMoment({ label, value, highlight = false, muted = false, strike = false }: { label: string; value: string; highlight?: boolean; muted?: boolean; strike?: boolean }) {
   return (
     <div>
@@ -696,39 +843,40 @@ function LotStepCard({ lot, index, selected, onSelect }: { lot: Lot; index: numb
     <button
       onClick={onSelect}
       disabled={disabled}
-      className={`relative overflow-hidden rounded-2xl border p-4 text-left transition hover:scale-[1.01] active:scale-[0.99] ${
-        selected && open ? "border-[#ff3b30] bg-[#ff3b30]/14" : "border-white/10 bg-black/25"
-      } ${disabled ? "cursor-not-allowed opacity-62" : ""}`}
+      className={`group relative overflow-hidden rounded-[24px] p-4 text-left transition duration-300 active:scale-[0.99] ${
+        selected && open
+          ? "bg-white text-black shadow-[0_18px_50px_rgba(255,255,255,0.14)]"
+          : "bg-black/30 text-white hover:bg-white/[0.08]"
+      } ${disabled ? "cursor-not-allowed opacity-58" : "hover:-translate-y-0.5"}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/55">
+            <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${selected && open ? "bg-black/8 text-black/55" : "bg-white/10 text-white/55"}`}>
               Lote {index + 1}
             </span>
             {soldOut && <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-black">🔒 Agotado</span>}
             {locked && <span className="rounded-full border border-white/12 bg-white/8 px-2 py-1 text-[10px] font-black uppercase text-white/50">🔒 Próximo</span>}
             {open && !soldOut && <span className="rounded-full bg-[#ff3b30] px-2 py-1 text-[10px] font-black uppercase text-white">Abierto</span>}
           </div>
-          <p className="mt-3 text-base font-black text-white">{lot.name}</p>
-          <p className="mt-1 text-xs font-semibold text-white/45">{status}</p>
+          <p className={`mt-3 text-base font-black ${selected && open ? "text-black" : "text-white"}`}>{lot.name}</p>
+          <p className={`mt-1 text-xs font-semibold ${selected && open ? "text-black/48" : "text-white/45"}`}>{status}</p>
         </div>
         <div className="text-right">
           {lot.discount > 0 && <p className="text-xs font-black text-[#ff8b80]">-{lot.discount}%</p>}
-          <p className="text-xl font-black text-white">{currency.format(lot.finalPrice)}</p>
-          <p className="text-[11px] font-semibold text-white/42">Base {currency.format(lot.basePrice)}</p>
+          <p className={`text-xl font-black ${selected && open ? "text-black" : "text-white"}`}>{currency.format(lot.finalPrice)}</p>
+          <p className={`text-[11px] font-semibold ${selected && open ? "text-black/42" : "text-white/42"}`}>Base {currency.format(lot.basePrice)}</p>
         </div>
       </div>
 
       <div className="mt-4">
-
-        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+        <div className={`h-2 overflow-hidden rounded-full ${selected && open ? "bg-black/10" : "bg-white/10"}`}>
           <div
             className={`h-full rounded-full transition-all duration-700 ${soldOut ? "bg-white/40" : "bg-gradient-to-r from-[#ff3b30] to-[#d7b56d]"}`}
             style={{ width: lot.capacity > 0 ? `${progress}%` : open ? "100%" : "0%" }}
           />
         </div>
-        <p className="mt-2 text-[11px] font-semibold text-white/42">
+        <p className={`mt-2 text-[11px] font-semibold ${selected && open ? "text-black/45" : "text-white/42"}`}>
           {lot.available === null ? "Cupo ilimitado" : soldOut ? "Este lote ya se completo" : `${lot.available} lugares disponibles`}
         </p>
       </div>
@@ -738,7 +886,7 @@ function LotStepCard({ lot, index, selected, onSelect }: { lot: Lot; index: numb
 
 function StoryStat({ icon, value, numeric, suffix = "", label }: { icon: string; value: string; numeric?: number; suffix?: string; label: string }) {
   return (
-    <div className="rounded-[22px] border border-white/10 bg-white/[0.06] p-4 text-center backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.09]">
+    <div className="rounded-[24px] bg-white/[0.055] p-4 text-center backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.09]">
       <p className="text-2xl">{icon}</p>
       <p className="mt-2 text-2xl font-black text-white">
         {typeof numeric === "number" ? <CountUp value={numeric} suffix={suffix} /> : value}
@@ -785,7 +933,7 @@ function monthsWithMordisco(firstOrderAt: string | null) {
 
 function getImpressiveBadge(verification: Verification) {
   const months = monthsWithMordisco(verification.customer.firstOrderAt);
-  if (verification.customer.topPercentile <= 10) return { icon: "🔥", label: `Top ${verification.customer.topPercentile}% de clientes` };
+  if (verification.benefit.key === "founder" && verification.customer.topPercentile <= 10) return { icon: "🔥", label: `Top ${verification.customer.topPercentile}% de clientes` };
   if (verification.customer.orderCount >= 3) return { icon: "🍔", label: `${verification.customer.orderCount} pedidos realizados` };
   if (months >= 1) return { icon: "🏆", label: `${months} meses mordiendo` };
   const year = verification.customer.firstOrderAt ? new Date(verification.customer.firstOrderAt).getFullYear() : new Date().getFullYear();
@@ -801,7 +949,7 @@ function buildEmotionalStory(verification: Verification) {
   const orderLine = verification.customer.orderCount > 0
     ? `Desde entonces realizaste ${verification.customer.orderCount} pedidos.`
     : "Esta puede ser tu primera noche siendo parte de Mordisco.";
-  const topLine = verification.customer.topPercentile <= 25
+  const topLine = verification.benefit.key === "founder" && verification.customer.topPercentile <= 25
     ? `Eso te pone dentro del Top ${verification.customer.topPercentile}% de clientes de Mordisco.`
     : `Eso te convierte en parte de nuestra comunidad.`;
 
@@ -814,6 +962,7 @@ function buildHistoryStats(verification: Verification) {
   return [
     { icon: "🍔", value: String(verification.customer.orderCount), numeric: verification.customer.orderCount, label: "Pedidos" },
     { icon: "❤️", value: String(months), numeric: months, label: "Meses con nosotros" },
+    { icon: "📍", value: branch, label: "Sucursal favorita" },
     { icon: "💰", value: currency.format(verification.customer.totalSpent), label: "Gastados" },
     { icon: "🏆", value: `Top ${verification.customer.topPercentile}%`, label: "Clientes" },
     { icon: "⚡", value: verification.customer.frequency.toFixed(1), numeric: verification.customer.frequency, label: "Pedidos por mes" },
