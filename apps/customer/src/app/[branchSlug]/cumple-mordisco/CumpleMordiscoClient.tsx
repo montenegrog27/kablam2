@@ -721,10 +721,7 @@ function LotStepCard({ lot, index, selected, onSelect }: { lot: Lot; index: numb
       </div>
 
       <div className="mt-4">
-        <div className="mb-2 flex items-center justify-between text-[11px] font-bold text-white/45">
-          <span>{lot.capacity > 0 ? `${lot.sold} / ${lot.capacity} vendidos` : `${lot.sold} vendidos`}</span>
-          <span>{lot.capacity > 0 ? `${progress}%` : "Sin cupo limite"}</span>
-        </div>
+
         <div className="h-2 overflow-hidden rounded-full bg-white/10">
           <div
             className={`h-full rounded-full transition-all duration-700 ${soldOut ? "bg-white/40" : "bg-gradient-to-r from-[#ff3b30] to-[#d7b56d]"}`}
