@@ -91,10 +91,10 @@ export default function KDSTab() {
     const variantIds = new Set<string>();
     (data || []).forEach((o: any) =>
       (o.order_items || []).forEach((i: any) => {
-        const comboId = nextComboMap[i.product_id]
+        const comboId = i.combo_id && nextComboMap[i.combo_id]
+          ? i.combo_id
+          : nextComboMap[i.product_id]
           ? i.product_id
-          : i.combo_id && nextComboMap[i.combo_id]
-            ? i.combo_id
             : typeof i.product_id === "string" && i.product_id.endsWith("-variant")
               ? i.product_id.replace(/-variant$/, "")
               : typeof i.variant_id === "string" && i.variant_id.endsWith("-variant")

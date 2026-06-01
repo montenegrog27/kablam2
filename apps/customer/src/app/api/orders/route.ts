@@ -38,7 +38,7 @@ type ComboRow = {
 
 type OrderItemInsert = {
   item_type: "product" | "combo";
-  product_id: string;
+  product_id: string | null;
   combo_id: string | null;
   variant_id: string | null;
   quantity: number;
@@ -270,7 +270,7 @@ export async function POST(req: Request) {
       const comboItemTotal = (Number(combo.price) + comboExtrasTotal) * item.quantity;
       itemsToInsert.push({
         item_type: "combo",
-        product_id: combo.id,
+        product_id: null,
         combo_id: combo.id,
         variant_id: null,
         quantity: item.quantity,

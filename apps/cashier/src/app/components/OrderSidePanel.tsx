@@ -679,7 +679,7 @@ export default function OrderSidePanel({
       return {
         order_id: orderId,
         item_type: isCombo ? "combo" : "product",
-        product_id: itemId,
+        product_id: isCombo ? null : itemId,
         combo_id: isCombo ? itemId : null,
         variant_id: isCombo ? null : item.variant.variant_id || null,
         quantity: item.quantity,

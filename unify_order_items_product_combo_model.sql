@@ -4,6 +4,12 @@ add column if not exists item_type text not null default 'product';
 alter table public.order_items
 add column if not exists combo_id uuid references public.combos(id);
 
+alter table public.order_items
+alter column variant_id drop not null;
+
+alter table public.order_items
+alter column product_id drop not null;
+
 do $$
 begin
   if not exists (
@@ -41,6 +47,13 @@ where oi.combo_id is null
 update public.order_items
 set item_type = 'combo'
 where combo_id is not null;
+
+update public.order_items
+set
+  product_id = null,
+  variant_id = null
+where item_type = 'combo'
+  and combo_id is not null;
 
 update public.order_items
 set item_type = 'product'
