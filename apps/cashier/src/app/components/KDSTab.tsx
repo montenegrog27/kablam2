@@ -20,6 +20,16 @@ type KdsCounter = {
   sortOrder: number;
 };
 
+type ExpandedKdsItem = {
+  id: string;
+  quantity: number;
+  variant_id: string | null;
+  products: any;
+  extras?: any[];
+  note?: string;
+  parent_combo_name?: string;
+};
+
 export default function KDSTab() {
   const { branchId, tenantId } = useCurrentBranch();
   const [allOrders, setAllOrders] = useState<any[]>([]);
@@ -32,6 +42,7 @@ export default function KDSTab() {
   );
   const [ingredientOrder, setIngredientOrder] = useState<string[]>([]);
   const [recipeMap, setRecipeMap] = useState<Record<string, any[]>>({});
+  const [comboMap, setComboMap] = useState<Record<string, any>>({});
   const [now, setNow] = useState(Date.now());
   const [showConfirmed, setShowConfirmed] = useState(false);
   const preparingRef = useRef<HTMLDivElement>(null);
@@ -56,17 +67,49 @@ export default function KDSTab() {
 
   const loadOrders = async () => {
     if (!branchId) return;
-    const { data } = await supabase
-      .from("orders")
-      .select("*, order_items(*, products(*))")
-      .eq("branch_id", branchId)
-      .in("status", ["confirmed", "preparing", "ready"])
-      .order("created_at", { ascending: true });
+    const [{ data }, { data: combos }] = await Promise.all([
+      supabase
+        .from("orders")
+        .select("*, order_items(*, products(*))")
+        .eq("branch_id", branchId)
+        .in("status", ["confirmed", "preparing", "ready"])
+        .order("created_at", { ascending: true }),
+      tenantId
+        ? supabase
+            .from("combos")
+            .select("id, name, combo_products(id, product_id, quantity, products(id, name, is_preparable, product_variants(id, is_default)))")
+            .eq("tenant_id", tenantId)
+        : Promise.resolve({ data: [] } as any),
+    ]);
+
+    const nextComboMap: Record<string, any> = {};
+    (combos || []).forEach((combo: any) => {
+      nextComboMap[combo.id] = combo;
+    });
+    setComboMap(nextComboMap);
     setAllOrders(data || []);
     const variantIds = new Set<string>();
     (data || []).forEach((o: any) =>
       (o.order_items || []).forEach((i: any) => {
-        if (i.variant_id) variantIds.add(i.variant_id);
+        const comboId = nextComboMap[i.product_id]
+          ? i.product_id
+          : i.combo_id && nextComboMap[i.combo_id]
+            ? i.combo_id
+            : typeof i.product_id === "string" && i.product_id.endsWith("-variant")
+              ? i.product_id.replace(/-variant$/, "")
+              : typeof i.variant_id === "string" && i.variant_id.endsWith("-variant")
+                ? i.variant_id.replace(/-variant$/, "")
+                : null;
+        const combo = comboId ? nextComboMap[comboId] : null;
+
+        if (combo) {
+          (combo.combo_products || []).forEach((comboProduct: any) => {
+            const variantId = getDefaultVariantId(comboProduct.products);
+            if (variantId) variantIds.add(variantId);
+          });
+        } else if (i.variant_id) {
+          variantIds.add(i.variant_id);
+        }
       }),
     );
     if (variantIds.size > 0) {
@@ -129,12 +172,71 @@ export default function KDSTab() {
     };
   }, [branchId, tenantId]);
 
+  const getDefaultVariantId = (product: any) => {
+    const variants = product?.product_variants || [];
+    return (
+      variants.find((variant: any) => variant.is_default)?.id ||
+      variants[0]?.id ||
+      null
+    );
+  };
+
+  const getComboIdFromOrderItem = (item: any) => {
+    if (item.combo_id && comboMap[item.combo_id]) return item.combo_id;
+    if (comboMap[item.product_id]) return item.product_id;
+    if (typeof item.product_id === "string" && item.product_id.endsWith("-variant")) {
+      return item.product_id.replace(/-variant$/, "");
+    }
+    if (typeof item.variant_id === "string" && item.variant_id.endsWith("-variant")) {
+      return item.variant_id.replace(/-variant$/, "");
+    }
+    return null;
+  };
+
+  const getComboExtrasForProduct = (extras: any[] = [], productName: string) =>
+    extras
+      .filter((extra) => typeof extra?.name === "string" && extra.name.startsWith(`${productName}:`))
+      .map((extra) => ({
+        ...extra,
+        name: extra.name.replace(`${productName}:`, "").trim(),
+      }));
+
+  const expandOrderItemsForKds = (order: any): ExpandedKdsItem[] => {
+    const expanded: ExpandedKdsItem[] = [];
+
+    (order.order_items || []).forEach((item: any) => {
+      const comboId = getComboIdFromOrderItem(item);
+      const combo = comboId ? comboMap[comboId] : null;
+
+      if (!combo) {
+        expanded.push(item);
+        return;
+      }
+
+      (combo.combo_products || []).forEach((comboProduct: any, index: number) => {
+        const product = comboProduct.products;
+        const productName = product?.name || "Producto";
+        expanded.push({
+          id: `${item.id || combo.id}-${comboProduct.id || comboProduct.product_id}-${index}`,
+          quantity: (item.quantity || 1) * (comboProduct.quantity || 1),
+          variant_id: getDefaultVariantId(product),
+          products: product,
+          extras: getComboExtrasForProduct(item.extras || [], productName),
+          note: item.note,
+          parent_combo_name: combo.name,
+        });
+      });
+    });
+
+    return expanded;
+  };
+
   const getRecipe = (item: any) => recipeMap[item.variant_id] || [];
 
   // Total ingredients across all preparing orders
   const totalIngredientCounts: Record<string, KdsCounter> = {};
   preparing.forEach((order) => {
-    (order.order_items || []).forEach((item: any) => {
+    expandOrderItemsForKds(order).forEach((item) => {
       getRecipe(item).forEach((r: any) => {
         const kdsItem = kdsIngredients[r.ingredient_id];
         if (kdsItem) {
@@ -192,7 +294,7 @@ export default function KDSTab() {
   };
 
   const getPreparableItems = (order: any) =>
-    (order.order_items || []).filter((i: any) => i.products?.is_preparable !== false);
+    expandOrderItemsForKds(order).filter((i: any) => i.products?.is_preparable !== false);
 
   const allItemsCooked = (order: any) => {
     const preparable = getPreparableItems(order);
@@ -202,7 +304,7 @@ export default function KDSTab() {
 
   const calcIngredients = (order: any) => {
     const counts: Record<string, KdsCounter> = {};
-    (order.order_items || []).forEach((item: any) => {
+    expandOrderItemsForKds(order).forEach((item) => {
       getRecipe(item).forEach((r: any) => {
         const kdsItem = kdsIngredients[r.ingredient_id];
         if (kdsItem) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Bike, X, Send, Paperclip } from "lucide-react";
+import { Bike, X, Send, Paperclip, Reply } from "lucide-react";
 
 type Rider = {
   id: string;
@@ -35,6 +35,7 @@ export default function RiderChat({
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [replyTo, setReplyTo] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -174,6 +175,7 @@ export default function RiderChat({
       .limit(50);
 
     setMessages(data || []);
+    setReplyTo(null);
   };
 
   const markAsRead = async (riderId: string) => {
@@ -191,40 +193,57 @@ export default function RiderChat({
       message: text,
       sender_type: "cashier",
       created_at: new Date().toISOString(),
+      reply_to_message_id: replyTo?.id || null,
+      reply_to_whatsapp_message_id: replyTo?.whatsapp_message_id || null,
     };
 
     setMessages((prev) => [...prev, tempMsg]);
+    const outgoingText = text;
+    const outgoingReply = replyTo;
     setText("");
+    setReplyTo(null);
 
     // Enviar por WhatsApp al rider
     const rider = riders.find((r) => r.id === activeChat.riderId);
     if (rider) {
-      await fetch("/api/whatsapp/send-direct", {
+      const res = await fetch("/api/whatsapp/send-direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          branchId,
+          tenantId,
+          riderId: activeChat.riderId,
+          conversationId: conv.id,
           phone: rider.phone,
-          message: text,
+          message: outgoingText,
+          contextMessageId: outgoingReply?.whatsapp_message_id || undefined,
         }),
       });
+      const data = await res.json();
+      if (data?.message) {
+        setMessages((prev) => prev.map((m) => m.id === tempMsg.id ? data.message : m));
+      }
     }
-
-    // Guardar mensaje
-    await supabase.from("messages").insert({
-      tenant_id: tenantId,
-      branch_id: branchId,
-      conversation_id: conv.id,
-      sender_type: "cashier",
-      rider_id: activeChat.riderId,
-      message: text,
-      media_type: "text",
-    });
 
     // Actualizar last_message_at
     await supabase
       .from("rider_conversations")
       .update({ last_message_at: new Date() })
       .eq("id", conv.id);
+  };
+
+  const getReplyPreview = (msg: any) => {
+    const target = messages.find((message) =>
+      message.id === msg.reply_to_message_id ||
+      (msg.reply_to_whatsapp_message_id && message.whatsapp_message_id === msg.reply_to_whatsapp_message_id),
+    );
+
+    if (!target) return null;
+
+    return {
+      author: target.sender_type === "cashier" ? "Vos" : activeChat?.riderName || "Rider",
+      text: target.message || "Mensaje",
+    };
   };
 
   const handleSelectRider = (rider: Rider) => {
@@ -302,7 +321,29 @@ export default function RiderChat({
                       : "bg-gray-100"
                   }`}
                 >
+                  {getReplyPreview(msg) && (
+                    <div
+                      className={`mb-1 rounded border-l-2 px-2 py-1 text-[10px] ${
+                        msg.sender_type === "cashier"
+                          ? "border-white/60 bg-white/15 text-white/80"
+                          : "border-blue-400 bg-white text-gray-500"
+                      }`}
+                    >
+                      <div className="font-semibold">{getReplyPreview(msg)?.author}</div>
+                      <div className="truncate">{getReplyPreview(msg)?.text}</div>
+                    </div>
+                  )}
                   {msg.message}
+                  {msg.whatsapp_message_id && (
+                    <button
+                      onClick={() => setReplyTo(msg)}
+                      className={`mt-1 flex items-center gap-1 text-[10px] ${
+                        msg.sender_type === "cashier" ? "text-white/70 hover:text-white" : "text-blue-600 hover:text-blue-700"
+                      }`}
+                    >
+                      <Reply size={11} /> Responder
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -337,6 +378,19 @@ export default function RiderChat({
               <Send size={16} />
             </button>
           </div>
+          {replyTo && (
+            <div className="px-3 py-2 border-t bg-blue-50 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-blue-700">
+                  Respondiendo a {replyTo.sender_type === "cashier" ? "vos" : activeChat.riderName}
+                </p>
+                <p className="text-xs text-blue-900 truncate">{replyTo.message || "Mensaje"}</p>
+              </div>
+              <button onClick={() => setReplyTo(null)} className="text-blue-700 hover:text-blue-900">
+                <X size={14} />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

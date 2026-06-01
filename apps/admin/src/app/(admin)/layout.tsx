@@ -8,17 +8,17 @@ import {
   LayoutDashboard, Store, Users, Tags, Package, Variable,
   ChefHat, Box, ShoppingBag, ShoppingCart, TicketPercent,
   Bike, Clock, CookingPot, Printer, Truck, CreditCard, Kanban,
-  UserCog, Award, Zap, Settings, LogOut, ChevronDown, Menu,
-  DollarSign, TrendingUp, Receipt, FileText, Truck as TruckIcon, BarChart3, Star, Shield,
+  UserCog, Award, Zap, Settings, LogOut, Menu,
+  DollarSign, Receipt, FileText, Truck as TruckIcon, BarChart3, Star, Shield,
   Calculator, Link as LinkIcon,
   CalendarCheck,
+  Upload,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
-  const [tenant, setTenant] = useState<any>(null);
+  const [tenant, setTenant] = useState<{ name?: string } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
   const router = useRouter();
   const pathname = usePathname();
 
@@ -37,8 +37,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     loadUser();
   }, []);
-
-  const toggle = (key: string) => setOpenMenus((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const navItems = [
     { section: "Gestión", items: [
@@ -76,6 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/arqueos", label: "Arqueos de Caja", icon: Calculator },
       { href: "/reporte-diario", label: "Reporte Diario", icon: FileText },
       { href: "/reports", label: "Reportes", icon: Receipt },
+      { href: "/migration", label: "Importar ventas", icon: Upload },
       { href: "/expenses", label: "Gastos", icon: Receipt },
       { href: "/expense-categories", label: "Cat. Gastos", icon: Tags },
       { href: "/suppliers", label: "Proveedores", icon: TruckIcon },

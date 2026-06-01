@@ -1,6 +1,6 @@
 "use client";
 
-import { ShoppingCart, User } from "lucide-react";
+import { Cake, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Branding } from "@/types/menu";
@@ -50,6 +50,20 @@ export default function NavbarDelivery({
 
       {/* Botones derecha */}
       <div className="flex items-center gap-2">
+        {branchSlug && !isAuthPage && (
+          <Link
+            href={`/${branchSlug}/cumple-mordisco`}
+            className="hidden items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold sm:flex"
+            style={{
+              borderColor: branding?.primary_color || "#000",
+              color: branding?.primary_color || "#000",
+            }}
+          >
+            <Cake size={17} />
+            Cumple Mordisco
+          </Link>
+        )}
+
         {/* Botón de login/perfil */}
         {/* {branchSlug && !isAuthPage && (
           <>

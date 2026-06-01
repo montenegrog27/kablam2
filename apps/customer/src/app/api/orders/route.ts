@@ -36,6 +36,17 @@ type ComboRow = {
   }>;
 };
 
+type OrderItemInsert = {
+  item_type: "product" | "combo";
+  product_id: string;
+  combo_id: string | null;
+  variant_id: string | null;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  extras: Array<{ type: string; name: string; price?: number }>;
+};
+
 const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
 const debugLog = (...args: unknown[]) => {
   if (DEBUG_LOGS) console.log(...args);
@@ -191,7 +202,7 @@ export async function POST(req: Request) {
 
     let subtotal = 0;
 
-    const itemsToInsert = productItems.map((item) => {
+    const itemsToInsert: OrderItemInsert[] = productItems.map((item) => {
       const variant =
         variantRows.find((v) => v.id === item.variantId) ||
         variantRows.find((v) => v.product_id === item.productId && v.is_default) ||
@@ -218,7 +229,9 @@ export async function POST(req: Request) {
       subtotal += itemTotal;
 
       return {
+        item_type: "product",
         product_id: variant.product_id || item.productId,
+        combo_id: null,
         variant_id: variant.id,
         quantity: item.quantity,
         unit_price: variant.price,
@@ -251,38 +264,19 @@ export async function POST(req: Request) {
         throw new Error(`Combo has no products: ${combo.name}`);
       }
 
-      const expandedUnits = comboProducts.reduce(
-        (sum, comboProduct) => sum + (comboProduct.quantity || 1),
-        0,
-      );
-      const unitShare =
-        expandedUnits > 0 ? Number(combo.price) / expandedUnits : 0;
-
       subtotal += (Number(combo.price) + comboExtrasTotal) * item.quantity;
 
-      comboProducts.forEach((comboProduct, index) => {
-        const defaultVariant =
-          comboProduct.products?.product_variants?.find(
-            (variant) => variant.is_default,
-          ) || comboProduct.products?.product_variants?.[0];
-
-        if (!defaultVariant) {
-          throw new Error(`Combo product has no variant: ${combo.name}`);
-        }
-
-        const quantity = (comboProduct.quantity || 1) * item.quantity;
-
-        itemsToInsert.push({
-          product_id: comboProduct.product_id,
-          variant_id: defaultVariant.id,
-          quantity,
-          unit_price: Math.round(unitShare),
-          total: Math.round(unitShare * quantity + (index === 0 ? comboExtrasTotal * item.quantity : 0)),
-          extras:
-            index === 0
-              ? [{ type: "extra", name: `Combo: ${combo.name}`, price: 0 }, ...comboExtrasArr]
-              : [{ type: "extra", name: `Combo: ${combo.name}`, price: 0 }],
-        });
+      // Store combo as a single order item with the full combo price
+      const comboItemTotal = (Number(combo.price) + comboExtrasTotal) * item.quantity;
+      itemsToInsert.push({
+        item_type: "combo",
+        product_id: combo.id,
+        combo_id: combo.id,
+        variant_id: item.variantId || null,
+        quantity: item.quantity,
+        unit_price: Number(combo.price),
+        total: comboItemTotal,
+        extras: comboExtrasArr.length > 0 ? comboExtrasArr : [],
       });
     });
 
@@ -470,7 +464,7 @@ export async function POST(req: Request) {
     }
 
     /* =========================
-       8. WHATSAPP
+        8. WHATSAPP - Confirmación al cliente
     ========================= */
 
     const orderText = itemsToInsert
@@ -485,11 +479,54 @@ export async function POST(req: Request) {
       if (!cashierUrl) {
         console.error("WhatsApp URL not configured (NEXT_PUBLIC_CASHIER_APP_URL)");
       } else {
+        // Check if payment method is transferencia
+        let esTransferencia = false;
+        if (paymentMethodId) {
+          const { data: pm } = await supabase
+            .from("payment_methods")
+            .select("name")
+            .eq("id", paymentMethodId)
+            .single();
+          if (pm) {
+            const name = pm.name.toLowerCase();
+            esTransferencia = name.includes("transferencia") || name.includes("alias") || name.includes("cbU") || name.includes("mercadopago") || name.includes("depósito");
+          }
+        }
+
+        const esDelivery = orderMode === "delivery";
+
+        // Build confirmation message
+        let mensajeFinal = "";
+        if (esTransferencia) {
+          if (esDelivery) {
+            mensajeFinal = "✅ Pedido confirmado. Te avisaremos por acá cuando esté yendo el repartidor. ¡Gracias!\nALIAS: 👇👇👇";
+          } else {
+            mensajeFinal = "✅ Pedido confirmado. Te avisaremos por acá cuando esté listo para retiro. ¡Gracias!\nALIAS: 👇👇👇";
+          }
+        } else {
+          if (esDelivery) {
+            mensajeFinal = "✅ Pedido confirmado. Te avisaremos por acá cuando esté yendo el repartidor. ¡Gracias!";
+          } else {
+            mensajeFinal = "✅ Pedido confirmado. Te avisaremos por acá cuando esté listo para retiro. ¡Gracias!";
+          }
+        }
+
+        // Send confirmation message
         await fetch(`${cashierUrl}/api/whatsapp/send`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            orderId: order.id,
+            type: "text",
+            text: mensajeFinal,
+          }),
+        });
+
+        // Send template for tracking
+        await fetch(`${cashierUrl}/api/whatsapp/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             conversationId: conversation.id,
             orderId: order.id,
@@ -498,6 +535,20 @@ export async function POST(req: Request) {
             params: [customer.name, orderText, orderTotal.toString()],
           }),
         });
+
+        // For transferencia, send extra alias message
+        if (esTransferencia) {
+          await fetch(`${cashierUrl}/api/whatsapp/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              conversationId: conversation.id,
+              orderId: order.id,
+              type: "text",
+              text: "MORDISCO.ARG",
+            }),
+          });
+        }
       }
     } catch (e) {
       console.error("WhatsApp error:", e);

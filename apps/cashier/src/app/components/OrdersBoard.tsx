@@ -129,12 +129,57 @@ export default function OrdersBoard({
 🚚 ¡A entregarlo!`;
 
     try {
+      const { data: existingConversation } = await supabase
+        .from("rider_conversations")
+        .select("*")
+        .eq("branch_id", order.branch_id)
+        .eq("rider_id", rider.id)
+        .maybeSingle();
+
+      const conversation = existingConversation || (await supabase
+        .from("rider_conversations")
+        .insert({
+          tenant_id: order.tenant_id,
+          branch_id: order.branch_id,
+          rider_id: rider.id,
+        })
+        .select()
+        .single()).data;
+
+      const { data: payments } = await supabase
+        .from("order_payments")
+        .select("payment_methods(name)")
+        .eq("order_id", order.id);
+
+      const paymentMethod =
+        payments?.map((payment: any) => payment.payment_methods?.name).filter(Boolean).join(", ") ||
+        order.payment_method ||
+        "No especificado";
+      const phoneDigits = order.customer_phone?.replace(/\D/g, "") || "";
+      const phoneForWa = phoneDigits.startsWith("54") ? phoneDigits : `549${phoneDigits}`;
+      const customerLink = phoneDigits
+        ? `https://wa.me/${phoneForWa}?text=${encodeURIComponent(`Hola, soy tu repartidor del pedido #${order.id.slice(-6).toUpperCase()}. Estoy en camino.`)}`
+        : "Sin telefono";
+
       const res = await fetch("/api/whatsapp/send-direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          branchId: order.branch_id,
+          tenantId: order.tenant_id,
+          riderId: rider.id,
+          conversationId: conversation?.id,
           phone: rider.phone,
-          message,
+          type: "template",
+          templateName: "rider_nuevo_pedido",
+          params: [
+            order.id.slice(-6).toUpperCase(),
+            order.address || "No especificada",
+            order.notes || order.note || "Sin indicaciones",
+            `$${Number(order.total || 0).toLocaleString("es-AR")}`,
+            paymentMethod,
+            customerLink,
+          ],
         }),
       });
 
@@ -344,7 +389,24 @@ export default function OrdersBoard({
           await fetch("/api/whatsapp/send-direct", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone: rider.phone, message }),
+            body: JSON.stringify({
+              branchId: order.branch_id,
+              tenantId: order.tenant_id,
+              riderId: rider.id,
+              phone: rider.phone,
+              type: "template",
+              templateName: "rider_nuevo_pedido",
+              params: [
+                order.id.slice(-6).toUpperCase(),
+                order.address || "No especificada",
+                order.notes || order.note || "Sin indicaciones",
+                `$${Number(order.total || 0).toLocaleString("es-AR")}`,
+                order.payment_method || "No especificado",
+                order.customer_phone
+                  ? `https://wa.me/${order.customer_phone.replace(/\D/g, "").startsWith("54") ? order.customer_phone.replace(/\D/g, "") : `549${order.customer_phone.replace(/\D/g, "")}`}`
+                  : "Sin telefono",
+              ],
+            }),
           });
         }
       }

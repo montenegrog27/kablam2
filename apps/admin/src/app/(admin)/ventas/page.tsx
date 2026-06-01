@@ -1,7 +1,8 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 import { useEffect, useState, useMemo } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Search, ChevronDown, ChevronUp, Download, Calendar, Filter, X, Bike } from "lucide-react";
+import { Search, ChevronDown, ChevronUp, Download, Calendar, Filter, X } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   unconfirmed: "Pendiente", confirmed: "Confirmado", preparing: "Preparando",
@@ -24,10 +25,23 @@ export default function VentasPage() {
   const [riders, setRiders] = useState<any[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tenantId, setTenantId] = useState("");
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [periodSummary, setPeriodSummary] = useState({
+    subtotal: 0,
+    shipping: 0,
+    total: 0,
+    paid: 0,
+    delivery: 0,
+    takeaway: 0,
+    pedidosya: 0,
+    coupons: 0,
+    deliveryShipping: 0,
+  });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const PAGE_SIZE = 25;
+  const SUMMARY_PAGE_SIZE = 1000;
 
   // Filters
   const [dateFrom, setDateFrom] = useState(() => {
@@ -42,20 +56,15 @@ export default function VentasPage() {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const tenantIdRef = useMemo(() => ({ current: "" }), []);
-
   const riderMap = useMemo(() => Object.fromEntries(riders.map((r) => [r.id, r.name])), [riders]);
   const couponMap = useMemo(() => Object.fromEntries(coupons.map((c) => [c.id, c.code])), [coupons]);
-
-  useEffect(() => { loadMeta(); }, []);
-  useEffect(() => { load(); }, [page, dateFrom, dateTo, statusFilter, typeFilter, paymentFilter, riderFilter, couponFilter, search]);
 
   const loadMeta = async () => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
     const { data: r } = await supabase.from("users").select("tenant_id, branch_id").eq("id", u.user.id).single();
     if (!r) return;
-    tenantIdRef.current = r.tenant_id;
+    setTenantId(r.tenant_id);
 
     const [{ data: pm }, { data: rd }, { data: cp }] = await Promise.all([
       supabase.from("payment_methods").select("*").eq("is_active", true).or(`tenant_id.eq.${r.tenant_id},tenant_id.is.null`),
@@ -67,32 +76,93 @@ export default function VentasPage() {
     setCoupons(cp || []);
   };
 
-  const load = async () => {
-    setLoading(true);
-    const tenantId = tenantIdRef.current;
-    if (!tenantId) { setLoading(false); return; }
-
-    let query = supabase.from("orders").select("*, order_items(*), order_payments(*)", { count: "exact" })
+  const applyFilters = (query: any) => {
+    let next = query
       .eq("tenant_id", tenantId)
-      .order("created_at", { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      .order("created_at", { ascending: false });
 
-    if (dateFrom) query = query.gte("created_at", `${dateFrom}T00:00:00`);
-    if (dateTo) query = query.lte("created_at", `${dateTo}T23:59:59`);
-    if (typeFilter) query = query.eq("type", typeFilter);
-    if (paymentFilter) query = query.eq("order_payments.payment_method_id", paymentFilter);
-    if (riderFilter === "__none__") query = query.is("rider_id", null);
-    else if (riderFilter) query = query.eq("rider_id", riderFilter);
-    if (couponFilter === "with") query = query.not("coupon_id", "is", null);
-    else if (couponFilter === "without") query = query.is("coupon_id", null);
-    if (statusFilter.length > 0) query = query.in("status", statusFilter);
-    if (search) query = query.or(`customer_name.ilike.%${search}%,id.ilike.%${search}%`);
+    if (dateFrom) next = next.gte("created_at", `${dateFrom}T00:00:00`);
+    if (dateTo) next = next.lte("created_at", `${dateTo}T23:59:59`);
+    if (typeFilter) next = next.eq("type", typeFilter);
+    if (paymentFilter) next = next.eq("order_payments.payment_method_id", paymentFilter);
+    if (riderFilter === "__none__") next = next.is("rider_id", null);
+    else if (riderFilter) next = next.eq("rider_id", riderFilter);
+    if (statusFilter.length > 0) next = next.in("status", statusFilter);
+    if (search) next = next.or(`customer_name.ilike.%${search}%,id.ilike.%${search}%`);
 
-    const { data, count } = await query;
+    return next;
+  };
+
+  const loadPeriodSummary = async () => {
+    const totals = {
+      subtotal: 0,
+      shipping: 0,
+      total: 0,
+      paid: 0,
+      delivery: 0,
+      takeaway: 0,
+      pedidosya: 0,
+      coupons: 0,
+      deliveryShipping: 0,
+    };
+
+    let from = 0;
+
+    while (true) {
+      const select = paymentFilter
+        ? "id, subtotal, shipping_cost, total, is_paid, type, order_payments!inner(payment_method_id)"
+        : "id, subtotal, shipping_cost, total, is_paid, type, order_payments(payment_method_id)";
+      const { data, error } = await applyFilters(
+        supabase.from("orders").select(select).range(from, from + SUMMARY_PAGE_SIZE - 1),
+      );
+
+      if (error) throw error;
+      const rows = data || [];
+
+      rows.forEach((order: any) => {
+        const total = Number(order.total || 0);
+        const shipping = Number(order.shipping_cost || 0);
+        totals.subtotal += Number(order.subtotal || total);
+        totals.shipping += shipping;
+        totals.total += total;
+        if (order.is_paid) totals.paid += total;
+        if (order.type === "delivery") {
+          totals.delivery += 1;
+          totals.deliveryShipping += shipping;
+        }
+        if (order.type === "takeaway") totals.takeaway += 1;
+        if (order.type === "pedidosya") totals.pedidosya += 1;
+      });
+
+      if (rows.length < SUMMARY_PAGE_SIZE) break;
+      from += SUMMARY_PAGE_SIZE;
+    }
+
+    setPeriodSummary(totals);
+  };
+
+  const load = async () => {
+    if (!tenantId) { setLoading(false); return; }
+    setLoading(true);
+
+    const pageSelect = paymentFilter
+      ? "*, order_items(*), order_payments!inner(*)"
+      : "*, order_items(*), order_payments(*)";
+    const pageQuery = applyFilters(
+      supabase
+        .from("orders")
+        .select(pageSelect, { count: "exact" })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1),
+    );
+
+    const [{ data, count }] = await Promise.all([pageQuery, loadPeriodSummary()]);
     setOrders(data || []);
     setTotalCount(count || 0);
     setLoading(false);
   };
+
+  useEffect(() => { loadMeta(); }, []);
+  useEffect(() => { load(); }, [tenantId, page, dateFrom, dateTo, statusFilter, typeFilter, paymentFilter, riderFilter, couponFilter, search]);
 
   const toggleStatus = (s: string) => {
     setStatusFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -107,18 +177,16 @@ export default function VentasPage() {
     setSearch(""); setPage(0);
   };
 
-  const hasActiveFilters = statusFilter.length > 0 || typeFilter || paymentFilter || riderFilter || couponFilter || search;
+  const hasActiveFilters = statusFilter.length > 0 || typeFilter || paymentFilter || riderFilter || search;
 
   // Summary calculations
-  const subtotalSum = orders.reduce((s, o) => s + Number(o.subtotal || o.total), 0);
-  const shippingSum = orders.reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
-  const totalSum = orders.reduce((s, o) => s + Number(o.total), 0);
-  const totalPaid = orders.filter((o) => o.is_paid).reduce((s, o) => s + Number(o.total), 0);
-  const deliveryCount = orders.filter((o) => o.type === "delivery").length;
-  const takeawayCount = orders.filter((o) => o.type === "takeaway").length;
-  const pedidosyaCount = orders.filter((o) => o.type === "pedidosya").length;
-  const couponCount = orders.filter((o) => o.coupon_id).length;
-  const deliveryShippingSum = orders.filter((o) => o.type === "delivery").reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
+  const shippingSum = periodSummary.shipping;
+  const totalSum = periodSummary.total;
+  const totalPaid = periodSummary.paid;
+  const deliveryCount = periodSummary.delivery;
+  const takeawayCount = periodSummary.takeaway;
+  const couponCount = periodSummary.coupons;
+  const deliveryShippingSum = periodSummary.deliveryShipping;
 
   const exportCSV = () => {
     const headers = ["ID", "Cliente", "Tipo", "Estado", "Items", "Cupón", "Subtotal", "Envío", "Total", "Repartidor", "Pago", "Pagado", "Fecha"];
@@ -138,8 +206,6 @@ export default function VentasPage() {
   };
 
   const allStatuses = ["unconfirmed", "confirmed", "preparing", "ready", "sent", "delivered", "cancelled"];
-  const orderTypes = ["", "delivery", "takeaway", "pedidosya"];
-
   return (
     <div>
       {/* Header */}
@@ -239,15 +305,6 @@ export default function VentasPage() {
                 <option value="">Todos</option>
                 <option value="__none__">Sin asignar</option>
                 {riders.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1.5">Cupón</label>
-              <select value={couponFilter} onChange={(e) => { setCouponFilter(e.target.value); setPage(0); }}
-                className="w-full border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-800 text-gray-100">
-                <option value="">Todos</option>
-                <option value="with">Con cupón</option>
-                <option value="without">Sin cupón</option>
               </select>
             </div>
             <div>

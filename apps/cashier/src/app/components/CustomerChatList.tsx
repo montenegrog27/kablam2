@@ -423,6 +423,15 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   if (loading) return <div className="h-full flex items-center justify-center bg-gray-50"><div className="text-gray-400 animate-pulse">Cargando...</div></div>;
 
   const filteredConversations = conversations.filter((conv) => {
+    const q = searchTerm.trim().toLowerCase();
+    const matchesSearch = !q || [
+      conv.customers.name,
+      conv.customers.phone,
+      conv.last_message,
+      ...(conv.customers.tags || []),
+    ].some((value) => value?.toLowerCase().includes(q));
+
+    if (!matchesSearch) return false;
     if (filter === "all") return true;
     if (filter === "without_orders") return !customerIdsWithoutOrders.has(conv.customer_id);
     if (filter === "delivered") return customerIdsDelivered.has(conv.customer_id);
@@ -434,10 +443,19 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
       <div className={`${activeConv ? "hidden lg:flex" : "flex"} w-full lg:w-80 xl:w-96 flex-col border-r bg-white flex-shrink-0`}>
         <div className="px-4 py-3 border-b flex items-center justify-between">
           <h2 className="font-semibold text-gray-900">WhatsApp</h2>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100"><X size={18} /></button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={requestNotifications}
+              className={`px-2 py-1 rounded-full text-[11px] font-medium ${notificationsEnabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+              title="Activar notificaciones del navegador"
+            >
+              {notificationsEnabled ? "Notifs on" : "Notifs"}
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100"><X size={18} /></button>
+          </div>
         </div>
         <div className="px-3 py-2 space-y-2">
-          <input placeholder="Buscar chat..." className="w-full bg-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar chat..." className="w-full bg-gray-100 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
           <div className="flex gap-2 text-xs">
             <button onClick={() => setFilter("all")} className={`px-3 py-1.5 rounded-full font-medium transition ${filter === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Todos</button>
             <button onClick={() => setFilter("without_orders")} className={`px-3 py-1.5 rounded-full font-medium transition ${filter === "without_orders" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Sin pedidos</button>
@@ -578,7 +596,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
                     {msg.message && msg.media_type !== "location" && msg.media_type !== "contacts" && <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>}
                     <div className={`flex justify-end items-center gap-1 mt-0.5 ${msg.media_type === "sticker" ? "hidden" : ""}`}>
                       <span className="text-[10px] text-gray-500">{fmtTime(msg.created_at)}</span>
-                      {isMe && (msg.status === "sent" ? <Check size={14} className="text-gray-400" /> : msg.status === "delivered" || msg.status === "read" ? <CheckCheck size={14} className="text-blue-500" /> : <Check size={14} className="text-gray-300" />)}
+                      {isMe && (msg.status === "error" ? <button onClick={msg.retry} className="text-[10px] font-medium text-red-600 hover:underline">Reintentar</button> : msg.status === "pending" ? <span className="text-[10px] text-gray-400">Enviando...</span> : msg.status === "sent" ? <Check size={14} className="text-gray-400" /> : msg.status === "delivered" || msg.status === "read" ? <CheckCheck size={14} className="text-blue-500" /> : <Check size={14} className="text-gray-300" />)}
                     </div>
                   </div>
                 </div>

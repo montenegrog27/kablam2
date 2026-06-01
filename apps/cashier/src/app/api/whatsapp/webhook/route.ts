@@ -208,6 +208,8 @@ export async function POST(req: Request) {
   debugLog("MESSAGE TYPE:", message.type);
   debugLog("MESSAGE DUMP:", JSON.stringify(message, null, 2));
 
+  const contextMessageId = message.context?.id || null;
+
   const phoneNumberId = value?.metadata?.phone_number_id;
   const phone = message.from;
 
@@ -462,6 +464,14 @@ export async function POST(req: Request) {
   }
 
       // Save message
+      const { data: repliedMessage } = contextMessageId
+        ? await supabase
+            .from("messages")
+            .select("id")
+            .eq("whatsapp_message_id", contextMessageId)
+            .maybeSingle()
+        : { data: null };
+
       await supabase.from("messages").insert({
         tenant_id: tenantId,
         branch_id: branchId,
@@ -471,6 +481,9 @@ export async function POST(req: Request) {
         message: text,
         media_type: mediaType,
         media_url: mediaUrl,
+        whatsapp_message_id: message.id || null,
+        reply_to_whatsapp_message_id: contextMessageId,
+        reply_to_message_id: repliedMessage?.id || null,
       });
 
       // Update conversation
@@ -622,6 +635,14 @@ export async function POST(req: Request) {
   // SAVE MESSAGE
   // ===============================
 
+  const { data: repliedMessage } = contextMessageId
+    ? await supabase
+        .from("messages")
+        .select("id")
+        .eq("whatsapp_message_id", contextMessageId)
+        .maybeSingle()
+    : { data: null };
+
   const { data: inserted } = await supabase
     .from("messages")
     .insert({
@@ -632,6 +653,9 @@ export async function POST(req: Request) {
       message: text,
       media_type: mediaType,
       media_url: mediaUrl,
+      whatsapp_message_id: message.id || null,
+      reply_to_whatsapp_message_id: contextMessageId,
+      reply_to_message_id: repliedMessage?.id || null,
       created_at: new Date(),
     })
     .select()

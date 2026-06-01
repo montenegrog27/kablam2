@@ -20,6 +20,7 @@ export default function BranchesPage() {
   const [fontsBucketExists, setFontsBucketExists] = useState<boolean | null>(
     null,
   );
+  const [branchHours, setBranchHours] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     loadData();
@@ -75,9 +76,21 @@ export default function BranchesPage() {
       .select("*")
       .eq("tenant_id", tenantId);
 
+    const { data: hoursData } = await supabase
+      .from("branch_hours")
+      .select("*");
+
     setBranches(branchesData || []);
     setSettings(settingsData || []);
     setWhatsapps(whatsappData || []);
+
+    // Group hours by branch_id
+    const hoursMap: Record<string, any[]> = {};
+    (hoursData || []).forEach((h: any) => {
+      if (!hoursMap[h.branch_id]) hoursMap[h.branch_id] = [];
+      hoursMap[h.branch_id].push(h);
+    });
+    setBranchHours(hoursMap);
   };
 
   /* =============================
@@ -362,8 +375,48 @@ export default function BranchesPage() {
   };
 
   /* =============================
+     BRANCH HOURS HELPERS
+   ============================= */
+
+  const saveBranchHour = async (branchId: string, day: number, field: string, value: string) => {
+    const existing = (branchHours[branchId] || []).find((h: any) => h.day_of_week === day);
+    if (existing) {
+      await supabase.from("branch_hours").update({ [field]: value }).eq("id", existing.id);
+    } else {
+      const data: any = { branch_id: branchId, day_of_week: day, open_time: "09:00", close_time: "23:00" };
+      data[field] = value;
+      await supabase.from("branch_hours").insert(data);
+    }
+    // Reload hours
+    const { data: hoursData } = await supabase.from("branch_hours").select("*");
+    const hoursMap: Record<string, any[]> = {};
+    (hoursData || []).forEach((h: any) => {
+      if (!hoursMap[h.branch_id]) hoursMap[h.branch_id] = [];
+      hoursMap[h.branch_id].push(h);
+    });
+    setBranchHours(hoursMap);
+  };
+
+  const toggleBranchHourClosed = async (branchId: string, day: number, existing: any) => {
+    if (existing) {
+      await supabase.from("branch_hours").update({ is_closed: !existing.is_closed }).eq("id", existing.id);
+    } else {
+      await supabase.from("branch_hours").insert({
+        branch_id: branchId, day_of_week: day, open_time: "09:00", close_time: "23:00", is_closed: true,
+      });
+    }
+    const { data: hoursData } = await supabase.from("branch_hours").select("*");
+    const hoursMap: Record<string, any[]> = {};
+    (hoursData || []).forEach((h: any) => {
+      if (!hoursMap[h.branch_id]) hoursMap[h.branch_id] = [];
+      hoursMap[h.branch_id].push(h);
+    });
+    setBranchHours(hoursMap);
+  };
+
+  /* =============================
      UI
-  ============================= */
+   ============================= */
 
   return (
     <div className="p-8 space-y-8 max-w-4xl">
@@ -696,39 +749,119 @@ export default function BranchesPage() {
             </div>
 
             {/* =============================
-                WEB STATUS
+                ESTADO WEB Y HORARIOS
             ============================= */}
 
-            <div className="space-y-3 border-t border-gray-700 pt-4">
-              <h3 className="font-semibold">Estado Web</h3>
+            <div className="space-y-4 border-t border-gray-700 pt-4">
+              <h3 className="font-semibold text-gray-100">Estado Web y Horarios</h3>
 
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+              {/* Toggles principales */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <ToggleSwitch
+                  label="Web abierta"
+                  description="Permite que los clientes vean el menú y hagan pedidos"
                   checked={branchSettings.web_open ?? true}
-                  onChange={(e) =>
-                    updateLocalSettings(branch.id, "web_open", e.target.checked)
-                  }
+                  onChange={(v) => updateLocalSettings(branch.id, "web_open", v)}
                 />
-                Web abierta
-              </label>
+                <ToggleSwitch
+                  label="Delivery habilitado"
+                  description="Clientes pueden pedir delivery"
+                  checked={branchSettings.delivery_enabled ?? true}
+                  onChange={(v) => updateLocalSettings(branch.id, "delivery_enabled", v)}
+                />
+                <ToggleSwitch
+                  label="Takeaway habilitado"
+                  description="Clientes pueden pedir para retirar"
+                  checked={branchSettings.takeaway_enabled ?? true}
+                  onChange={(v) => updateLocalSettings(branch.id, "takeaway_enabled", v)}
+                />
+              </div>
 
-              <input
-                placeholder="Mensaje cuando está cerrado"
-                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
-                value={branchSettings.web_closed_message || ""}
-                onChange={(e) =>
-                  updateLocalSettings(
-                    branch.id,
-                    "web_closed_message",
-                    e.target.value,
-                  )
-                }
-              />
+              {/* Cierre temporal */}
+              <details className="bg-gray-800 rounded-xl p-3 border border-gray-700">
+                <summary className="text-sm font-medium text-gray-300 cursor-pointer hover:text-gray-100">⏸️ Cierre temporal</summary>
+                <div className="mt-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={!!branchSettings.web_closed_reason}
+                      onChange={(e) => {
+                        updateLocalSettings(branch.id, "web_closed_reason", e.target.checked ? "Mantenimiento" : null);
+                        if (!e.target.checked) updateLocalSettings(branch.id, "web_closed_until", null);
+                      }}
+                      className="rounded border-gray-600"
+                    />
+                    Cerrar web temporalmente
+                  </label>
+                  {branchSettings.web_closed_reason !== null && branchSettings.web_closed_reason !== undefined && (
+                    <>
+                      <input
+                        placeholder="Motivo (ej: estamos con demoras, perdon las molestias)"
+                        className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                        value={branchSettings.web_closed_reason || ""}
+                        onChange={(e) => updateLocalSettings(branch.id, "web_closed_reason", e.target.value)}
+                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">Cerrar hasta:</span>
+                        <input
+                          type="datetime-local"
+                          className="border border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-900 text-gray-100"
+                          value={branchSettings.web_closed_until ? branchSettings.web_closed_until.slice(0, 16) : ""}
+                          onChange={(e) => updateLocalSettings(branch.id, "web_closed_until", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                        />
+                        <button
+                          onClick={() => {
+                            updateLocalSettings(branch.id, "web_closed_until", null);
+                            updateLocalSettings(branch.id, "web_closed_reason", null);
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-300 underline"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </details>
+
+              {/* Horarios por día */}
+              <details className="bg-gray-800 rounded-xl p-3 border border-gray-700">
+                <summary className="text-sm font-medium text-gray-300 cursor-pointer hover:text-gray-100">🕐 Horarios por día</summary>
+                <div className="mt-3 space-y-2">
+                  {[0,1,2,3,4,5,6].map((day) => {
+                    const dayNames = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+                    const hours = branchHours[branch.id]?.find((h: any) => h.day_of_week === day);
+                    return (
+                      <div key={day} className="flex items-center gap-3 text-sm bg-gray-900 rounded-lg px-3 py-2">
+                        <span className="w-8 font-semibold text-gray-300">{dayNames[day]}</span>
+                        {hours?.is_closed ? (
+                          <span className="text-gray-500 italic">Cerrado</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <input type="time" value={hours?.open_time?.slice(0, 5) || "09:00"}
+                              onChange={(e) => saveBranchHour(branch.id, day, "open_time", e.target.value)}
+                              className="border border-gray-600 rounded px-2 py-1 text-sm bg-gray-800 text-gray-100" />
+                            <span className="text-gray-500">→</span>
+                            <input type="time" value={hours?.close_time?.slice(0, 5) || "23:00"}
+                              onChange={(e) => saveBranchHour(branch.id, day, "close_time", e.target.value)}
+                              className="border border-gray-600 rounded px-2 py-1 text-sm bg-gray-800 text-gray-100" />
+                          </div>
+                        )}
+                        <button
+                          onClick={() => toggleBranchHourClosed(branch.id, day, hours)}
+                          className={`ml-auto text-xs px-2 py-1 rounded font-medium ${hours?.is_closed ? "bg-emerald-700/30 text-emerald-300" : "bg-gray-700 text-gray-400 hover:bg-red-700/30 hover:text-red-300"}`}
+                        >
+                          {hours?.is_closed ? "Abrir" : "Cerrar"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
 
               <button
                 onClick={() => saveSettings(branch.id)}
-                className="bg-black text-white px-4 py-2 rounded"
+                className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-black border border-gray-700"
               >
                 Guardar configuración
               </button>
@@ -798,5 +931,22 @@ export default function BranchesPage() {
         );
       })}
     </div>
+  );
+}
+
+function ToggleSwitch({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-3 bg-gray-800 rounded-xl p-4 border border-gray-700 cursor-pointer hover:bg-gray-750 transition">
+      <div className="relative mt-0.5">
+        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="sr-only peer" />
+        <div className={`w-10 h-6 rounded-full transition-colors ${checked ? "bg-emerald-600" : "bg-gray-600"}`}>
+          <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform mt-1 ${checked ? "translate-x-5" : "translate-x-1"}`} />
+        </div>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-gray-100">{label}</p>
+        {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+      </div>
+    </label>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect } from "react";
 import type {
@@ -14,6 +15,7 @@ import ProductModal from "../../components/ProductModal";
 import CartBottomBar from "../../components/CartBottomBar";
 import FontLoader from "../../components/FontLoader";
 import MetaTags from "../../components/MetaTags";
+import CumpleMordiscoEntry from "../../components/CumpleMordiscoEntry";
 
 export default function MenuPageClient({
   initialMenu,
@@ -65,6 +67,7 @@ export default function MenuPageClient({
         customer={customer}
         branchSlug={branchSlug}
       />
+      <CumpleMordiscoEntry branchSlug={branchSlug} />
 
       <div className="pb-24">
         <ProfessionalMenu

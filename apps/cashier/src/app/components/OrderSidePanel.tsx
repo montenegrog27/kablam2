@@ -674,7 +674,9 @@ export default function OrderSidePanel({
 
     const itemsToInsert = cart.map((item) => ({
       order_id: orderId,
+      item_type: item.variant.is_combo ? "combo" : "product",
       product_id: item.variant.product_id || item.variant.id,
+      combo_id: item.variant.is_combo ? item.variant.product_id || item.variant.id : null,
       variant_id: item.variant.variant_id || null,
       quantity: item.quantity,
       unit_price: item.variant.price,
