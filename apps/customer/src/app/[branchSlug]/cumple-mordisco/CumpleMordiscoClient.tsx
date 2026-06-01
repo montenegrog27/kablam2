@@ -817,7 +817,6 @@ function buildHistoryStats(verification: Verification) {
   return [
     { icon: "🍔", value: String(verification.customer.orderCount), numeric: verification.customer.orderCount, label: "Pedidos" },
     { icon: "❤️", value: String(months), numeric: months, label: "Meses con nosotros" },
-    { icon: "📍", value: branch, label: "Sucursal favorita" },
     { icon: "💰", value: currency.format(verification.customer.totalSpent), label: "Gastados" },
     { icon: "🏆", value: `Top ${verification.customer.topPercentile}%`, label: "Clientes" },
     { icon: "⚡", value: verification.customer.frequency.toFixed(1), numeric: verification.customer.frequency, label: "Pedidos por mes" },
