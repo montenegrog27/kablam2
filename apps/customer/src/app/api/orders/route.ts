@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { logAppError } from "@/lib/logAppError";
+import { getBranchAvailability } from "@/lib/branchAvailability";
 
 type OrderItemInput = {
   itemType?: "product" | "combo";
@@ -115,6 +116,33 @@ export async function POST(req: Request) {
 
     if (!branch) {
       return Response.json({ success: false, error: "Branch not found" });
+    }
+
+    const [{ data: branchSettings }, { data: branchHours }] = await Promise.all([
+      supabase
+        .from("branch_settings")
+        .select("web_open, web_closed_message, web_closed_reason, web_closed_until")
+        .eq("branch_id", branch.id)
+        .maybeSingle(),
+      supabase
+        .from("branch_hours")
+        .select("day_of_week, open_time, close_time, is_closed")
+        .eq("branch_id", branch.id),
+    ]);
+
+    const availability = getBranchAvailability({
+      settings: branchSettings,
+      hours: branchHours,
+    });
+
+    if (!availability.isOpen) {
+      return Response.json(
+        {
+          success: false,
+          error: availability.message || "Estamos cerrados por el momento.",
+        },
+        { status: 409 },
+      );
     }
 
     /* =========================

@@ -21,6 +21,7 @@ export default function MenuPageClient({
   initialMenu,
   initialCombos,
   branding,
+  availability,
   branchSlug,
   customer,
 }: MenuPageClientProps) {
@@ -30,6 +31,10 @@ export default function MenuPageClient({
   const [sidebar, setSidebar] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [modal, setModal] = useState(false);
+  const [closedNotice, setClosedNotice] = useState("");
+  const branchIsOpen = availability?.isOpen !== false;
+  const closedMessage =
+    availability?.message || branding?.web_closed_message || "Estamos cerrados por el momento. Volve a intentar mas tarde.";
 
   useEffect(() => {
     const stored = sessionStorage.getItem(`cart_${branchSlug}`);
@@ -51,7 +56,18 @@ export default function MenuPageClient({
     }
   }, [carrito, branchSlug]);
 
+  useEffect(() => {
+    if (!closedNotice) return;
+    const timer = window.setTimeout(() => setClosedNotice(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [closedNotice]);
+
   const agregarAlCarrito = (product: Product) => {
+    if (!branchIsOpen) {
+      setClosedNotice(closedMessage);
+      return;
+    }
+
     setSelectedProduct(product);
     setModal(true);
   };
@@ -70,6 +86,18 @@ export default function MenuPageClient({
       <CumpleMordiscoEntry branchSlug={branchSlug} />
 
       <div className="pb-24">
+        {!branchIsOpen && (
+          <div className="mx-auto mt-4 max-w-3xl px-4">
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shadow-sm">
+              {closedMessage}
+            </div>
+          </div>
+        )}
+        {closedNotice && (
+          <div className="fixed left-4 right-4 top-20 z-50 mx-auto max-w-md rounded-2xl bg-gray-950 px-4 py-3 text-center text-sm font-semibold text-white shadow-2xl">
+            {closedNotice}
+          </div>
+        )}
         <ProfessionalMenu
           productos={products}
           combos={combos}
@@ -85,6 +113,8 @@ export default function MenuPageClient({
         setCarrito={setCarrito}
         branchSlug={branchSlug}
         branding={branding}
+        canCheckout={branchIsOpen}
+        closedMessage={closedMessage}
       />
 
       <ProductModal
@@ -92,6 +122,12 @@ export default function MenuPageClient({
         product={selectedProduct}
         onClose={() => setModal(false)}
         onAddToCart={(item: CartItem) => {
+          if (!branchIsOpen) {
+            setClosedNotice(closedMessage);
+            setModal(false);
+            return;
+          }
+
           setCarrito((prev) => [
             ...prev,
             { ...item, uid: crypto.randomUUID() },
@@ -100,7 +136,7 @@ export default function MenuPageClient({
         branding={branding}
       />
 
-      <CartBottomBar carrito={carrito} onOpenCart={() => setSidebar(true)} />
+      <CartBottomBar carrito={carrito} onOpenCart={() => setSidebar(true)} disabled={!branchIsOpen} />
     </>
   );
 }

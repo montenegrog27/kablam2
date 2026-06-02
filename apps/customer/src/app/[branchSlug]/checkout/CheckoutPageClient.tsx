@@ -9,9 +9,14 @@ import type { CartItem, Branding } from "@/types/menu";
 type Props = {
   branchSlug: string;
   branding?: Branding;
+  availability?: {
+    isOpen: boolean;
+    message: string;
+    reason: "manual" | "temporary" | "hours" | null;
+  };
 };
 
-export default function CheckoutPageClient({ branchSlug, branding }: Props) {
+export default function CheckoutPageClient({ branchSlug, branding, availability }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderMode, setOrderMode] = useState<"delivery" | "takeaway" | null>(
     null,
@@ -27,6 +32,7 @@ export default function CheckoutPageClient({ branchSlug, branding }: Props) {
   }, [branchSlug]);
 
   const addToCart = (item: CartItem) => {
+    if (availability?.isOpen === false) return;
     const updatedCart = [...cart];
     updatedCart.push(item);
     setCart(updatedCart);
@@ -47,6 +53,13 @@ export default function CheckoutPageClient({ branchSlug, branding }: Props) {
       <style>{`.pac-container { z-index: 9999 !important; } body { overflow-x: hidden; }`}</style>
       <div className="min-h-screen bg-gray-100 overflow-x-hidden">
         <div className="w-full max-w-6xl mx-auto overflow-x-hidden px-3 sm:px-4 md:px-6">
+          {availability?.isOpen === false && (
+            <div className="pt-4">
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shadow-sm">
+                {availability.message}
+              </div>
+            </div>
+          )}
           {!orderMode ? (
             <OrderModeSelector
               onSelect={setOrderMode}
@@ -62,6 +75,7 @@ export default function CheckoutPageClient({ branchSlug, branding }: Props) {
               onAddToCart={addToCart}
               onUpdateCart={updateCart}
               branding={branding}
+              availability={availability}
             />
           )}
         </div>

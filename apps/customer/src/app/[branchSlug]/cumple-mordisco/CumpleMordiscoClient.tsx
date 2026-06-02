@@ -48,10 +48,15 @@ type Verification = {
 type Invitation = {
   invitation_code: string;
   customer_name: string;
+  dni?: string | null;
+  birthdate?: string | null;
+  email?: string | null;
   whatsapp: string;
   benefit_tier: string;
   lot_name?: string;
   price: number;
+  companion_name?: string | null;
+  companion_dni?: string | null;
 };
 
 type EventInfo = {
@@ -92,6 +97,13 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const inviteRef = useRef<HTMLDivElement | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [customerDni, setCustomerDni] = useState("");
+  const [birthdate, setBirthdate] = useState("");
+  const [email, setEmail] = useState("");
+  const [companionEnabled, setCompanionEnabled] = useState(false);
+  const [companionName, setCompanionName] = useState("");
+  const [companionDni, setCompanionDni] = useState("");
+  const [showReservationModal, setShowReservationModal] = useState(false);
   const [selectedLotKey, setSelectedLotKey] = useState("lote_1");
   const [loading, setLoading] = useState(false);
   const [verification, setVerification] = useState<Verification | null>(null);
@@ -156,6 +168,14 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       setError("Completa nombre y WhatsApp para generar la invitacion.");
       return;
     }
+    if (!customerDni || !birthdate || !email) {
+      setError("Completa DNI, fecha de cumpleaños y correo electronico para reservar.");
+      return;
+    }
+    if (companionEnabled && (!companionName || !companionDni)) {
+      setError("Completa nombre y DNI del acompañante.");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -169,6 +189,11 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           branchSlug,
           name,
           phone,
+          dni: customerDni,
+          birthdate,
+          email,
+          companionName: companionEnabled ? companionName : "",
+          companionDni: companionEnabled ? companionDni : "",
           benefitKey: verification.benefit.key,
           lotKey: selectedLot.key,
           lotName: selectedLot.name,
@@ -180,6 +205,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || "No pudimos generar la invitacion");
       setInvitation(data.invitation);
+      setShowReservationModal(false);
       if (data.whatsapp?.skipped) {
         setNotice("La invitacion se genero, pero no se envio WhatsApp porque falta configurar WHATSAPP_TOKEN.");
       } else if (data.whatsapp && data.whatsapp.ok === false) {
@@ -370,7 +396,6 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 selectedLot={selectedLot}
                 selectedLotKey={selectedLotKey}
                 setSelectedLotKey={setSelectedLotKey}
-                purchase={purchase}
                 loading={loading}
                 levelName={levelName}
                 impressiveBadge={impressiveBadge}
@@ -378,6 +403,16 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 historyStats={historyStats}
                 hasDiscount={hasDiscount}
                 savings={savings}
+                companionEnabled={companionEnabled}
+                setCompanionEnabled={setCompanionEnabled}
+                companionName={companionName}
+                setCompanionName={setCompanionName}
+                companionDni={companionDni}
+                setCompanionDni={setCompanionDni}
+                openReservationModal={() => {
+                  setError("");
+                  setShowReservationModal(true);
+                }}
               />
             <div className={`hidden mt-6 overflow-hidden rounded-[24px] border p-5 ${isFounder ? "border-[#d7b56d]/70 bg-[#d7b56d]/12" : "border-white/12 bg-black/25"}`}>
               <div className="flex items-start justify-between gap-4">
@@ -478,6 +513,76 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
         </div>
       </section>
 
+      {showReservationModal && verification && selectedLot && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-lg overflow-hidden rounded-[30px] bg-[#0d0a08] text-white shadow-2xl">
+            <div className="border-b border-white/10 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d7b56d]">Confirmar reserva</p>
+                  <h3 className="mt-2 text-2xl font-black">Resumen de tu invitación</h3>
+                </div>
+                <button onClick={() => setShowReservationModal(false)} className="rounded-full bg-white/10 px-3 py-2 text-sm font-black text-white">
+                  X
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div className="rounded-[22px] bg-white/[0.07] p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-black">{name}</p>
+                    <p className="mt-1 text-xs font-semibold text-white/45">{verification.benefit.label} · {selectedLot.name}</p>
+                    {companionEnabled && (
+                      <p className="mt-2 text-xs font-semibold text-[#d7b56d]">Acompañante: {companionName || "Sin completar"}</p>
+                    )}
+                  </div>
+                  <p className="text-right text-2xl font-black text-[#d7b56d]">{currency.format(selectedLot.finalPrice)}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  <span className="mb-1 block text-xs font-semibold text-white/50">DNI</span>
+                  <input
+                    value={customerDni}
+                    onChange={(event) => setCustomerDni(event.target.value.replace(/\D/g, ""))}
+                    className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-[16px] outline-none"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1 block text-xs font-semibold text-white/50">Fecha de cumpleaños</span>
+                  <input
+                    type="date"
+                    value={birthdate}
+                    onChange={(event) => setBirthdate(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-[16px] outline-none"
+                  />
+                </label>
+                <label className="sm:col-span-2">
+                  <span className="mb-1 block text-xs font-semibold text-white/50">Correo electrónico</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-[16px] outline-none"
+                  />
+                </label>
+              </div>
+
+              <p className="rounded-2xl bg-[#d7b56d]/12 px-4 py-3 text-xs font-semibold leading-5 text-[#f8ddb0]">
+                Al confirmar, te enviamos por WhatsApp las instrucciones para transferir y reservar tu lugar.
+              </p>
+
+              <button onClick={purchase} disabled={loading} className="w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black transition hover:bg-[#f6ead2] disabled:opacity-50">
+                {loading ? "Generando invitación..." : "Confirmar y recibir WhatsApp"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {invitation && (
         <section ref={inviteRef} className="mx-auto max-w-3xl px-5 pb-20">
           <div className="rounded-[32px] border border-[#d7b56d]/35 bg-[#120f0b] p-6 shadow-2xl">
@@ -538,7 +643,6 @@ function BenefitExperience({
   selectedLot,
   selectedLotKey,
   setSelectedLotKey,
-  purchase,
   loading,
   levelName,
   impressiveBadge,
@@ -546,12 +650,18 @@ function BenefitExperience({
   historyStats,
   hasDiscount,
   savings,
+  companionEnabled,
+  setCompanionEnabled,
+  companionName,
+  setCompanionName,
+  companionDni,
+  setCompanionDni,
+  openReservationModal,
 }: {
   verification: Verification;
   selectedLot?: Lot;
   selectedLotKey: string;
   setSelectedLotKey: (key: string) => void;
-  purchase: () => void;
   loading: boolean;
   levelName: string;
   impressiveBadge: { icon: string; label: string } | null;
@@ -559,6 +669,13 @@ function BenefitExperience({
   historyStats: Array<{ icon: string; value: string; numeric?: number; suffix?: string; label: string }>;
   hasDiscount: boolean;
   savings: number;
+  companionEnabled: boolean;
+  setCompanionEnabled: (value: boolean) => void;
+  companionName: string;
+  setCompanionName: (value: string) => void;
+  companionDni: string;
+  setCompanionDni: (value: string) => void;
+  openReservationModal: () => void;
 }) {
   return (
     <div className="anniversary-reveal mt-6 overflow-hidden rounded-[32px] bg-[#070504] text-white shadow-[0_28px_90px_rgba(0,0,0,0.45)] sm:rounded-[36px]">
@@ -649,8 +766,44 @@ function BenefitExperience({
               ))}
             </div>
 
-            <button onClick={purchase} disabled={loading || !selectedLot || !selectedLot.isOpen} className="mt-5 w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black shadow-[0_18px_50px_rgba(255,255,255,0.14)] transition duration-300 hover:scale-[1.01] hover:bg-[#f6ead2] disabled:opacity-50">
-              {loading ? "Generando invitación..." : "Reservar mi lugar"}
+            <div className="mt-4 rounded-[24px] bg-black/28 p-4">
+              <label className="flex items-center justify-between gap-4">
+                <span>
+                  <span className="block text-sm font-black text-white">Agregar acompañante</span>
+                  <span className="mt-1 block text-xs font-semibold text-white/42">Sumá un invitado a tu reserva.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={companionEnabled}
+                  onChange={(event) => setCompanionEnabled(event.target.checked)}
+                  className="h-5 w-5 accent-[#ff3b30]"
+                />
+              </label>
+
+              {companionEnabled && (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label>
+                    <span className="mb-1 block text-xs font-semibold text-white/45">Nombre del acompañante</span>
+                    <input
+                      value={companionName}
+                      onChange={(event) => setCompanionName(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-[16px] text-white outline-none"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1 block text-xs font-semibold text-white/45">DNI del acompañante</span>
+                    <input
+                      value={companionDni}
+                      onChange={(event) => setCompanionDni(event.target.value.replace(/\D/g, ""))}
+                      className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-[16px] text-white outline-none"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <button onClick={openReservationModal} disabled={loading || !selectedLot || !selectedLot.isOpen} className="mt-5 w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black shadow-[0_18px_50px_rgba(255,255,255,0.14)] transition duration-300 hover:scale-[1.01] hover:bg-[#f6ead2] disabled:opacity-50">
+              Reservar mi lugar
             </button>
           </section>
         </div>
@@ -962,6 +1115,7 @@ function buildHistoryStats(verification: Verification) {
   return [
     { icon: "🍔", value: String(verification.customer.orderCount), numeric: verification.customer.orderCount, label: "Pedidos" },
     { icon: "❤️", value: String(months), numeric: months, label: "Meses con nosotros" },
+    { icon: "📍", value: branch, label: "Sucursal favorita" },
     { icon: "💰", value: currency.format(verification.customer.totalSpent), label: "Gastados" },
     { icon: "🏆", value: `Top ${verification.customer.topPercentile}%`, label: "Clientes" },
     { icon: "⚡", value: verification.customer.frequency.toFixed(1), numeric: verification.customer.frequency, label: "Pedidos por mes" },

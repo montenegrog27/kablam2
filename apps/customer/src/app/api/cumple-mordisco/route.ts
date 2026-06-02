@@ -524,6 +524,10 @@ async function purchaseInvitation(body: {
   branchSlug: string;
   name: string;
   dni?: string;
+  birthdate?: string;
+  email?: string;
+  companionName?: string;
+  companionDni?: string;
   phone: string;
   benefitKey?: string;
   lotKey?: string;
@@ -570,6 +574,10 @@ async function purchaseInvitation(body: {
     invitation_code: code,
     customer_name: body.name,
     dni: body.dni || null,
+    birthdate: body.birthdate || null,
+    email: body.email || null,
+    companion_name: body.companionName || null,
+    companion_dni: body.companionDni || null,
     whatsapp: whatsappPhone,
     benefit_tier: body.benefitKey || tier.key,
     lot_key: body.lotKey || selectedLot.key,

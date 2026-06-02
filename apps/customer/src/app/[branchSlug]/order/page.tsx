@@ -3,6 +3,7 @@ import MenuPageClient from "./MenuPageClient";
 import { createSupabaseServer } from "@kablam/supabase/server";
 import { getCustomerSession } from "@/lib/customer-session";
 import { buildCustomerMetadata } from "@/lib/metadata";
+import { getBranchAvailability } from "@/lib/branchAvailability";
 import type { Product, Combo } from "@/types/menu";
 
 export async function generateMetadata({
@@ -70,6 +71,16 @@ export default async function OrderPage({
       .eq("branch_id", branch.id)
       .single();
 
+    const { data: branchHours } = await supabase
+      .from("branch_hours")
+      .select("day_of_week, open_time, close_time, is_closed")
+      .eq("branch_id", branch.id);
+
+    const availability = getBranchAvailability({
+      settings,
+      hours: branchHours,
+    });
+
     console.log("Loading menu for branch:", branch.id);
     const menu: Product[] = await loadMenuServer(branchSlug);
     console.log("Menu loaded with", menu.length, "products");
@@ -100,6 +111,7 @@ export default async function OrderPage({
         initialMenu={menu}
         initialCombos={combos}
         branding={settings ? JSON.parse(JSON.stringify(settings)) : undefined}
+        availability={availability}
         branchSlug={branchSlug}
         customer={customer}
       />

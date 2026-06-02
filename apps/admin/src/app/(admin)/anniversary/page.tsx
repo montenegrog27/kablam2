@@ -80,7 +80,7 @@ export default function AnniversaryDashboardPage() {
     return items.filter((item) => {
       if (tier && item.benefit_tier !== tier) return false;
       if (!term) return true;
-      return [item.customer_name, item.whatsapp, item.invitation_code, item.lot_name]
+      return [item.customer_name, item.whatsapp, item.dni, item.email, item.companion_name, item.companion_dni, item.invitation_code, item.lot_name]
         .join(" ")
         .toLowerCase()
         .includes(term);
@@ -396,6 +396,13 @@ export default function AnniversaryDashboardPage() {
               <div className="rounded-lg bg-gray-950 p-3">
                 <p className="font-semibold text-gray-100">{selected.customer_name}</p>
                 <p className="text-sm text-gray-500">{selected.whatsapp}</p>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <InfoPill label="DNI" value={selected.dni || "-"} />
+                  <InfoPill label="Cumpleaños" value={selected.birthdate ? new Date(selected.birthdate).toLocaleDateString("es-AR") : "-"} />
+                  <InfoPill label="Email" value={selected.email || "-"} wide />
+                  <InfoPill label="Acompañante" value={selected.companion_name || "-"} />
+                  <InfoPill label="DNI acomp." value={selected.companion_dni || "-"} />
+                </div>
                 {selected.last_whatsapp_sent_at && (
                   <p className="mt-2 text-xs text-emerald-400">Ultimo WhatsApp: {new Date(selected.last_whatsapp_sent_at).toLocaleString("es-AR")}</p>
                 )}
@@ -440,6 +447,15 @@ function AdminInput({
         className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 outline-none"
       />
     </label>
+  );
+}
+
+function InfoPill({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={`rounded-lg bg-gray-900 p-2 ${wide ? "col-span-2" : ""}`}>
+      <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 break-words font-semibold text-gray-200">{value}</p>
+    </div>
   );
 }
 

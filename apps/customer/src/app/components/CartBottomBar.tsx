@@ -5,11 +5,13 @@ import type { CartItem } from "@/types/menu";
 type Props = {
   carrito: CartItem[];
   onOpenCart: () => void;
+  disabled?: boolean;
 };
 
 export default function CartBottomBar({
   carrito,
   onOpenCart,
+  disabled = false,
 }: Props) {
   if (!carrito.length) return null;
 
@@ -28,7 +30,9 @@ export default function CartBottomBar({
 
       <button
         onClick={onOpenCart}
-        className="w-full bg-black text-white rounded-2xl px-5 py-4 flex items-center justify-between shadow-xl"
+        className={`w-full rounded-2xl px-5 py-4 flex items-center justify-between shadow-xl ${
+          disabled ? "bg-gray-700 text-white" : "bg-black text-white"
+        }`}
       >
         {/* cantidad */}
         <div className="flex items-center gap-3">
@@ -38,7 +42,7 @@ export default function CartBottomBar({
           </div>
 
           <span className="font-semibold">
-            Ver carrito
+            {disabled ? "Local cerrado" : "Ver carrito"}
           </span>
 
         </div>

@@ -13,6 +13,8 @@ type Props = {
   setCarrito: Dispatch<SetStateAction<CartItem[]>>;
   branchSlug: string;
   branding?: Branding;
+  canCheckout?: boolean;
+  closedMessage?: string;
 };
 
 export default function SidebarCarritoDelivery({
@@ -22,6 +24,8 @@ export default function SidebarCarritoDelivery({
   setCarrito,
   branchSlug,
   branding,
+  canCheckout = true,
+  closedMessage = "Estamos cerrados por el momento. Volve a intentar mas tarde.",
 }: Props) {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -45,6 +49,7 @@ export default function SidebarCarritoDelivery({
 
   const handleCheckout = () => {
     if (carrito.length === 0) return;
+    if (!canCheckout) return;
 
     const cleanCart = carrito.map((item) => ({
       uid: item.uid,
@@ -170,15 +175,20 @@ export default function SidebarCarritoDelivery({
 
           <button
             onClick={handleCheckout}
-            disabled={carrito.length === 0}
+            disabled={carrito.length === 0 || !canCheckout}
             className="w-full py-4 rounded-xl text-white font-bold text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98]"
             style={{
               backgroundColor:
                 branding?.primary_color || branding?.brand_color || "#000000",
             }}
           >
-            Finalizar pedido
+            {canCheckout ? "Finalizar pedido" : "Local cerrado"}
           </button>
+          {!canCheckout && (
+            <p className="mt-3 text-center text-sm font-medium text-red-600">
+              {closedMessage}
+            </p>
+          )}
         </div>
       </div>
     </div>

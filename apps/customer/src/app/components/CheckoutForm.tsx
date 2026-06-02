@@ -47,6 +47,11 @@ type Props = {
   onAddToCart: (item: CartItem) => void;
   onUpdateCart: (cart: CartItem[]) => void;
   branding?: Branding;
+  availability?: {
+    isOpen: boolean;
+    message: string;
+    reason: "manual" | "temporary" | "hours" | null;
+  };
 };
 
 type PaymentMethod = {
@@ -89,6 +94,7 @@ export default function CheckoutForm({
   onAddToCart,
   onUpdateCart, // eslint-disable-next-line @typescript-eslint/no-unused-vars
   branding,
+  availability,
 }: Props) {
   const [customer, setCustomer] = useState({
     name: "",
@@ -125,6 +131,9 @@ export default function CheckoutForm({
   const [submitError, setSubmitError] = useState("");
 
   const fontFamily = getBrandFontFamily(branding);
+  const branchIsOpen = availability?.isOpen !== false;
+  const closedMessage =
+    availability?.message || branding?.web_closed_message || "Estamos cerrados por el momento. Volve a intentar mas tarde.";
 
   const loadPaymentMethods = useCallback(async () => {
     console.log(
@@ -396,6 +405,11 @@ export default function CheckoutForm({
   ========================= */
 
   const handleSubmit = async () => {
+    if (!branchIsOpen) {
+      setSubmitError(closedMessage);
+      return;
+    }
+
     if (!isValid() || isPhoneMissingForCoupon) return;
 
     setLoading(true);
@@ -455,6 +469,12 @@ export default function CheckoutForm({
   return (
     <div className="w-full min-w-0 max-w-full space-y-5 pb-8 overflow-x-hidden [&_input]:max-w-full [&_input]:!text-[16px] [&_select]:max-w-full [&_select]:!text-[16px] [&_textarea]:max-w-full [&_textarea]:!text-[16px]">
       {/* Header */}
+      {!branchIsOpen && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {closedMessage}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={onBack}
@@ -840,7 +860,7 @@ export default function CheckoutForm({
             <div className="mt-6">
               <button
                 onClick={handleSubmit}
-                disabled={!isValid() || loading || isPhoneMissingForCoupon}
+                disabled={!branchIsOpen || !isValid() || loading || isPhoneMissingForCoupon}
                 className="w-full bg-gray-900 hover:bg-black text-white font-semibold py-4 rounded-xl transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2.5 text-base shadow-sm hover:shadow-md"
                 style={{ fontFamily }}
               >

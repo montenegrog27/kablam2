@@ -102,6 +102,8 @@ export type Branding = {
   website_url?: string;
   web_open?: boolean;
   web_closed_message?: string;
+  web_closed_reason?: string;
+  web_closed_until?: string;
   brand_color?: string;
   accent_color?: string;
   font_family?: string;
@@ -162,6 +164,11 @@ export type MenuPageClientProps = {
   initialMenu: Product[];
   initialCombos?: Combo[];
   branding?: Branding;
+  availability?: {
+    isOpen: boolean;
+    message: string;
+    reason: "manual" | "temporary" | "hours" | null;
+  };
   branchSlug: string;
   customer?: {
     name?: string;
