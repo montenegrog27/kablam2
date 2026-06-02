@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { MessageCircle, RefreshCw, Save, Search, Send, Settings, Ticket, Users } from "lucide-react";
+import { MessageCircle, RefreshCw, Save, Search, Send, Settings, Ticket, Trash2, Users } from "lucide-react";
 
 const currency = new Intl.NumberFormat("es-AR", {
   style: "currency",
@@ -173,6 +173,31 @@ export default function AnniversaryDashboardPage() {
     const data = await response.json();
     setResult(data.error ? `${data.error}${data.detail ? `: ${JSON.stringify(data.detail)}` : ""}` : "WhatsApp enviado.");
     await load();
+    setLoading(false);
+  };
+
+  const deleteInvitation = async () => {
+    if (!selected) return;
+    const confirmed = window.confirm(`Eliminar la invitacion de ${selected.customer_name}? Esta accion no se puede deshacer.`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    setResult("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const response = await fetch(`/api/anniversary-invitations?id=${encodeURIComponent(selected.id)}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const data = await response.json();
+    if (data.error) {
+      setResult(`${data.error}${data.detail ? `: ${data.detail}` : ""}`);
+    } else {
+      setResult("Invitacion eliminada.");
+      setSelected(null);
+      setMessage(defaultMessage);
+      await load();
+    }
     setLoading(false);
   };
 
@@ -452,6 +477,10 @@ export default function AnniversaryDashboardPage() {
               <button onClick={sendWhatsapp} disabled={loading || !message.trim()} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">
                 <Send size={16} />
                 Enviar WhatsApp
+              </button>
+              <button onClick={deleteInvitation} disabled={loading} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200 transition hover:bg-red-500/18 disabled:opacity-50">
+                <Trash2 size={16} />
+                Eliminar invitacion
               </button>
             </div>
           )}

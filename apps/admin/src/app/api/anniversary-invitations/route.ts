@@ -292,3 +292,28 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, result });
 }
+
+export async function DELETE(req: NextRequest) {
+  const tenantId = await getUserTenant(req);
+  if (!tenantId) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  const invitationId = req.nextUrl.searchParams.get("id");
+  if (!invitationId) return NextResponse.json({ error: "Falta invitacion" }, { status: 400 });
+
+  const service = createServiceClient();
+  const { error, count } = await service
+    .from("anniversary_invitations")
+    .delete({ count: "exact" })
+    .eq("tenant_id", tenantId)
+    .eq("id", invitationId);
+
+  if (error) {
+    return NextResponse.json({ error: "No se pudo eliminar la invitacion", detail: error.message }, { status: 500 });
+  }
+
+  if (!count) {
+    return NextResponse.json({ error: "Invitacion no encontrada" }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
