@@ -453,7 +453,7 @@ export default function CheckoutForm({
   ========================= */
 
   return (
-    <div className="w-full max-w-full space-y-6 pb-8 overflow-x-hidden [&_input]:!text-[16px] [&_select]:!text-[16px] [&_textarea]:!text-[16px]">
+    <div className="w-full min-w-0 max-w-full space-y-5 pb-8 overflow-x-hidden [&_input]:max-w-full [&_input]:!text-[16px] [&_select]:max-w-full [&_select]:!text-[16px] [&_textarea]:max-w-full [&_textarea]:!text-[16px]">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button
@@ -474,11 +474,11 @@ export default function CheckoutForm({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:gap-8 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-4 sm:gap-6 lg:gap-8 lg:grid-cols-3">
         {/* Columna izquierda - Información del cliente y pago */}
-        <div className="lg:col-span-2 space-y-5">
+        <div className="min-w-0 lg:col-span-2 space-y-4 sm:space-y-5">
           {/* Sección de información del cliente */}
-          <div className="bg-white rounded-2xl shadow-[0_1px_3px_0_rgba(0,0,0,0.06)] border border-gray-200 p-5 md:p-6">
+          <div className="min-w-0 bg-white rounded-2xl shadow-[0_1px_3px_0_rgba(0,0,0,0.06)] border border-gray-200 p-4 sm:p-5 md:p-6">
             <h2
               className="font-semibold text-gray-900 text-lg mb-5 flex items-center gap-2.5"
               style={{ fontFamily }}
@@ -528,13 +528,13 @@ export default function CheckoutForm({
                             key={address.id}
                             type="button"
                             onClick={() => selectSavedAddress(address)}
-                            className={`rounded-xl border px-3 py-2.5 text-left text-sm transition ${
+                            className={`min-w-0 rounded-xl border px-3 py-2.5 text-left text-sm transition ${
                               selectedAddressId === address.id
                                 ? "border-gray-900 bg-gray-900 text-white"
                                 : "border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-400"
                             }`}
                           >
-                            <span className="block font-bold">
+                            <span className="block truncate font-bold">
                               {address.alias}
                               {address.is_default ? " · Favorita" : ""}
                             </span>
@@ -592,7 +592,7 @@ export default function CheckoutForm({
           </div>
 
           {/* Sección de cupón */}
-          <div className="bg-white rounded-2xl shadow-[0_1px_3px_0_rgba(0,0,0,0.06)] border border-gray-200 p-5 md:p-6">
+          <div className="min-w-0 bg-white rounded-2xl shadow-[0_1px_3px_0_rgba(0,0,0,0.06)] border border-gray-200 p-4 sm:p-5 md:p-6">
             <h2 className="font-semibold text-gray-900 text-lg mb-5 flex items-center gap-2.5" style={{ fontFamily }}>
               <div className="w-8 h-8 rounded-xl bg-gray-900 text-white flex items-center justify-center">
                 <Tag size={16} />
@@ -600,8 +600,8 @@ export default function CheckoutForm({
               Cupón de descuento
             </h2>
             <div className="space-y-3">
-              <div className="flex gap-3">
-                <div className="relative flex-1">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative min-w-0 flex-1">
                   <input
                     placeholder="Código de cupón"
                     value={couponCode}
@@ -611,7 +611,7 @@ export default function CheckoutForm({
                 </div>
                 <button
                   onClick={applyCoupon}
-                  className="bg-gray-900 hover:bg-black text-white font-semibold px-6 py-3.5 rounded-xl transition-all text-sm whitespace-nowrap active:scale-[0.97]"
+                  className="w-full bg-gray-900 hover:bg-black text-white font-semibold px-4 py-3.5 rounded-xl transition-all text-sm whitespace-nowrap active:scale-[0.97] sm:w-auto sm:px-6"
                   style={{ fontFamily }}
                 >
                   Aplicar
@@ -660,7 +660,7 @@ export default function CheckoutForm({
           </div>
 
           {/* Sección de método de pago */}
-          <div className="bg-white rounded-2xl shadow-[0_1px_3px_0_rgba(0,0,0,0.06)] border border-gray-200 p-5 md:p-6">
+          <div className="min-w-0 bg-white rounded-2xl shadow-[0_1px_3px_0_rgba(0,0,0,0.06)] border border-gray-200 p-4 sm:p-5 md:p-6">
             <h2 className="font-semibold text-gray-900 text-lg mb-5 flex items-center gap-2.5" style={{ fontFamily }}>
               <div className="w-8 h-8 rounded-xl bg-gray-900 text-white flex items-center justify-center">
                 <CreditCard size={16} />
@@ -679,7 +679,7 @@ export default function CheckoutForm({
                         key={pm.id}
                         type="button"
                         onClick={() => setSelectedPaymentMethod(pm.id)}
-                        className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                        className={`w-full min-w-0 text-left px-4 py-3.5 rounded-xl border-2 transition-all flex items-center gap-3 ${
                           selected
                             ? "border-gray-900 bg-gray-50"
                             : "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50"
@@ -690,7 +690,7 @@ export default function CheckoutForm({
                         }`}>
                           {selected && <div className="w-2.5 h-2.5 rounded-full bg-gray-900" />}
                         </div>
-                        <span className={`font-medium text-sm ${selected ? "text-gray-900" : "text-gray-600"}`} style={{ fontFamily }}>
+                        <span className={`min-w-0 truncate font-medium text-sm ${selected ? "text-gray-900" : "text-gray-600"}`} style={{ fontFamily }}>
                           {pm.name}
                         </span>
                       </button>
@@ -721,9 +721,9 @@ export default function CheckoutForm({
         </div>
 
         {/* Columna derecha - Resumen y CTA */}
-        <div className="lg:col-span-1 space-y-5">
+        <div className="min-w-0 lg:col-span-1 space-y-5">
           {/* Resumen del pedido */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:p-6 sticky top-4">
+          <div className="min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 md:p-6 sticky top-4">
             <h2 className="font-semibold text-gray-900 text-lg mb-5 flex items-center gap-2.5" style={{ fontFamily }}>
               <div className="w-8 h-8 rounded-xl bg-gray-900 text-white flex items-center justify-center">
                 <ShoppingCart size={16} />
@@ -736,7 +736,7 @@ export default function CheckoutForm({
               {cart.map((item) => (
                 <div
                   key={item.uid}
-                  className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-xl group hover:bg-gray-100 transition-colors border border-gray-100"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 p-2.5 bg-gray-50 rounded-xl group hover:bg-gray-100 transition-colors border border-gray-100 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">
@@ -764,7 +764,7 @@ export default function CheckoutForm({
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                  <div className="flex items-center gap-1.5 justify-self-end bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
                     <button
                       onClick={() => {
                         if (item.quantity > 1) {
@@ -787,7 +787,7 @@ export default function CheckoutForm({
                       <Plus size={11} />
                     </button>
                   </div>
-                  <span className="text-sm font-semibold text-gray-900 min-w-[60px] text-right tabular-nums">
+                  <span className="col-span-2 justify-self-end text-sm font-semibold text-gray-900 tabular-nums sm:col-span-1 sm:min-w-[60px] sm:text-right">
                     ${(item.price * item.quantity).toLocaleString("es-AR")}
                   </span>
                 </div>

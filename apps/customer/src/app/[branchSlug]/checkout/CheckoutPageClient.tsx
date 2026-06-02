@@ -46,7 +46,7 @@ export default function CheckoutPageClient({ branchSlug, branding }: Props) {
       <FontLoader branding={branding} />
       <style>{`.pac-container { z-index: 9999 !important; } body { overflow-x: hidden; }`}</style>
       <div className="min-h-screen bg-gray-100 overflow-x-hidden">
-        <div className="max-w-6xl mx-auto overflow-x-hidden px-4 md:px-6">
+        <div className="w-full max-w-6xl mx-auto overflow-x-hidden px-3 sm:px-4 md:px-6">
           {!orderMode ? (
             <OrderModeSelector
               onSelect={setOrderMode}
