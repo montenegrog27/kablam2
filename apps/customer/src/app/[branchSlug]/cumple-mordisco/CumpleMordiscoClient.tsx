@@ -389,7 +389,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
 
           <button
             onClick={verify}
-            disabled={loading || !phone || !hasFullName}
+            disabled={loading}
             className="mt-5 w-full rounded-2xl bg-[#d7b56d] px-5 py-4 text-sm font-black text-black transition hover:bg-[#f0cf88] disabled:opacity-50"
           >
             {loading ? "Verificando..." : "Ver mis beneficios"}
@@ -703,6 +703,32 @@ function BenefitExperience({
               <span className="text-xs font-black uppercase tracking-[0.12em]">{impressiveBadge.label}</span>
             </div>
           )}
+          <div className="fade-up mx-auto mt-5 max-w-sm overflow-hidden rounded-[28px] bg-white text-black shadow-[0_24px_80px_rgba(255,255,255,0.18)] sm:mt-7">
+            <div className="bg-[radial-gradient(circle_at_top_left,rgba(255,59,48,0.22),transparent_42%),linear-gradient(180deg,#ffffff,#f5efe5)] px-5 py-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-black/42">Beneficio desbloqueado</p>
+              <div className="mt-2 flex items-end justify-center gap-3">
+                <p className="text-[3.1rem] font-black leading-none tracking-normal text-black">
+                  {hasDiscount ? `${verification.benefit.discount}%` : "VIP"}
+                </p>
+                <p className="pb-1 text-2xl font-black leading-none text-[#ff3b30]">{hasDiscount ? "OFF" : "ACCESS"}</p>
+              </div>
+              <p className="mt-3 text-xs font-black uppercase tracking-[0.12em] text-black/46">
+                {hasDiscount ? `Por ser ${levelName}` : "Invitación habilitada"}
+              </p>
+            </div>
+            {selectedLot && (
+              <div className="grid grid-cols-2 bg-black text-white">
+                <div className="border-r border-white/10 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/36">Lote</p>
+                  <p className="mt-1 text-sm font-black">{currency.format(selectedLot.basePrice)}</p>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d7b56d]">Tu precio</p>
+                  <p className="mt-1 text-sm font-black">{currency.format(selectedLot.finalPrice)}</p>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
 
         <div className="relative space-y-4 px-3 pb-4 sm:space-y-5 sm:px-6 sm:pb-6">
