@@ -67,11 +67,13 @@ export default function KDSTab() {
 
   const loadOrders = async () => {
     if (!branchId) return;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const [{ data }, { data: combos }] = await Promise.all([
       supabase
         .from("orders")
         .select("*, order_items(*, products(*))")
         .eq("branch_id", branchId)
+        .gte("created_at", since)
         .in("status", ["confirmed", "preparing", "ready"])
         .order("created_at", { ascending: true }),
       tenantId

@@ -7,6 +7,16 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-AR").format(value || 0);
 }
 
+function getPaymentLabel(order: any) {
+  const payments = order.order_payments || [];
+  if (!payments.length) return "Sin metodo";
+
+  return payments
+    .map((payment: any) => payment.payment_methods?.name || "Pago")
+    .filter(Boolean)
+    .join(" + ");
+}
+
 export default function OrderCard({
   order,
   selected,
@@ -31,6 +41,7 @@ export default function OrderCard({
   const isFullyPaid = remaining <= 0;
   const isDelivery = order.type === "delivery";
   const canChange = canChangeRider && isDelivery;
+  const paymentLabel = getPaymentLabel(order);
 
   useEffect(() => {
     if (order.rider_id) {
@@ -158,6 +169,10 @@ export default function OrderCard({
               }`}
             >
               {order.type}
+            </span>
+
+            <span className="text-sm px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+              {paymentLabel}
             </span>
 
             {rider && (

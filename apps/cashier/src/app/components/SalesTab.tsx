@@ -24,7 +24,7 @@ export default function SalesTab({ session }: any) {
 
     const { data: ordersData } = await supabase
       .from("orders")
-      .select("*")
+      .select("*, order_payments(amount, payment_methods(name))")
       .eq("branch_id", branchId)
       .gte("created_at", since)
       .not("status", "in", "(delivered,cancelled)")
