@@ -103,7 +103,18 @@ export default function SalesTab({ session }: any) {
     channel.on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages" },
-      () => loadOrders(),
+      (payload) => {
+        const msg = payload.new;
+        loadOrders();
+
+        if (
+          msg?.branch_id === branchId &&
+          msg?.sender_type === "rider" &&
+          !showRiderChat
+        ) {
+          setRiderUnread((prev) => prev + 1);
+        }
+      },
     );
 
     channel.subscribe((status) => {
@@ -113,7 +124,7 @@ export default function SalesTab({ session }: any) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [branchId]);
+  }, [branchId, showRiderChat]);
 
   return (
     <div className="flex h-full overflow-hidden relative">
@@ -164,13 +175,19 @@ export default function SalesTab({ session }: any) {
           onClose={() => setShowRiderChat(false)}
           onRiderSelect={() => {}}
           selectedRiderId={null}
-          onUnreadChange={setRiderUnread}
+          onUnreadChange={(count: number) => {
+            if (!showRiderChat) setRiderUnread(count);
+          }}
         />
       )}
 
       {/* FLOATING RIDER BUTTON */}
       <button
-        onClick={() => setShowRiderChat(!showRiderChat)}
+        onClick={() => {
+          const willOpen = !showRiderChat;
+          setShowRiderChat(willOpen);
+          if (willOpen) setRiderUnread(0);
+        }}
         className={`
           absolute bottom-6 right-6
           w-14 h-14 rounded-full
@@ -179,10 +196,11 @@ export default function SalesTab({ session }: any) {
           transition-all z-50
           flex items-center justify-center
           ${showRiderChat ? "bg-gray-700" : ""}
+          ${riderUnread > 0 && !showRiderChat ? "animate-pulse ring-4 ring-blue-300 ring-offset-2" : ""}
         `}
       >
         <Bike size={24} />
-        {riderUnread > 0 && (
+        {riderUnread > 0 && !showRiderChat && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
             {riderUnread > 9 ? "9+" : riderUnread}
           </span>

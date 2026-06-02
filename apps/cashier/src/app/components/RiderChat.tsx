@@ -39,6 +39,22 @@ export default function RiderChat({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const readStorageKey = `rider_chat_read_${branchId}`;
+
+  const getReadMap = () => {
+    try {
+      return JSON.parse(localStorage.getItem(readStorageKey) || "{}");
+    } catch {
+      return {};
+    }
+  };
+
+  const saveReadMap = (readMap: Record<string, number>) => {
+    try {
+      localStorage.setItem(readStorageKey, JSON.stringify(readMap));
+    } catch {}
+  };
+
   useEffect(() => {
     loadRiders();
     loadUnreadCounts();
@@ -73,28 +89,36 @@ export default function RiderChat({
   };
 
   const loadUnreadCounts = async () => {
-    const { data } = await supabase
-      .from("messages")
-      .select("conversation_id, sender_type")
-      .eq("branch_id", branchId)
-      .eq("sender_type", "rider");
-
-    const counts: Record<string, number> = {};
-    data?.forEach((m) => {
-      if (m.conversation_id) {
-        counts[m.conversation_id] = (counts[m.conversation_id] || 0) + 1;
-      }
-    });
-
-    // Mapear por rider_id
-    const riderCounts: Record<string, number> = {};
     const { data: convs } = await supabase
       .from("rider_conversations")
       .select("id, rider_id")
       .eq("branch_id", branchId);
 
+    const conversationToRider: Record<string, string> = {};
     convs?.forEach((c) => {
-      riderCounts[c.rider_id] = counts[c.id] || 0;
+      conversationToRider[c.id] = c.rider_id;
+    });
+
+    const { data } = await supabase
+      .from("messages")
+      .select("conversation_id, sender_type, created_at")
+      .eq("branch_id", branchId)
+      .eq("sender_type", "rider");
+
+    const readMap = getReadMap();
+    const riderCounts: Record<string, number> = {};
+
+    data?.forEach((m) => {
+      if (!m.conversation_id) return;
+
+      const riderId = conversationToRider[m.conversation_id];
+      if (!riderId) return;
+
+      const lastRead = readMap[riderId] || 0;
+      const createdAt = new Date(m.created_at).getTime();
+      if (createdAt > lastRead) {
+        riderCounts[riderId] = (riderCounts[riderId] || 0) + 1;
+      }
     });
 
     setUnread(riderCounts);
@@ -124,6 +148,7 @@ export default function RiderChat({
               if (exists) return prev;
               return [...prev, msg];
             });
+            markAsRead(activeChat.riderId);
           } else {
             // Incrementar unread
             setUnread((prev) => ({
@@ -180,6 +205,9 @@ export default function RiderChat({
 
   const markAsRead = async (riderId: string) => {
     setUnread((prev) => ({ ...prev, [riderId]: 0 }));
+    const readMap = getReadMap();
+    readMap[riderId] = Date.now();
+    saveReadMap(readMap);
   };
 
   const sendMessage = async () => {
@@ -251,7 +279,7 @@ export default function RiderChat({
   };
 
   return (
-    <div className="w-[320px] h-full flex flex-col bg-white border-l border-gray-200">
+    <div className="w-[420px] max-w-[42vw] h-full flex flex-col bg-white border-l border-gray-200">
       {/* HEADER */}
       <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center gap-2">
@@ -264,7 +292,7 @@ export default function RiderChat({
       </div>
 
       {/* RIDER LIST */}
-      <div className="flex-1 overflow-y-auto">
+      <div className={`${activeChat ? "max-h-56" : "flex-1"} overflow-y-auto`}>
         {riders.map((rider) => (
           <button
             key={rider.id}
@@ -296,7 +324,7 @@ export default function RiderChat({
 
       {/* ACTIVE CHAT */}
       {activeChat && (
-        <div className="h-[300px] flex flex-col border-t border-gray-200">
+        <div className="flex-1 min-h-0 flex flex-col border-t border-gray-200">
           <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
             <span className="text-sm font-medium">{activeChat.riderName}</span>
             <button
@@ -308,7 +336,7 @@ export default function RiderChat({
           </div>
 
           {/* MESSAGES */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
             {messages.map((msg) => (
               <div
                 key={msg.id}

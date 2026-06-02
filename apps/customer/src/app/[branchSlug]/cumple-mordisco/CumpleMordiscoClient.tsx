@@ -330,7 +330,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
         </div>
       </section>
 
-      <section id="beneficios" className="mx-auto grid max-w-6xl gap-8 px-5 py-16 lg:grid-cols-[0.9fr_1.1fr]">
+      <section id="beneficios" className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-5 sm:py-16 lg:grid-cols-[0.58fr_1.42fr]">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Verificacion</p>
           <h2 className="mt-4 text-4xl font-black tracking-tight">Qué tan Mordiscolover sos? Descubrilo!</h2>
@@ -340,15 +340,15 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           </p>
         </div>
 
-        <div className="rounded-[28px] border border-white/12 bg-white/[0.06] p-5 shadow-2xl backdrop-blur-xl">
+        <div className="rounded-[28px] border border-white/12 bg-white/[0.06] p-4 shadow-2xl backdrop-blur-xl sm:p-5">
           <div className="grid gap-3">
             <label>
               <span className="mb-1 block text-xs font-semibold text-white/55">Nombre completo</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 outline-none" />
+              <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none" />
             </label>
             <label>
               <span className="mb-1 block text-xs font-semibold text-white/55">Numero de WhatsApp</span>
-              <input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 outline-none" />
+              <input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none" />
             </label>
           </div>
 
@@ -561,42 +561,42 @@ function BenefitExperience({
   savings: number;
 }) {
   return (
-    <div className="anniversary-reveal mt-6 overflow-hidden rounded-[36px] bg-[#070504] text-white shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
+    <div className="anniversary-reveal mt-6 overflow-hidden rounded-[32px] bg-[#070504] text-white shadow-[0_28px_90px_rgba(0,0,0,0.45)] sm:rounded-[36px]">
       <div className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,59,48,0.26),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.045),transparent_30%)]" />
         <div className="pointer-events-none absolute left-1/2 top-10 h-48 w-48 -translate-x-1/2 rounded-full border border-white/10" />
 
-        <section className="relative px-5 pb-12 pt-10 text-center sm:px-8 sm:pb-16 sm:pt-14">
+        <section className="relative px-4 pb-8 pt-8 text-center sm:px-8 sm:pb-12 sm:pt-12">
           <p className="fade-up text-[10px] font-black uppercase tracking-[0.34em] text-white/38">Primer Aniversario Mordisco</p>
-          <p className="fade-up mt-10 text-sm font-semibold text-white/54">Tu membresía fue revelada</p>
-          <h3 className="fade-up level-glow mx-auto mt-3 max-w-[11ch] break-words text-[4rem] font-black uppercase leading-[0.78] tracking-normal text-white sm:text-[6.4rem]">
+          <p className="fade-up mt-7 text-sm font-semibold text-white/54 sm:mt-9">Tu membresía fue revelada</p>
+          <h3 className="fade-up level-glow mx-auto mt-3 max-w-[12ch] break-words text-[3.25rem] font-black uppercase leading-[0.8] tracking-normal text-white sm:text-[5.7rem]">
             {levelName}
           </h3>
           {impressiveBadge && (
-            <div className="fade-up mx-auto mt-8 inline-flex max-w-full items-center gap-3 rounded-full bg-white px-5 py-3 text-black shadow-[0_22px_70px_rgba(255,255,255,0.16)] transition duration-300 hover:scale-[1.02]">
+            <div className="fade-up mx-auto mt-6 inline-flex max-w-full items-center gap-3 rounded-full bg-white px-4 py-3 text-black shadow-[0_22px_70px_rgba(255,255,255,0.16)] transition duration-300 hover:scale-[1.02] sm:mt-8 sm:px-5">
               <span className="text-xl">{impressiveBadge.icon}</span>
               <span className="text-xs font-black uppercase tracking-[0.12em]">{impressiveBadge.label}</span>
             </div>
           )}
         </section>
 
-        <div className="relative space-y-5 px-4 pb-5 sm:px-6 sm:pb-6">
-          <section className="fade-up rounded-[30px] bg-white/[0.07] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl sm:p-7">
+        <div className="relative space-y-4 px-3 pb-4 sm:space-y-5 sm:px-6 sm:pb-6">
+          <section className="fade-up rounded-[26px] bg-white/[0.07] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl sm:rounded-[30px] sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d7b56d]">Tu historia</p>
-            <p className="mt-5 whitespace-pre-line text-xl font-semibold leading-9 text-white/90">{story}</p>
+            <p className="mt-4 whitespace-pre-line text-base font-semibold leading-7 text-white/90 sm:text-xl sm:leading-9">{story}</p>
           </section>
 
-          <section className="fade-up rounded-[30px] bg-[#11100e] p-5 sm:p-6">
-            <div className="mb-5 flex items-end justify-between gap-4">
+          <section className="fade-up rounded-[26px] bg-[#11100e] p-4 sm:rounded-[30px] sm:p-5">
+            <div className="mb-4 flex items-end justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.24em] text-white/36">Comunidad</p>
-                <h4 className="mt-2 text-2xl font-black text-white">Tus señales Mordisco</h4>
+                <h4 className="mt-2 text-xl font-black text-white sm:text-2xl">Tus señales Mordisco</h4>
               </div>
               <p className="hidden max-w-36 text-right text-xs font-semibold leading-5 text-white/40 sm:block">
                 Datos que explican tu lugar en este aniversario.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {historyStats.map((stat) => (
                 <StoryStat key={stat.label} {...stat} />
               ))}
@@ -886,12 +886,12 @@ function LotStepCard({ lot, index, selected, onSelect }: { lot: Lot; index: numb
 
 function StoryStat({ icon, value, numeric, suffix = "", label }: { icon: string; value: string; numeric?: number; suffix?: string; label: string }) {
   return (
-    <div className="rounded-[24px] bg-white/[0.055] p-4 text-center backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.09]">
-      <p className="text-2xl">{icon}</p>
-      <p className="mt-2 text-2xl font-black text-white">
+    <div className="rounded-[18px] bg-white/[0.055] p-3 text-center backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.09] sm:rounded-[24px] sm:p-4">
+      <p className="text-xl sm:text-2xl">{icon}</p>
+      <p className="mt-1 text-lg font-black text-white sm:mt-2 sm:text-2xl">
         {typeof numeric === "number" ? <CountUp value={numeric} suffix={suffix} /> : value}
       </p>
-      <p className="mt-1 text-xs font-semibold text-white/48">{label}</p>
+      <p className="mt-1 text-[10px] font-semibold leading-3 text-white/48 sm:text-xs sm:leading-normal">{label}</p>
     </div>
   );
 }
