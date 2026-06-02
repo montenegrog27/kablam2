@@ -486,7 +486,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                           <p className="text-sm font-black">{lot.name}</p>
                           <p className="mt-1 text-xs text-white/50">Precio base {currency.format(lot.basePrice)}</p>
                           <p className="mt-1 text-xs text-white/45">
-                            {lot.available === null ? "Cupo limitado" : lot.available > 0 ? `${lot.available} lugares disponibles` : "Lote agotado"}
+                            {lot.available === null ? "Cupo limitado" : lot.available > 0 ? `` : "Lote agotado"}
                           </p>
                         </div>
                         <div className="text-right">
@@ -685,7 +685,6 @@ function BenefitExperience({
 
         <section className="relative px-4 pb-8 pt-8 text-center sm:px-8 sm:pb-12 sm:pt-12">
           <p className="fade-up text-[10px] font-black uppercase tracking-[0.34em] text-white/38">Primer Aniversario Mordisco</p>
-          <p className="fade-up mt-7 text-sm font-semibold text-white/54 sm:mt-9">Tu membresía fue revelada</p>
           <h3 className="fade-up level-glow mx-auto mt-3 max-w-[12ch] break-words text-[3.25rem] font-black uppercase leading-[0.8] tracking-normal text-white sm:text-[5.7rem]">
             {levelName}
           </h3>
@@ -1030,7 +1029,7 @@ function LotStepCard({ lot, index, selected, onSelect }: { lot: Lot; index: numb
           />
         </div>
         <p className={`mt-2 text-[11px] font-semibold ${selected && open ? "text-black/45" : "text-white/42"}`}>
-          {lot.available === null ? "Cupo ilimitado" : soldOut ? "Este lote ya se completo" : `${lot.available} lugares disponibles`}
+          {lot.available === null ? "Cupo ilimitado" : soldOut ? "Este lote ya se completo" : ``}
         </p>
       </div>
     </button>
