@@ -250,7 +250,7 @@ export default function CustomerHubPage() {
           is_active: Boolean(link.is_active),
         };
 
-        if (!link._draft) payload.id = link.id;
+        payload.id = link._draft ? crypto.randomUUID() : link.id;
 
         return payload;
       });
