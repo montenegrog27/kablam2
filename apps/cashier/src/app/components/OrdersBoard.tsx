@@ -3,6 +3,7 @@
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import OrderCard from "./OrderCard";
 import { useState, useEffect } from "react";
+import { publishOrderRealtimeEvent } from "../../lib/publishOrderRealtimeEvent";
 
 const STATUSES = ["unconfirmed", "confirmed", "preparing", "ready", "sent"];
 const STATUS_META: any = {
@@ -27,6 +28,15 @@ const STATUS_META: any = {
     accent: "bg-purple-100 text-purple-700",
   },
 };
+
+function statusToRealtimeEvent(status: string) {
+  if (status === "confirmed") return "orders.confirmed";
+  if (status === "preparing") return "orders.preparing";
+  if (status === "ready") return "orders.ready";
+  if (status === "sent") return "orders.sent";
+  if (status === "delivered") return "orders.delivered";
+  return "orders.accepted";
+}
 
 export default function OrdersBoard({
   orders,
@@ -256,6 +266,7 @@ export default function OrdersBoard({
         is_paid: true,
       })
       .eq("id", order.id);
+
     setLoading(false);
     reloadOrders();
   };
@@ -328,6 +339,24 @@ export default function OrdersBoard({
       .from("orders")
       .update(updates)
       .eq("id", order.id);
+
+    await publishOrderRealtimeEvent({
+      tenantId: order.tenant_id,
+      branchId: order.branch_id,
+      eventType: statusToRealtimeEvent(nextStatus),
+      payload: {
+        orderId: order.id,
+        status: nextStatus,
+        previousStatus: order.status,
+        order: {
+          id: order.id,
+          status: nextStatus,
+          type: order.type,
+          customerName: order.customer_name,
+          createdAt: order.created_at,
+        },
+      },
+    });
 
     // Takeaway: preparing → ready → enviar aviso_ready_takeaway
     if (nextStatus === "ready" && order.type === "takeaway") {

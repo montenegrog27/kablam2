@@ -103,6 +103,7 @@ export default function MenuPageClient({
           combos={combos}
           onAgregar={agregarAlCarrito}
           branding={branding}
+          disabled={!branchIsOpen}
         />
       </div>
 

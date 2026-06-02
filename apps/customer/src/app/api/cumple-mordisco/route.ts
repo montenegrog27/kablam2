@@ -189,15 +189,15 @@ async function loadLots(service: ReturnType<typeof createServiceClient>, tenantI
 async function countSoldByLot(service: ReturnType<typeof createServiceClient>, tenantId: string, branchId: string) {
   const { data } = await service
     .from("anniversary_invitations")
-    .select("lot_key")
+    .select("lot_key, attendee_count")
     .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .neq("status", "cancelled");
 
   const counts = new Map<string, number>();
-  (data || []).forEach((row: { lot_key?: string | null }) => {
+  (data || []).forEach((row: { lot_key?: string | null; attendee_count?: number | null }) => {
     if (!row.lot_key) return;
-    counts.set(row.lot_key, (counts.get(row.lot_key) || 0) + 1);
+    counts.set(row.lot_key, (counts.get(row.lot_key) || 0) + Math.max(1, Number(row.attendee_count || 1)));
   });
   return counts;
 }
@@ -467,6 +467,9 @@ async function sendPaymentWhatsapp({
   phone,
   code,
   lotName,
+  companionName,
+  attendeeCount,
+  unitPrice,
   price,
   benefitLabel,
   discount,
@@ -481,6 +484,9 @@ async function sendPaymentWhatsapp({
   phone: string;
   code: string;
   lotName: string;
+  companionName?: string | null;
+  attendeeCount: number;
+  unitPrice: number;
   price: number;
   benefitLabel: string;
   discount: number;
@@ -507,6 +513,10 @@ async function sendPaymentWhatsapp({
 
   const deadlineText = settings.paymentDeadlineMinutes === 60 ? "1hs" : `${settings.paymentDeadlineMinutes} minutos`;
   const message = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${settings.eventDate}\nHora: ${settings.eventTime}\nUbicacion: ${settings.eventLocation}\n\n*Tu acceso*\n${lotName}\nMonto a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *${settings.paymentAlias}*\n\nTenes *${deadlineText}* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
+  const companionText = companionName ? `\nAcompañante: ${companionName}` : "";
+  const accessText = `${lotName}\nTitular: ${name}${companionText}\nCantidad: ${attendeeCount} ${attendeeCount === 1 ? "entrada" : "entradas"}\nPrecio por entrada: *$${unitPrice.toLocaleString("es-AR")}*`;
+  const paymentMessage = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${settings.eventDate}\nHora: ${settings.eventTime}\nUbicacion: ${settings.eventLocation}\n\n*Tu acceso*\n${accessText}\n\nImporte total a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *${settings.paymentAlias}*\n\nTenes *${deadlineText}* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
+  void message;
   const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
     method: "POST",
     headers: {
@@ -517,7 +527,7 @@ async function sendPaymentWhatsapp({
       slug: "mordiscoburgers",
       branchId: branchSlug,
       phone: whatsappPhone,
-      message,
+      message: paymentMessage,
     }),
   });
 
@@ -538,6 +548,7 @@ async function purchaseInvitation(body: {
   email?: string;
   companionName?: string;
   companionDni?: string;
+  attendeeCount?: number;
   phone: string;
   benefitKey?: string;
   lotKey?: string;
@@ -577,7 +588,13 @@ async function purchaseInvitation(body: {
   }
   const discount = Number(tier.discount || body.discount || 0);
   const basePrice = Number(selectedLot.basePrice || body.basePrice || 0);
-  const price = Math.round(basePrice * (1 - discount / 100));
+  const unitPrice = Math.round(basePrice * (1 - discount / 100));
+  const hasCompanion = Boolean(String(body.companionName || "").trim() && String(body.companionDni || "").trim());
+  const attendeeCount = hasCompanion ? 2 : 1;
+  if (selectedLot.available !== null && attendeeCount > selectedLot.available) {
+    return NextResponse.json({ error: "Este lote no tiene cupo suficiente para la cantidad de entradas" }, { status: 409 });
+  }
+  const price = unitPrice * attendeeCount;
   const payload = {
     tenant_id: branch.tenant_id,
     branch_id: branch.id,
@@ -586,8 +603,9 @@ async function purchaseInvitation(body: {
     dni: body.dni || null,
     birthdate: body.birthdate || null,
     email: body.email || null,
-    companion_name: body.companionName || null,
-    companion_dni: body.companionDni || null,
+    companion_name: hasCompanion ? body.companionName : null,
+    companion_dni: hasCompanion ? body.companionDni : null,
+    attendee_count: attendeeCount,
     whatsapp: whatsappPhone,
     benefit_tier: body.benefitKey || tier.key,
     lot_key: body.lotKey || selectedLot.key,
@@ -618,6 +636,9 @@ async function purchaseInvitation(body: {
     phone: whatsappPhone,
     code,
     lotName: payload.lot_name,
+    companionName: payload.companion_name,
+    attendeeCount,
+    unitPrice,
     price,
     benefitLabel: tier.label,
     discount,
@@ -632,7 +653,7 @@ async function purchaseInvitation(body: {
       .from("anniversary_invitations")
       .update({
         last_whatsapp_sent_at: whatsappResult && "ok" in whatsappResult && whatsappResult.ok ? new Date().toISOString() : null,
-        last_whatsapp_message: `Invitacion ${code} - ${tier.label} - ${payload.lot_name} - ${price} - vence en 1hs`,
+        last_whatsapp_message: `Invitacion ${code} - ${tier.label} - ${payload.lot_name} - ${attendeeCount} entradas - ${price} - vence en 1hs`,
       })
       .eq("id", data.id);
   }

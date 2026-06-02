@@ -103,7 +103,7 @@ export default function AnniversaryDashboardPage() {
     const sold = new Map<string, number>();
     items.forEach((item) => {
       if (!item.lot_key) return;
-      sold.set(item.lot_key, (sold.get(item.lot_key) || 0) + 1);
+      sold.set(item.lot_key, (sold.get(item.lot_key) || 0) + Math.max(1, Number(item.attendee_count || 1)));
     });
     return sold;
   }, [items]);
@@ -437,7 +437,10 @@ export default function AnniversaryDashboardPage() {
                     <p className="text-xs text-gray-500">{item.whatsapp}</p>
                   </div>
                   <div className="col-span-3 text-sm text-gray-300">{item.invitation_code}</div>
-                  <div className="col-span-2 text-sm text-gray-400">{item.lot_name || "-"}</div>
+                  <div className="col-span-2 text-sm text-gray-400">
+                    <p>{item.lot_name || "-"}</p>
+                    <p className="text-xs text-gray-500">{item.attendee_count || 1} entradas</p>
+                  </div>
                   <div className="col-span-2 text-right text-sm font-semibold text-emerald-300">{currency.format(Number(item.price || 0))}</div>
                   <div className="col-span-1 flex justify-end">
                     <MessageCircle size={16} className={item.last_whatsapp_sent_at ? "text-emerald-400" : "text-gray-500"} />
@@ -459,6 +462,7 @@ export default function AnniversaryDashboardPage() {
                 <p className="text-sm text-gray-500">{selected.whatsapp}</p>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <InfoPill label="DNI" value={selected.dni || "-"} />
+                  <InfoPill label="Entradas" value={String(selected.attendee_count || 1)} />
                   <InfoPill label="Cumpleaños" value={selected.birthdate ? new Date(selected.birthdate).toLocaleDateString("es-AR") : "-"} />
                   <InfoPill label="Email" value={selected.email || "-"} wide />
                   <InfoPill label="Acompañante" value={selected.companion_name || "-"} />

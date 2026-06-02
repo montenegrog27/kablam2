@@ -118,6 +118,8 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const qr = useMemo(() => qrCells(invitation?.invitation_code || "MORDISCO"), [invitation]);
   const hasDiscount = Number(verification?.benefit.discount || 0) > 0;
   const savings = selectedLot ? Math.max(selectedLot.basePrice - selectedLot.finalPrice, 0) : 0;
+  const attendeeCount = 1 + (companionEnabled ? 1 : 0);
+  const reservationTotal = selectedLot ? selectedLot.finalPrice * attendeeCount : 0;
   const levelName = verification ? levelDisplayName(verification.benefit.key, verification.benefit.label) : "";
   const impressiveBadge = verification ? getImpressiveBadge(verification) : null;
   const story = verification ? verification.message || buildEmotionalStory(verification) : "";
@@ -200,12 +202,13 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           email,
           companionName: companionEnabled ? companionName : "",
           companionDni: companionEnabled ? companionDni : "",
+          attendeeCount,
           benefitKey: verification.benefit.key,
           lotKey: selectedLot.key,
           lotName: selectedLot.name,
           basePrice: selectedLot.basePrice,
           discount: selectedLot.discount,
-          price: selectedLot.finalPrice,
+          price: reservationTotal,
         }),
       });
       const data = await response.json();
@@ -410,6 +413,8 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 perks={verification.perks || []}
                 hasDiscount={hasDiscount}
                 savings={savings}
+                attendeeCount={attendeeCount}
+                reservationTotal={reservationTotal}
                 companionEnabled={companionEnabled}
                 setCompanionEnabled={setCompanionEnabled}
                 companionName={companionName}
@@ -545,7 +550,12 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                       <p className="mt-2 text-xs font-semibold text-[#d7b56d]">Acompañante: {companionName || "Sin completar"}</p>
                     )}
                   </div>
-                  <p className="text-right text-2xl font-black text-[#d7b56d]">{currency.format(selectedLot.finalPrice)}</p>
+                  <div className="text-right">
+                    <p className="text-2xl font-black text-[#d7b56d]">{currency.format(reservationTotal)}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-white/42">
+                      {attendeeCount} {attendeeCount === 1 ? "entrada" : "entradas"} x {currency.format(selectedLot.finalPrice)}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -658,6 +668,8 @@ function BenefitExperience({
   perks,
   hasDiscount,
   savings,
+  attendeeCount,
+  reservationTotal,
   companionEnabled,
   setCompanionEnabled,
   companionName,
@@ -678,6 +690,8 @@ function BenefitExperience({
   perks: string[];
   hasDiscount: boolean;
   savings: number;
+  attendeeCount: number;
+  reservationTotal: number;
   companionEnabled: boolean;
   setCompanionEnabled: (value: boolean) => void;
   companionName: string;
@@ -796,7 +810,14 @@ function BenefitExperience({
               <p className="text-xs font-black uppercase tracking-[0.24em] text-white/36">Reservá tu lugar</p>
               <div className="mt-2 flex items-end justify-between gap-4">
                 <h4 className="text-2xl font-black text-white">Elegí el lote activo</h4>
-                {selectedLot && <p className="text-right text-2xl font-black text-[#d7b56d]">{currency.format(selectedLot.finalPrice)}</p>}
+                {selectedLot && (
+                  <div className="text-right">
+                    <p className="text-2xl font-black text-[#d7b56d]">{currency.format(reservationTotal)}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-white/42">
+                      {attendeeCount} {attendeeCount === 1 ? "entrada" : "entradas"}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -844,6 +865,17 @@ function BenefitExperience({
                       className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-[16px] text-white outline-none"
                     />
                   </label>
+                </div>
+              )}
+              {selectedLot && (
+                <div className="mt-4 rounded-2xl bg-white/[0.06] px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-white/45">Total a transferir</span>
+                    <span className="text-lg font-black text-[#d7b56d]">{currency.format(reservationTotal)}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] font-semibold text-white/38">
+                    {attendeeCount} {attendeeCount === 1 ? "entrada" : "entradas"} x {currency.format(selectedLot.finalPrice)}
+                  </p>
                 </div>
               )}
             </div>

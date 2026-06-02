@@ -12,6 +12,12 @@ import {
   Play,
 } from "lucide-react";
 import { useCurrentBranch } from "../(cashier)/context/BranchContext";
+import {
+  createKdsRealtimeClient,
+  isKdsOrderEvent,
+  type KdsRealtimeStatus,
+} from "../../lib/kdsRealtime";
+import { publishOrderRealtimeEvent } from "../../lib/publishOrderRealtimeEvent";
 
 type KdsCounter = {
   count: number;
@@ -45,6 +51,8 @@ export default function KDSTab() {
   const [comboMap, setComboMap] = useState<Record<string, any>>({});
   const [now, setNow] = useState(Date.now());
   const [showConfirmed, setShowConfirmed] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] =
+    useState<KdsRealtimeStatus>("disabled");
   const preparingRef = useRef<HTMLDivElement>(null);
 
   const confirmed = allOrders.filter((o) => o.status === "confirmed");
@@ -147,10 +155,9 @@ export default function KDSTab() {
 
   useEffect(() => {
     if (!branchId) return;
-    // Polling cada 10s como respaldo (Realtime requiere habilitarlo en Supabase)
     loadOrders();
     loadKdsConfig();
-    const pollInterval = setInterval(() => loadOrders(), 10000);
+    const pollInterval = setInterval(() => loadOrders(), 60000);
 
     const channel = supabase.channel(`kds-realtime-${branchId}`);
     channel
@@ -171,6 +178,38 @@ export default function KDSTab() {
     return () => {
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
+    };
+  }, [branchId, tenantId]);
+
+  useEffect(() => {
+    if (!branchId || !tenantId) return;
+
+    const client = createKdsRealtimeClient({ tenantId, branchId });
+
+    if (!client) {
+      setRealtimeStatus("disabled");
+      return;
+    }
+
+    const cleanupEvent = client.onEvent((event) => {
+      if (!isKdsOrderEvent(event)) return;
+      loadOrders();
+    });
+    const cleanupState = client.onStateChange(setRealtimeStatus);
+    const cleanupError = client.onError((error) => {
+      console.warn("KDS realtime error:", error);
+    });
+
+    void client.connect().catch((error) => {
+      console.warn("KDS realtime connection failed:", error);
+      setRealtimeStatus("disconnected");
+    });
+
+    return () => {
+      cleanupEvent();
+      cleanupState();
+      cleanupError();
+      client.disconnect();
     };
   }, [branchId, tenantId]);
 
@@ -259,12 +298,29 @@ export default function KDSTab() {
   const moveToPreparing = async (orderId: string) => {
     setLoading(true);
     await supabase.from("orders").update({ status: "preparing" }).eq("id", orderId);
+    await publishOrderRealtimeEvent({
+      tenantId,
+      branchId,
+      eventType: "orders.preparing",
+      payload: { orderId, status: "preparing", previousStatus: "confirmed" },
+    });
     setLoading(false);
   };
 
   const markAsReady = async (order: any) => {
     setLoading(true);
     await supabase.from("orders").update({ status: "ready" }).eq("id", order.id);
+    await publishOrderRealtimeEvent({
+      tenantId,
+      branchId,
+      eventType: "orders.ready",
+      payload: {
+        orderId: order.id,
+        status: "ready",
+        previousStatus: order.status,
+        order: compactOrderPayload(order),
+      },
+    });
     if (order.type === "takeaway") {
       const { data: conversation } = await supabase
         .from("conversations")
@@ -351,6 +407,7 @@ export default function KDSTab() {
       {sortedTotalIngredients.length > 0 && (
         <div className="flex flex-wrap gap-4 items-center bg-gray-900 rounded-2xl px-6 py-5 border border-gray-800 sticky top-0 z-10 shadow-lg">
           <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">En cocina</span>
+          <RealtimeBadge status={realtimeStatus} />
           {sortedTotalIngredients.map(([id, info]) => (
             <span
               key={id}
@@ -438,6 +495,40 @@ export default function KDSTab() {
         </div>
       )}
     </div>
+  );
+}
+
+function compactOrderPayload(order: any) {
+  return {
+    id: order.id,
+    status: order.status,
+    type: order.type,
+    customerName: order.customer_name,
+    createdAt: order.created_at,
+  };
+}
+
+function RealtimeBadge({ status }: { status: KdsRealtimeStatus }) {
+  const meta = {
+    connected: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+    connecting: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+    disconnected: "bg-red-500/20 text-red-300 border-red-500/30",
+    idle: "bg-gray-700 text-gray-300 border-gray-600",
+    disabled: "bg-gray-700 text-gray-300 border-gray-600",
+  }[status];
+
+  const label = {
+    connected: "Realtime",
+    connecting: "Conectando",
+    disconnected: "Sin realtime",
+    idle: "Realtime idle",
+    disabled: "Realtime off",
+  }[status];
+
+  return (
+    <span className={`text-xs px-3 py-1 rounded-full border font-bold ${meta}`}>
+      {label}
+    </span>
   );
 }
 

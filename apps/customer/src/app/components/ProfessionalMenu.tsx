@@ -15,6 +15,7 @@ type Props = {
   combos?: Combo[];
   onAgregar: (product: Product) => void;
   branding?: Branding;
+  disabled?: boolean;
 };
 
 export default function ProfessionalMenu({
@@ -22,6 +23,7 @@ export default function ProfessionalMenu({
   combos,
   onAgregar,
   branding,
+  disabled = false,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(
@@ -218,6 +220,7 @@ export default function ProfessionalMenu({
   };
 
   const handleAddProduct = (product: Product) => {
+    if (disabled) return;
     onAgregar(product);
   };
 
@@ -306,12 +309,13 @@ export default function ProfessionalMenu({
                   )}
                 </div>
                 <button
-                  onClick={() => onAgregar(heroProduct)}
-                  className="px-6 py-3 rounded-full font-bold text-white shadow-lg hover:scale-105 transition-transform"
-                  style={{ backgroundColor: brandColor }}
+                  onClick={() => handleAddProduct(heroProduct)}
+                  disabled={disabled}
+                  className="px-6 py-3 rounded-full font-bold text-white shadow-lg transition-transform enabled:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-70"
+                  style={{ backgroundColor: disabled ? "#6b7280" : brandColor }}
                 >
                   <span className="flex items-center gap-2">
-                    <span>Agregar</span>
+                    <span>{disabled ? "Cerrado" : "Agregar"}</span>
                     <span className="font-bold">
                       ${formatPrice(getPrice(heroProduct))}
                     </span>
@@ -457,6 +461,7 @@ export default function ProfessionalMenu({
                   getImage={getImage}
                   formatPrice={formatPrice}
                   saleBadge={getProductSaleBadge(product)}
+                  disabled={disabled}
                 />
               </div>
             ))}
@@ -474,6 +479,7 @@ export default function ProfessionalMenu({
                 getImage={getImage}
                 formatPrice={formatPrice}
                 saleBadge={getProductSaleBadge(product)}
+                disabled={disabled}
               />
             ))}
           </div>
@@ -508,11 +514,11 @@ export default function ProfessionalMenu({
                       return (
                         <div key={sub.id} id={`sub-${sub.id}`} className="mb-4 ml-4">
                           <h5 className="text-sm font-semibold text-gray-500 mb-2">{sub.name}</h5>
-                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} disabled={disabled} />))}</div>
                         </div>
                       );
                     }) : (
-                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} disabled={disabled} />))}</div>
                     )}
                   </div>
                 );
@@ -530,12 +536,12 @@ export default function ProfessionalMenu({
                       <span className="w-1 h-5 rounded-full" style={{ backgroundColor: brandColor }} />
                       {sub.name}
                     </h4>
-                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />))}</div>
+                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} disabled={disabled} />))}</div>
                   </div>
                 );
               });
             }
-            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} />));
+            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} disabled={disabled} />));
           })()}
         </div>
       </div>
@@ -588,6 +594,7 @@ function FeaturedCard({
   getImage,
   formatPrice,
   saleBadge,
+  disabled = false,
 }: {
   product: Product;
   onAgregar: (product: Product) => void;
@@ -597,16 +604,21 @@ function FeaturedCard({
   getImage: (p: Product) => string | undefined;
   formatPrice: (p: number) => string;
   saleBadge?: string | null;
+  disabled?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
     <div
-      className="group relative bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer ring-2 ring-offset-2"
+      className={`group relative bg-white rounded-2xl overflow-hidden shadow-sm transition-all duration-300 ring-2 ring-offset-2 ${
+        disabled ? "cursor-not-allowed opacity-75 grayscale-[0.25]" : "cursor-pointer hover:shadow-xl"
+      }`}
       style={{ fontFamily }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={() => onAgregar(product)}
+      onClick={() => {
+        if (!disabled) onAgregar(product);
+      }}
     >
       {/* Image */}
       <div className="relative h-36 md:h-44 overflow-hidden">
@@ -645,14 +657,15 @@ function FeaturedCard({
 
         {/* Quick Add Button */}
         <button
-          className="absolute bottom-2 right-2 w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform"
-          style={{ backgroundColor: brandColor }}
+          disabled={disabled}
+          className="absolute bottom-2 right-2 w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg transition-transform enabled:hover:scale-110 disabled:cursor-not-allowed disabled:opacity-80"
+          style={{ backgroundColor: disabled ? "#6b7280" : brandColor }}
           onClick={(e) => {
             e.stopPropagation();
-            onAgregar(product);
+            if (!disabled) onAgregar(product);
           }}
         >
-          <span className="text-xl">+</span>
+          <span className="text-xl">{disabled ? "x" : "+"}</span>
         </button>
       </div>
 
@@ -685,6 +698,7 @@ function NormalProductCard({
   getImage,
   formatPrice,
   saleBadge,
+  disabled = false,
 }: {
   product: Product;
   onAgregar: (product: Product) => void;
@@ -694,13 +708,18 @@ function NormalProductCard({
   getImage: (p: Product) => string | undefined;
   formatPrice: (p: number) => string;
   saleBadge?: string | null;
+  disabled?: boolean;
 }) {
   const image = getImage(product);
 
   return (
     <div
-      className="relative grid grid-cols-12 gap-2 bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-100 overflow-visible"
-      onClick={() => onAgregar(product)}
+      className={`relative grid grid-cols-12 gap-2 bg-white rounded-xl p-3 shadow-sm transition-all border border-gray-100 overflow-visible ${
+        disabled ? "cursor-not-allowed opacity-75 grayscale-[0.2]" : "cursor-pointer hover:shadow-md"
+      }`}
+      onClick={() => {
+        if (!disabled) onAgregar(product);
+      }}
     >
       {/* Image - 2 cols */}
       <div className="col-span-2 aspect-square rounded-lg overflow-hidden relative">
@@ -749,14 +768,15 @@ function NormalProductCard({
 
       {/* + button overlapping bottom-right */}
       <button
-        className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform z-10"
-        style={{ backgroundColor: brandColor }}
+        disabled={disabled}
+        className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center text-white shadow-lg transition-transform z-10 enabled:hover:scale-110 disabled:cursor-not-allowed disabled:opacity-80"
+        style={{ backgroundColor: disabled ? "#6b7280" : brandColor }}
         onClick={(e) => {
           e.stopPropagation();
-          onAgregar(product);
+          if (!disabled) onAgregar(product);
         }}
       >
-        <span className="text-base leading-none">+</span>
+        <span className="text-base leading-none">{disabled ? "x" : "+"}</span>
       </button>
     </div>
   );
