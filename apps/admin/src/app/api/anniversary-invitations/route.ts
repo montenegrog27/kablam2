@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     invitations: data || [],
-    lots: lotsError ? DEFAULT_LOTS : lots || [],
+    lots: lotsError || !lots || lots.length === 0 ? DEFAULT_LOTS : lots,
     settings: settingsError ? DEFAULT_SETTINGS : normalizeSettings(settings),
     lotsError: lotsError?.message || null,
     settingsError: settingsError?.message || null,
