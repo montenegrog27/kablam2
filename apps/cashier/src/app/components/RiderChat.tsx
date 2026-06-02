@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Bike, X, Send, Paperclip, Reply } from "lucide-react";
+import { Bike, X, Send, Paperclip, Reply, FileText } from "lucide-react";
 
 type Rider = {
   id: string;
@@ -36,6 +36,7 @@ export default function RiderChat({
   const [text, setText] = useState("");
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [replyTo, setReplyTo] = useState<any | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -260,6 +261,167 @@ export default function RiderChat({
       .eq("id", conv.id);
   };
 
+  const getMediaType = (file: File) => {
+    const family = file.type.split("/")[0];
+    if (file.type === "image/webp") return "sticker";
+    if (family === "image") return "image";
+    if (family === "video") return "video";
+    if (family === "audio") return "audio";
+    return "document";
+  };
+
+  const uploadFile = async (file: File): Promise<string | null> => {
+    const ext = file.name.split(".").pop() || "bin";
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `riders/${tenantId}/${branchId}/${Date.now()}-${crypto.randomUUID()}-${safeName || `archivo.${ext}`}`;
+    const buckets = ["whatsapp-media", "media", "uploads"];
+
+    for (const bucket of buckets) {
+      const { error } = await supabase.storage.from(bucket).upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+      if (!error) {
+        return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl || null;
+      }
+    }
+
+    return null;
+  };
+
+  const sendMedia = async (file: File) => {
+    if (!activeChat) return;
+
+    const conv = await getOrCreateConversation(activeChat.riderId);
+    if (!conv) return;
+
+    const rider = riders.find((r) => r.id === activeChat.riderId);
+    if (!rider) return;
+
+    const type = getMediaType(file);
+    const previewUrl = URL.createObjectURL(file);
+    const tempMsg = {
+      id: crypto.randomUUID(),
+      message: type === "document" ? file.name : null,
+      media_type: type,
+      media_url: previewUrl,
+      sender_type: "cashier",
+      created_at: new Date().toISOString(),
+      status: "pending",
+      reply_to_message_id: replyTo?.id || null,
+      reply_to_whatsapp_message_id: replyTo?.whatsapp_message_id || null,
+    };
+
+    const outgoingReply = replyTo;
+    setMessages((prev) => [...prev, tempMsg]);
+    setReplyTo(null);
+
+    const publicUrl = await uploadFile(file);
+    if (!publicUrl) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === tempMsg.id
+            ? { ...msg, status: "error", error: "No se pudo subir el archivo" }
+            : msg,
+        ),
+      );
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/whatsapp/send-direct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId,
+          tenantId,
+          riderId: activeChat.riderId,
+          conversationId: conv.id,
+          phone: rider.phone,
+          type,
+          mediaUrl: publicUrl,
+          fileName: file.name,
+          caption: type === "document" ? file.name : undefined,
+          contextMessageId: outgoingReply?.whatsapp_message_id || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data?.error) throw new Error(data?.error || "No se pudo enviar");
+
+      if (data?.message) {
+        setMessages((prev) => [
+          ...prev.filter((msg) => msg.id !== tempMsg.id && msg.id !== data.message.id),
+          data.message,
+        ]);
+      } else {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === tempMsg.id
+              ? { ...msg, status: "sent", media_url: publicUrl }
+              : msg,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === tempMsg.id
+            ? { ...msg, status: "error", error: "No se pudo enviar" }
+            : msg,
+        ),
+      );
+    }
+
+    await supabase
+      .from("rider_conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conv.id);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) void sendMedia(file);
+    event.target.value = "";
+  };
+
+  const renderMedia = (msg: any) => {
+    const type = msg.media_type || "text";
+
+    if (type === "text" || !msg.media_url) return null;
+
+    if (type === "image" || type === "sticker" || type.startsWith("image")) {
+      return (
+        <img
+          src={msg.media_url}
+          alt=""
+          className="max-h-72 max-w-full cursor-pointer rounded-lg object-cover"
+          onClick={() => setLightbox(msg.media_url)}
+        />
+      );
+    }
+
+    if (type === "video" || type.startsWith("video")) {
+      return <video controls className="max-h-72 max-w-full rounded-lg" src={msg.media_url} />;
+    }
+
+    if (type === "audio" || type.startsWith("audio")) {
+      return <audio controls className="h-10 max-w-full" src={msg.media_url} />;
+    }
+
+    return (
+      <a
+        href={msg.media_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex max-w-full items-center gap-2 rounded-lg bg-white/60 px-3 py-2 text-blue-700 hover:underline"
+      >
+        <FileText size={16} />
+        <span className="truncate">{msg.message || "Documento"}</span>
+      </a>
+    );
+  };
+
   const getReplyPreview = (msg: any) => {
     const target = messages.find((message) =>
       message.id === msg.reply_to_message_id ||
@@ -270,7 +432,7 @@ export default function RiderChat({
 
     return {
       author: target.sender_type === "cashier" ? "Vos" : activeChat?.riderName || "Rider",
-      text: target.message || "Mensaje",
+      text: target.message || (target.media_type && target.media_type !== "text" ? "Archivo" : "Mensaje"),
     };
   };
 
@@ -361,7 +523,21 @@ export default function RiderChat({
                       <div className="truncate">{getReplyPreview(msg)?.text}</div>
                     </div>
                   )}
-                  {msg.message}
+                  {renderMedia(msg)}
+                  {msg.message && <p className={msg.media_url ? "mt-1 break-words" : "break-words"}>{msg.message}</p>}
+                  {msg.status === "pending" && (
+                    <p className={`mt-1 text-[10px] ${msg.sender_type === "cashier" ? "text-white/70" : "text-gray-400"}`}>
+                      Enviando...
+                    </p>
+                  )}
+                  {msg.status === "error" && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-1 text-[10px] font-semibold text-red-500 hover:underline"
+                    >
+                      {msg.error || "No se pudo enviar"}
+                    </button>
+                  )}
                   {msg.whatsapp_message_id && (
                     <button
                       onClick={() => setReplyTo(msg)}
@@ -390,7 +566,8 @@ export default function RiderChat({
               ref={fileInputRef}
               type="file"
               className="hidden"
-              onChange={() => {}}
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              onChange={handleFileSelect}
             />
             <input
               value={text}
@@ -419,6 +596,20 @@ export default function RiderChat({
               </button>
             </div>
           )}
+        </div>
+      )}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[80] flex cursor-pointer items-center justify-center bg-black/90 p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <img src={lightbox} alt="" className="max-h-full max-w-full object-contain" />
+          <button
+            onClick={() => setLightbox(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+          >
+            <X size={24} />
+          </button>
         </div>
       )}
     </div>

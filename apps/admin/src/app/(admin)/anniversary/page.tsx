@@ -248,7 +248,7 @@ export default function AnniversaryDashboardPage() {
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                   <span>Vendidas: {sold}</span>
-                  <span>{available === null ? "Cupo ilimitado" : `Disponibles: ${available}`}</span>
+                  <span>{available === null ? "Cupos limitado" : `Disponibles: ${available}`}</span>
                 </div>
               </div>
             );

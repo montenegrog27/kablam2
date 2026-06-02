@@ -6,6 +6,12 @@ const debugLog = (...args: unknown[]) => {
   if (DEBUG_LOGS) console.log(...args);
 };
 
+const MEDIA_TYPES = ["image", "video", "audio", "document", "sticker"];
+
+function isMediaType(type: string) {
+  return MEDIA_TYPES.includes(type);
+}
+
 export async function POST(req: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,14 +27,22 @@ export async function POST(req: Request) {
     riderId,
     conversationId,
     type = "text",
+    mediaUrl,
+    caption,
+    fileName,
     templateName,
     params = [],
     contextMessageId,
   } = body;
 
-  if (!phone || (type === "text" && !message) || (type === "template" && !templateName)) {
+  if (
+    !phone ||
+    (type === "text" && !message) ||
+    (type === "template" && !templateName) ||
+    (isMediaType(type) && !mediaUrl)
+  ) {
     return NextResponse.json(
-      { error: "phone and message/template required" },
+      { error: "phone and message/template/mediaUrl required" },
       { status: 400 },
     );
   }
@@ -62,26 +76,51 @@ export async function POST(req: Request) {
         ]
       : [];
 
-  const payload =
-    type === "template"
-      ? {
-          messaging_product: "whatsapp",
-          to: phoneNormalized,
-          type: "template",
-          template: {
-            name: templateName,
-            language: { code: "es_AR" },
-            ...(components.length > 0 ? { components } : {}),
-          },
-          ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
-        }
-      : {
-          messaging_product: "whatsapp",
-          to: phoneNormalized,
-          type: "text",
-          text: { body: message },
-          ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
-        };
+  let payload: Record<string, unknown>;
+
+  if (type === "template") {
+    payload = {
+      messaging_product: "whatsapp",
+      to: phoneNormalized,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: "es_AR" },
+        ...(components.length > 0 ? { components } : {}),
+      },
+      ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
+    };
+  } else if (isMediaType(type)) {
+    const mediaPayload =
+      type === "document"
+        ? {
+            link: mediaUrl,
+            filename: fileName || "archivo",
+            ...(caption ? { caption } : {}),
+          }
+        : type === "audio" || type === "sticker"
+          ? { link: mediaUrl }
+          : {
+              link: mediaUrl,
+              ...(caption ? { caption } : {}),
+            };
+
+    payload = {
+      messaging_product: "whatsapp",
+      to: phoneNormalized,
+      type,
+      [type]: mediaPayload,
+      ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
+    };
+  } else {
+    payload = {
+      messaging_product: "whatsapp",
+      to: phoneNormalized,
+      type: "text",
+      text: { body: message },
+      ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
+    };
+  }
 
   debugLog("Sending WhatsApp direct", { type, templateName });
 
@@ -147,8 +186,9 @@ export async function POST(req: Request) {
         conversation_id: targetConversationId,
         sender_type: "cashier",
         rider_id: riderId || null,
-        message: type === "template" ? templateName : message,
+        message: type === "template" ? templateName : message || caption || fileName || null,
         media_type: type,
+        media_url: mediaUrl || null,
         whatsapp_message_id: messageId,
         reply_to_whatsapp_message_id: contextMessageId || null,
         reply_to_message_id: repliedMessage?.id || null,
