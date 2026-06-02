@@ -403,13 +403,25 @@ export async function POST(req: Request) {
   if (rider) {
     // Solo tratar como rider si ya tiene una conversación de rider activa
     // Si no, pasa como cliente (el rider puede ser cliente también)
-    const { data: riderConv } = await supabase
+    const { data: existingRiderConv } = await supabase
       .from("rider_conversations")
       .select("*")
       .eq("rider_id", rider.id)
       .eq("branch_id", branchId)
-      .gte("last_message_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .limit(1)
       .maybeSingle();
+
+    const riderConv = existingRiderConv || (await supabase
+      .from("rider_conversations")
+      .insert({
+        tenant_id: tenantId,
+        branch_id: branchId,
+        rider_id: rider.id,
+        last_message_at: new Date().toISOString(),
+      })
+      .select()
+      .single()).data;
 
     if (riderConv) {
       // Parse message
@@ -472,7 +484,7 @@ export async function POST(req: Request) {
             .maybeSingle()
         : { data: null };
 
-      await supabase.from("messages").insert({
+      const riderMessagePayload = {
         tenant_id: tenantId,
         branch_id: branchId,
         conversation_id: riderConv.id,
@@ -484,7 +496,16 @@ export async function POST(req: Request) {
         whatsapp_message_id: message.id || null,
         reply_to_whatsapp_message_id: contextMessageId,
         reply_to_message_id: repliedMessage?.id || null,
-      });
+      };
+
+      const { error: riderMessageError } = await supabase
+        .from("messages")
+        .insert(riderMessagePayload);
+
+      if (riderMessageError) {
+        console.error("Error saving rider message:", riderMessageError);
+        return NextResponse.json({ ok: true });
+      }
 
       // Update conversation
       await supabase
