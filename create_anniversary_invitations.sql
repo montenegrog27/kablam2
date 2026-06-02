@@ -60,12 +60,16 @@ CREATE TABLE IF NOT EXISTS anniversary_settings (
   community_discount NUMERIC NOT NULL DEFAULT 25,
   founder_discount NUMERIC NOT NULL DEFAULT 50,
   tier_messages JSONB NOT NULL DEFAULT '{}'::jsonb,
+  tier_perks JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS anniversary_settings_tenant_idx
 ON anniversary_settings(tenant_id, branch_id, updated_at DESC);
+
+ALTER TABLE anniversary_settings
+  ADD COLUMN IF NOT EXISTS tier_perks JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 ALTER TABLE anniversary_invitations
   ALTER COLUMN dni DROP NOT NULL;

@@ -27,6 +27,11 @@ const DEFAULT_SETTINGS = {
   generalDiscount: 0,
   communityDiscount: 25,
   founderDiscount: 50,
+  perks: {
+    general: ["Acceso al evento aniversario", "Sorteos durante la noche"],
+    community: ["Acceso al evento aniversario", "Sorteos durante la noche", "Precio especial comunidad"],
+    founder: ["Acceso al evento aniversario", "Sorteos durante la noche", "5 tragos a eleccion"],
+  },
   messages: {
     general: [
       "Hola {name}. Esta puede ser tu primera noche siendo parte de Mordisco.",
@@ -64,6 +69,10 @@ function normalizeSettings(row: Record<string, unknown> | null | undefined) {
     generalDiscount: Number(row.general_discount ?? DEFAULT_SETTINGS.generalDiscount),
     communityDiscount: Number(row.community_discount ?? DEFAULT_SETTINGS.communityDiscount),
     founderDiscount: Number(row.founder_discount ?? DEFAULT_SETTINGS.founderDiscount),
+    perks: {
+      ...DEFAULT_SETTINGS.perks,
+      ...(typeof row.tier_perks === "object" && row.tier_perks ? row.tier_perks : {}),
+    },
     messages: {
       ...DEFAULT_SETTINGS.messages,
       ...(typeof row.tier_messages === "object" && row.tier_messages ? row.tier_messages : {}),
@@ -182,6 +191,7 @@ export async function PATCH(req: NextRequest) {
 
   if (settings) {
     const messages = settings.messages && typeof settings.messages === "object" ? settings.messages : DEFAULT_SETTINGS.messages;
+    const perks = settings.perks && typeof settings.perks === "object" ? settings.perks : DEFAULT_SETTINGS.perks;
     await service
       .from("anniversary_settings")
       .delete()
@@ -206,6 +216,7 @@ export async function PATCH(req: NextRequest) {
         community_discount: Number(settings.communityDiscount ?? DEFAULT_SETTINGS.communityDiscount),
         founder_discount: Number(settings.founderDiscount ?? DEFAULT_SETTINGS.founderDiscount),
         tier_messages: messages,
+        tier_perks: perks,
         updated_at: new Date().toISOString(),
       })
       .select("*")

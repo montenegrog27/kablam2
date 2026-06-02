@@ -41,6 +41,7 @@ type Verification = {
     topPercentile: number;
   };
   benefit: Benefit;
+  perks: string[];
   lots: Lot[];
   message: string;
 };
@@ -121,6 +122,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const impressiveBadge = verification ? getImpressiveBadge(verification) : null;
   const story = verification ? verification.message || buildEmotionalStory(verification) : "";
   const historyStats = verification ? buildHistoryStats(verification) : [];
+  const hasFullName = name.trim().split(/\s+/).length >= 2;
 
   useEffect(() => {
     let cancelled = false;
@@ -140,6 +142,10 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   }, [branchSlug]);
 
   const verify = async () => {
+    if (!hasFullName) {
+      setError("Ingresá nombre y apellido para personalizar tu beneficio.");
+      return;
+    }
     setLoading(true);
     setError("");
     setNotice("");
@@ -164,8 +170,8 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
 
   const purchase = async () => {
     if (!verification || !selectedLot) return;
-    if (!name || !phone) {
-      setError("Completa nombre y WhatsApp para generar la invitacion.");
+    if (!hasFullName || !phone) {
+      setError("Completa nombre, apellido y WhatsApp para generar la invitacion.");
       return;
     }
     if (!customerDni || !birthdate || !email) {
@@ -369,7 +375,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
         <div className="rounded-[28px] border border-white/12 bg-white/[0.06] p-4 shadow-2xl backdrop-blur-xl sm:p-5">
           <div className="grid gap-3">
             <label>
-              <span className="mb-1 block text-xs font-semibold text-white/55">Nombre completo</span>
+              <span className="mb-1 block text-xs font-semibold text-white/55">Nombre y apellido</span>
               <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none" />
             </label>
             <label>
@@ -383,7 +389,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
 
           <button
             onClick={verify}
-            disabled={loading || !phone}
+            disabled={loading || !phone || !hasFullName}
             className="mt-5 w-full rounded-2xl bg-[#d7b56d] px-5 py-4 text-sm font-black text-black transition hover:bg-[#f0cf88] disabled:opacity-50"
           >
             {loading ? "Verificando..." : "Ver mis beneficios"}
@@ -401,6 +407,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 impressiveBadge={impressiveBadge}
                 story={story}
                 historyStats={historyStats}
+                perks={verification.perks || []}
                 hasDiscount={hasDiscount}
                 savings={savings}
                 companionEnabled={companionEnabled}
@@ -648,6 +655,7 @@ function BenefitExperience({
   impressiveBadge,
   story,
   historyStats,
+  perks,
   hasDiscount,
   savings,
   companionEnabled,
@@ -667,6 +675,7 @@ function BenefitExperience({
   impressiveBadge: { icon: string; label: string } | null;
   story: string;
   historyStats: Array<{ icon: string; value: string; numeric?: number; suffix?: string; label: string }>;
+  perks: string[];
   hasDiscount: boolean;
   savings: number;
   companionEnabled: boolean;
@@ -731,6 +740,18 @@ function BenefitExperience({
                   ? `Precio privado por pertenecer a ${verification.benefit.label}. Tu historia con Mordisco ya tiene beneficio aplicado.`
                   : "Acceso reservado para vivir el primer aniversario desde adentro."}
               </p>
+              {perks.length > 0 && (
+                <div className="mx-auto mt-6 max-w-md rounded-[26px] bg-black px-4 py-4 text-left text-white shadow-[0_20px_55px_rgba(0,0,0,0.18)]">
+                  <p className="text-center text-[10px] font-black uppercase tracking-[0.24em] text-[#d7b56d]">Tu acceso incluye</p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {perks.map((perk) => (
+                      <div key={perk} className="rounded-2xl bg-white/[0.08] px-3 py-3 text-sm font-bold leading-5 text-white/92">
+                        {perk}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {selectedLot && (
@@ -1110,7 +1131,6 @@ function buildEmotionalStory(verification: Verification) {
 
 function buildHistoryStats(verification: Verification) {
   const months = monthsWithMordisco(verification.customer.firstOrderAt);
-  const branch = verification.customer.favoriteBranch?.name || "Mordisco";
   return [
     { icon: "🍔", value: String(verification.customer.orderCount), numeric: verification.customer.orderCount, label: "Pedidos" },
     { icon: "❤️", value: String(months), numeric: months, label: "Meses con nosotros" },

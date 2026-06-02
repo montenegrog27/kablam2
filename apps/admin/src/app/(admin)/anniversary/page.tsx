@@ -27,6 +27,11 @@ const defaultSettings = {
   generalDiscount: 0,
   communityDiscount: 25,
   founderDiscount: 50,
+  perks: {
+    general: ["Acceso al evento aniversario", "Sorteos durante la noche"],
+    community: ["Acceso al evento aniversario", "Sorteos durante la noche", "Precio especial comunidad"],
+    founder: ["Acceso al evento aniversario", "Sorteos durante la noche", "5 tragos a eleccion"],
+  },
   messages: {
     general: [
       "Hola {name}. Esta puede ser tu primera noche siendo parte de Mordisco.",
@@ -68,7 +73,7 @@ export default function AnniversaryDashboardPage() {
     const data = await response.json();
     setItems(Array.isArray(data.invitations) ? data.invitations : []);
     setLots(Array.isArray(data.lots) ? data.lots : []);
-    if (data.settings) setSettings({ ...defaultSettings, ...data.settings, messages: { ...defaultSettings.messages, ...(data.settings.messages || {}) } });
+    if (data.settings) setSettings({ ...defaultSettings, ...data.settings, messages: { ...defaultSettings.messages, ...(data.settings.messages || {}) }, perks: { ...defaultSettings.perks, ...(data.settings.perks || {}) } });
     setResult(data.error ? `${data.error}${data.detail ? `: ${data.detail}` : ""}` : "");
     setLoading(false);
   };
@@ -121,6 +126,16 @@ export default function AnniversaryDashboardPage() {
     }));
   };
 
+  const updatePerks = (key: SettingsKey, value: string) => {
+    setSettings((prev: any) => ({
+      ...prev,
+      perks: {
+        ...prev.perks,
+        [key]: value.split("\n").map((line) => line.trim()).filter(Boolean),
+      },
+    }));
+  };
+
   const saveConfig = async () => {
     setLoading(true);
     setResult("");
@@ -137,7 +152,7 @@ export default function AnniversaryDashboardPage() {
     const data = await response.json();
     setResult(data.error ? `${data.error}${data.detail ? `: ${data.detail}` : ""}` : "Configuracion guardada.");
     if (Array.isArray(data.lots)) setLots(data.lots);
-    if (data.settings) setSettings({ ...defaultSettings, ...data.settings, messages: { ...defaultSettings.messages, ...(data.settings.messages || {}) } });
+    if (data.settings) setSettings({ ...defaultSettings, ...data.settings, messages: { ...defaultSettings.messages, ...(data.settings.messages || {}) }, perks: { ...defaultSettings.perks, ...(data.settings.perks || {}) } });
     setLoading(false);
   };
 
@@ -308,6 +323,27 @@ export default function AnniversaryDashboardPage() {
               Fundador aplica si cumple los pedidos minimos y tambien entra en el Top %. Pone 0 para desactivar una condicion.
             </p>
           </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          {[
+            { key: "general" as const, title: "Beneficios General" },
+            { key: "community" as const, title: "Beneficios Comunidad" },
+            { key: "founder" as const, title: "Beneficios Fundadores" },
+          ].map((group) => (
+            <label key={group.key} className="rounded-lg border border-gray-800 bg-gray-950 p-4">
+              <span className="mb-2 block text-sm font-bold text-gray-100">{group.title}</span>
+              <textarea
+                value={(settings.perks?.[group.key] || []).join("\n")}
+                onChange={(event) => updatePerks(group.key, event.target.value)}
+                rows={5}
+                className="w-full rounded-lg border border-gray-700 bg-gray-900 p-3 text-sm text-gray-100 outline-none"
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                Un beneficio por linea. Ejemplo: 5 tragos a eleccion.
+              </p>
+            </label>
+          ))}
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-3">

@@ -33,6 +33,11 @@ const DEFAULT_SETTINGS = {
   generalDiscount: 0,
   communityDiscount: 25,
   founderDiscount: 50,
+  perks: {
+    general: ["Acceso al evento aniversario", "Sorteos durante la noche"],
+    community: ["Acceso al evento aniversario", "Sorteos durante la noche", "Precio especial comunidad"],
+    founder: ["Acceso al evento aniversario", "Sorteos durante la noche", "5 tragos a eleccion"],
+  },
   messages: {
     general: [
       "Hola {name}. Esta puede ser tu primera noche siendo parte de Mordisco.",
@@ -134,6 +139,10 @@ function normalizeSettings(row: Record<string, unknown> | null | undefined): Ann
     generalDiscount: Number(row.general_discount ?? DEFAULT_SETTINGS.generalDiscount),
     communityDiscount: Number(row.community_discount ?? DEFAULT_SETTINGS.communityDiscount),
     founderDiscount: Number(row.founder_discount ?? DEFAULT_SETTINGS.founderDiscount),
+    perks: {
+      ...DEFAULT_SETTINGS.perks,
+      ...(row.tier_perks && typeof row.tier_perks === "object" ? row.tier_perks as AnniversarySettings["perks"] : {}),
+    },
     messages: {
       ...DEFAULT_SETTINGS.messages,
       ...(rowMessages as AnniversarySettings["messages"]),
@@ -370,7 +379,7 @@ async function getCustomerAnniversaryStats(
 
   return {
     customer,
-    displayName: customer?.name || name,
+    displayName: name || customer?.name || "Mordedor",
     orderCount,
     totalSpent,
     firstOrderAt,
@@ -402,7 +411,7 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
   const settings = await loadSettings(service, branch.tenant_id, branch.id);
   const { customer, orderCount, totalSpent, firstOrderAt, lastOrderAt, favoriteBranch, frequency, topPercentile } = stats;
   const tier = getTier(orderCount, topPercentile, settings);
-  const message = pickMessage(settings, tier.key as keyof AnniversarySettings["messages"], stats.displayName, orderCount, firstOrderAt, topPercentile, favoriteBranch.name, phone);
+  const message = pickMessage(settings, tier.key as keyof AnniversarySettings["messages"], name || stats.displayName, orderCount, firstOrderAt, topPercentile, favoriteBranch.name, phone);
   const lots = await lotsForTier(service, branch.tenant_id, branch.id, tier.discount);
 
   return NextResponse.json({
@@ -421,6 +430,7 @@ async function verifyCustomer(branchSlug: string, name: string, phoneInput: stri
       topPercentile,
     },
     benefit: tier,
+    perks: settings.perks[tier.key as keyof AnniversarySettings["perks"]] || [],
     lots,
     message,
     settings: {
