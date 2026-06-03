@@ -76,6 +76,20 @@ export default function KDSTab() {
   const loadOrders = async () => {
     if (!branchId) return;
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const loadCombos = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return [];
+
+      const response = await fetch(`/api/kds/combos?branchId=${encodeURIComponent(branchId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) return [];
+
+      const result = await response.json();
+      return result.combos || [];
+    };
     const [{ data }, { data: combos }] = await Promise.all([
       supabase
         .from("orders")
@@ -84,12 +98,7 @@ export default function KDSTab() {
         .gte("created_at", since)
         .in("status", ["confirmed", "preparing", "ready"])
         .order("created_at", { ascending: true }),
-      tenantId
-        ? supabase
-            .from("combos")
-            .select("id, name, combo_products(id, product_id, quantity, products(id, name, is_preparable, product_variants(id, is_default)))")
-            .or(`tenant_id.eq.${tenantId},branch_id.eq.${branchId}`)
-        : Promise.resolve({ data: [] } as any),
+      loadCombos().then((combos) => ({ data: combos })),
     ]);
 
     const nextComboMap: Record<string, any> = {};
