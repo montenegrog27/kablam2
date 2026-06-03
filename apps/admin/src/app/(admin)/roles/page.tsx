@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { Plus, Trash2, Pencil, X, Shield, Search } from "lucide-react";
@@ -15,6 +15,8 @@ export default function RolesPage() {
   const [description, setDescription] = useState("");
   const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
   const [moduleFilter, setModuleFilter] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -46,36 +48,70 @@ export default function RolesPage() {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!tenantId || !name) return;
+    setSaving(true);
+    setError("");
 
-    if (editing) {
-      await supabase.from("roles").update({ name, description }).eq("id", editing.id);
-      await supabase.from("role_permissions").delete().eq("role_id", editing.id);
-    } else {
-      const { data: newRole } = await supabase.from("roles").insert({ tenant_id: tenantId, name, description }).select().single();
-      if (!newRole) return;
-      if (selectedPerms.length > 0) {
-        await supabase.from("role_permissions").insert(selectedPerms.map((pid) => ({ role_id: newRole.id, permission_id: pid })));
-      }
-      resetForm(); load();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setError("No hay sesion activa.");
+      setSaving(false);
       return;
     }
 
-    if (selectedPerms.length > 0) {
-      await supabase.from("role_permissions").insert(selectedPerms.map((pid) => ({ role_id: editing.id, permission_id: pid })));
+    const response = await fetch("/api/roles", {
+      method: editing ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        roleId: editing?.id,
+        name,
+        description,
+        permissionIds: selectedPerms,
+      }),
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      setError(result?.details || result?.error || "No se pudo guardar el rol.");
+      setSaving(false);
+      return;
     }
-    resetForm(); load();
+
+    resetForm();
+    await load();
+    setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar rol?")) return;
-    // Check if any user has this role
-    const { data: usersWithRole } = await supabase.from("users").select("id").eq("role_id", id).limit(1);
-    if (usersWithRole && usersWithRole.length > 0) {
-      alert("No se puede eliminar un rol asignado a usuarios. Reasigná los usuarios primero.");
+    if (!confirm("Eliminar rol?")) return;
+    setError("");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setError("No hay sesion activa.");
       return;
     }
-    await supabase.from("roles").delete().eq("id", id);
-    load();
+
+    const response = await fetch(`/api/roles?roleId=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+
+    if (response.status === 409) {
+      alert("No se puede eliminar un rol asignado a usuarios. Reasigna los usuarios primero.");
+      return;
+    }
+    if (!response.ok) {
+      setError(result?.details || result?.error || "No se pudo eliminar el rol.");
+      return;
+    }
+
+    await load();
   };
 
   const togglePerm = (pid: string) => {
@@ -103,6 +139,11 @@ export default function RolesPage() {
             <h3 className="font-semibold text-gray-100"><Shield size={16} className="inline mr-1" /> {editing ? "Editar" : "Nuevo"} rol</h3>
             <button onClick={resetForm} className="p-1 rounded-lg hover:bg-gray-800"><X size={18} /></button>
           </div>
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <input className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-800 text-gray-100 placeholder-gray-500" placeholder="Nombre del rol *" value={name} onChange={(e) => setName(e.target.value)} required />
             <input className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-800 text-gray-100 placeholder-gray-500" placeholder="Descripción" value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -133,10 +174,16 @@ export default function RolesPage() {
               ))}
             </div>
           </div>
-          <button type="submit" className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-black border border-gray-700">
-            {editing ? "Guardar cambios" : "Crear rol"}
+          <button type="submit" disabled={saving} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-black border border-gray-700 disabled:opacity-50">
+            {saving ? "Guardando..." : editing ? "Guardar cambios" : "Crear rol"}
           </button>
         </form>
+      )}
+
+      {!showForm && error && (
+        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          {error}
+        </div>
       )}
 
       <div className="space-y-3">
