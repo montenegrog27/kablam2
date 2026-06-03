@@ -79,7 +79,7 @@ export default function KDSTab() {
     const [{ data }, { data: combos }] = await Promise.all([
       supabase
         .from("orders")
-        .select("*, order_items(*, products(*))")
+        .select("*, order_items(*, products(*), combos(*))")
         .eq("branch_id", branchId)
         .gte("created_at", since)
         .in("status", ["confirmed", "preparing", "ready"])
@@ -88,13 +88,20 @@ export default function KDSTab() {
         ? supabase
             .from("combos")
             .select("id, name, combo_products(id, product_id, quantity, products(id, name, is_preparable, product_variants(id, is_default)))")
-            .eq("tenant_id", tenantId)
+            .or(`tenant_id.eq.${tenantId},branch_id.eq.${branchId}`)
         : Promise.resolve({ data: [] } as any),
     ]);
 
     const nextComboMap: Record<string, any> = {};
     (combos || []).forEach((combo: any) => {
       nextComboMap[combo.id] = combo;
+    });
+    (data || []).forEach((order: any) => {
+      (order.order_items || []).forEach((item: any) => {
+        if (item.combo_id && item.combos && !nextComboMap[item.combo_id]) {
+          nextComboMap[item.combo_id] = item.combos;
+        }
+      });
     });
     setComboMap(nextComboMap);
     setAllOrders(data || []);

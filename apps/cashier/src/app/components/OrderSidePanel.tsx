@@ -277,25 +277,33 @@ export default function OrderSidePanel({
   const loadOrderForEdit = async () => {
     const { data: items } = await supabase
       .from("order_items")
-      .select("*, products(*), product_variants(*)")
+      .select("*, products(*), product_variants(*), combos(*)")
       .eq("order_id", selectedOrder.id);
 
     if (items) {
       setCart(
-        items.map((item: any) => ({
-          variant: {
-            ...item.products,
-            product_id: item.product_id,
-            variant_id: item.variant_id,
-            price:
-              item.unit_price ??
-              item.product_variants?.price ??
-              item.products?.price ??
-              0,
-          },
-          quantity: item.quantity,
-          note: item.note || "",
-        })),
+        items.map((item: any) => {
+          const isCombo = item.item_type === "combo" || Boolean(item.combo_id);
+          const base = isCombo ? item.combos : item.products;
+          return {
+            variant: {
+              ...base,
+              id: item.combo_id || item.product_id || base?.id,
+              name: base?.name || (isCombo ? "Combo" : "Producto"),
+              product_id: item.product_id,
+              combo_id: item.combo_id,
+              variant_id: item.variant_id,
+              is_combo: isCombo,
+              price:
+                item.unit_price ??
+                item.product_variants?.price ??
+                base?.price ??
+                0,
+            },
+            quantity: item.quantity,
+            note: item.note || "",
+          };
+        }),
       );
     }
 
