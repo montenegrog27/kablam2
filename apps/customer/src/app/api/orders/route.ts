@@ -182,9 +182,13 @@ export async function POST(req: Request) {
             .in("product_id", productIds)
         : { data: [] as VariantRow[] };
 
-    const comboIds = comboItems
-      .map((item) => item.comboId)
-      .filter((id): id is string => Boolean(id));
+    const comboIds = [
+      ...new Set(
+        comboItems
+          .map((item) => item.comboId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
 
     const { data: combos } =
       comboIds.length > 0
@@ -205,7 +209,7 @@ export async function POST(req: Request) {
             `,
             )
             .in("id", comboIds)
-            .eq("branch_id", branch.id)
+            .or(`branch_id.eq.${branch.id},tenant_id.eq.${branch.tenant_id}`)
             .eq("is_active", true)
         : { data: [] as ComboRow[] };
     debugLog("VARIANTS:", variants);
@@ -218,8 +222,17 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Invalid products" });
     }
 
-    if (comboItems.length > 0 && (!combos || combos.length !== comboIds.length)) {
-      return Response.json({ success: false, error: "Invalid combos" });
+    if (comboItems.length > 0) {
+      const foundComboIds = new Set((combos || []).map((combo) => combo.id));
+      const missingComboIds = comboIds.filter((comboId) => !foundComboIds.has(comboId));
+
+      if (comboIds.length === 0 || missingComboIds.length > 0) {
+        return Response.json({
+          success: false,
+          error: "Invalid combos",
+          details: missingComboIds.length > 0 ? { missingComboIds } : undefined,
+        });
+      }
     }
 
     const comboRows = (combos || []) as ComboRow[];
