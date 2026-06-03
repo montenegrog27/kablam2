@@ -102,6 +102,12 @@ export default function SuperAdminLayout({
           >
             System Settings
           </Link>
+          <Link
+            href="/superadmin/realtime"
+            className="px-3 py-2 rounded hover:bg-gray-800"
+          >
+            Realtime KDS
+          </Link>
 
           <div className="mt-auto pt-6 border-t border-gray-800">
             <button

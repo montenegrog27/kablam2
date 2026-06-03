@@ -13,6 +13,7 @@ import {
   Calculator, Link as LinkIcon,
   CalendarCheck,
   Upload, Cake,
+  RadioTower,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -68,6 +69,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/printers", label: "Impresoras", icon: Printer },
       { href: "/flash-sales", label: "Ofertas Flash", icon: Zap },
       { href: "/kds-config", label: "KDS Config", icon: Kanban },
+      { href: "/realtime-diagnostics", label: "Realtime KDS", icon: RadioTower },
     ]},
     { section: "Finanzas", items: [
       { href: "/ventas", label: "Ventas", icon: DollarSign },
