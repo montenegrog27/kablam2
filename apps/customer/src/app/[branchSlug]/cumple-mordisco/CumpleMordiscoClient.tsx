@@ -725,6 +725,9 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-black/45">Cumple Mordisco</p>
                   <p className="mt-2 text-2xl font-black">{invitation.customer_name}</p>
                   <p className="text-sm text-black/55">WhatsApp {invitation.whatsapp}</p>
+                  <p className="mt-3 inline-flex rounded-full bg-black px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-[#d7b56d]">
+                    {levelDisplayName(invitation.benefit_tier, invitation.benefit_tier)}
+                  </p>
                   <p className="mt-4 text-sm font-bold">Invitacion #{invitation.invitation_code}</p>
                   {invitation.entry_numbers && invitation.entry_numbers.length > 0 && (
                     <div className="mt-4 rounded-2xl bg-[#d7b56d] px-4 py-3 text-black">
@@ -758,6 +761,15 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           </div>
         </section>
       )}
+      <style>{`
+        @supports (-webkit-touch-callout: none) {
+          input,
+          select,
+          textarea {
+            font-size: 16px !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }
@@ -834,6 +846,20 @@ function BenefitExperience({
             <section className="fade-up overflow-hidden rounded-[34px] bg-white text-black shadow-[0_28px_80px_rgba(255,255,255,0.13)]">
             <div className="bg-[radial-gradient(circle_at_top_left,rgba(255,59,48,0.18),transparent_36%),linear-gradient(180deg,#ffffff,#f4eee4)] p-6 text-center sm:p-8">
               <p className="text-[11px] font-black uppercase tracking-[0.28em] text-black/42">Beneficio desbloqueado</p>
+              <div className="mx-auto mt-4 max-w-sm overflow-hidden rounded-[28px] border border-black/10 bg-black text-white shadow-[0_22px_60px_rgba(0,0,0,0.18)]">
+                <div className="bg-[#d7b56d] px-4 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-black">
+                  Tu categoria Mordisco
+                </div>
+                <div className="px-5 py-5">
+                  <p className="text-3xl font-black leading-none tracking-normal">{levelName}</p>
+                  <p className="mt-2 text-sm font-bold leading-5 text-white/62">{verification.benefit.description}</p>
+                  {impressiveBadge && (
+                    <p className="mt-3 inline-flex rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-black text-[#d7b56d]">
+                      {impressiveBadge.label}
+                    </p>
+                  )}
+                </div>
+              </div>
               <p className="mt-4 text-[4.8rem] font-black leading-none tracking-normal text-black sm:text-[6.2rem]">
                 BENEFICIOS
               </p>

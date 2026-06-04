@@ -215,13 +215,37 @@ async function nextEntryNumbers(
     .eq("branch_id", branchId)
     .neq("status", "cancelled");
 
+  if (error?.code === "42703") {
+    const { data: legacyRows, error: legacyError } = await service
+      .from("anniversary_invitations")
+      .select("attendee_count")
+      .eq("tenant_id", tenantId)
+      .eq("branch_id", branchId)
+      .neq("status", "cancelled");
+
+    if (legacyError) throw new Error(`No se pudieron calcular los numeros de entrada: ${legacyError.message}`);
+
+    const usedCount = (legacyRows || []).reduce(
+      (sum: number, row: { attendee_count?: number | null }) => sum + Math.max(1, Number(row.attendee_count || 1)),
+      0,
+    );
+
+    return {
+      numbers: Array.from({ length: count }, (_, index) => usedCount + index + 1),
+      canPersist: false,
+    };
+  }
+
   if (error) throw new Error(`No se pudieron calcular los numeros de entrada: ${error.message}`);
 
   const usedNumbers = (data || []).flatMap((row: { entry_numbers?: number[] | null }) =>
     Array.isArray(row.entry_numbers) ? row.entry_numbers.map(Number) : [],
   );
   const maxNumber = usedNumbers.length > 0 ? Math.max(...usedNumbers) : 0;
-  return Array.from({ length: count }, (_, index) => maxNumber + index + 1);
+  return {
+    numbers: Array.from({ length: count }, (_, index) => maxNumber + index + 1),
+    canPersist: true,
+  };
 }
 
 async function lotsForTier(
@@ -632,9 +656,10 @@ async function purchaseInvitation(body: {
   if (selectedLot && selectedLot.available !== null && attendeeCount > selectedLot.available) {
     return NextResponse.json({ error: "Este lote no tiene cupo suficiente para la cantidad de entradas" }, { status: 409 });
   }
-  const entryNumbers = isFreeReservation
-    ? []
+  const entryNumberResult = isFreeReservation
+    ? { numbers: [], canPersist: true }
     : await nextEntryNumbers(service, branch.tenant_id, branch.id, attendeeCount);
+  const entryNumbers = entryNumberResult.numbers;
   if (entryNumbers.some((number) => number > 100)) {
     return NextResponse.json({ error: "Ya no quedan numeros disponibles para el sorteo" }, { status: 409 });
   }
@@ -650,7 +675,7 @@ async function purchaseInvitation(body: {
     companion_name: hasCompanion ? body.companionName : null,
     companion_dni: hasCompanion ? body.companionDni : null,
     attendee_count: attendeeCount,
-    entry_numbers: entryNumbers,
+    ...(entryNumberResult.canPersist ? { entry_numbers: entryNumbers } : {}),
     whatsapp: whatsappPhone,
     benefit_tier: body.benefitKey || tier.key,
     lot_key: isFreeReservation ? null : body.lotKey || selectedLot?.key,
@@ -675,8 +700,12 @@ async function purchaseInvitation(body: {
     }, { status: 500 });
   }
 
-  const savedInvitation = data || {
+  const savedInvitation = data ? {
+    ...data,
+    entry_numbers: entryNumbers,
+  } : {
     ...payload,
+    entry_numbers: entryNumbers,
     id: code,
     created_at: new Date().toISOString(),
     persisted: false,
@@ -707,7 +736,7 @@ async function purchaseInvitation(body: {
       .from("anniversary_invitations")
       .update({
         last_whatsapp_sent_at: whatsappResult && "ok" in whatsappResult && whatsappResult.ok ? new Date().toISOString() : null,
-        last_whatsapp_message: `Invitacion ${code} - ${tier.label} - ${payload.lot_name} - ${attendeeCount} entradas - ${price} - vence en 1hs`,
+        last_whatsapp_message: `Invitacion ${code} - ${tier.label} - ${payload.lot_name} - ${attendeeCount} entradas - numeros ${entryNumbers.join(", ") || "sin sorteo"} - ${price} - vence en 1hs`,
       })
       .eq("id", data.id);
   }
