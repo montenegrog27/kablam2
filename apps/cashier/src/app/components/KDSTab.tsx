@@ -346,6 +346,46 @@ export default function KDSTab() {
       return (a.products?.name || "").localeCompare(b.products?.name || "");
     });
 
+  const canGroupKdsItem = (item: ExpandedKdsItem) =>
+    !item.note &&
+    (!item.extras || item.extras.length === 0) &&
+    Boolean(item.products?.id || item.variant_id);
+
+  const getKdsGroupKey = (item: ExpandedKdsItem) =>
+    [
+      item.parent_combo_name || "",
+      item.products?.id || "",
+      item.variant_id || "",
+      item.products?.name || "",
+    ].join("|");
+
+  const groupItemsForKds = (items: ExpandedKdsItem[]) => {
+    const grouped: ExpandedKdsItem[] = [];
+    const indexByKey = new Map<string, number>();
+
+    items.forEach((item) => {
+      if (!canGroupKdsItem(item)) {
+        grouped.push(item);
+        return;
+      }
+
+      const key = getKdsGroupKey(item);
+      const existingIndex = indexByKey.get(key);
+      if (existingIndex === undefined) {
+        indexByKey.set(key, grouped.length);
+        grouped.push({ ...item });
+        return;
+      }
+
+      grouped[existingIndex] = {
+        ...grouped[existingIndex],
+        quantity: (grouped[existingIndex].quantity || 0) + (item.quantity || 0),
+      };
+    });
+
+    return grouped;
+  };
+
   const getRecipe = (item: any) => recipeMap[item.variant_id] || [];
 
   // Total ingredients across all preparing orders
@@ -426,7 +466,7 @@ export default function KDSTab() {
   };
 
   const getPreparableItems = (order: any) =>
-    sortItemsForKds(expandOrderItemsForKds(order).filter((i: any) => i.products?.is_preparable !== false));
+    groupItemsForKds(sortItemsForKds(expandOrderItemsForKds(order).filter((i: any) => i.products?.is_preparable !== false)));
 
   const allItemsCooked = (order: any) => {
     const preparable = getPreparableItems(order);
