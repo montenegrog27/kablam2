@@ -11,9 +11,27 @@ CREATE TABLE IF NOT EXISTS tables (
   width DECIMAL(10,2) DEFAULT 60,
   height DECIMAL(10,2) DEFAULT 40,
   rotation DECIMAL(5,2) DEFAULT 0,
+  color TEXT DEFAULT '#ffffff',
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(branch_id, number)
+);
+
+-- Floor objects (walls, trees, counters, etc.)
+CREATE TABLE IF NOT EXISTS floor_objects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL,
+  branch_id UUID REFERENCES branches(id) ON DELETE CASCADE,
+  type TEXT NOT NULL, -- 'wall' | 'tree' | 'counter' | 'column' | 'decoration'
+  label TEXT,
+  pos_x DECIMAL(10,2) DEFAULT 0,
+  pos_y DECIMAL(10,2) DEFAULT 0,
+  width DECIMAL(10,2) DEFAULT 40,
+  height DECIMAL(10,2) DEFAULT 10,
+  rotation DECIMAL(5,2) DEFAULT 0,
+  color TEXT DEFAULT '#4B5563',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Table sessions (orders on tables)
@@ -55,4 +73,18 @@ CREATE POLICY "ts_update" ON table_sessions FOR UPDATE USING (
 );
 CREATE POLICY "ts_delete" ON table_sessions FOR DELETE USING (
   table_id IN (SELECT id FROM tables WHERE branch_id IN (SELECT id FROM branches WHERE tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid())))
+);
+
+ALTER TABLE floor_objects ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "fo_select" ON floor_objects FOR SELECT USING (
+  branch_id IN (SELECT id FROM branches WHERE tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid()))
+);
+CREATE POLICY "fo_insert" ON floor_objects FOR INSERT WITH CHECK (
+  branch_id IN (SELECT id FROM branches WHERE tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid()))
+);
+CREATE POLICY "fo_update" ON floor_objects FOR UPDATE USING (
+  branch_id IN (SELECT id FROM branches WHERE tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid()))
+);
+CREATE POLICY "fo_delete" ON floor_objects FOR DELETE USING (
+  branch_id IN (SELECT id FROM branches WHERE tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid()))
 );

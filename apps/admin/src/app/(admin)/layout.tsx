@@ -14,6 +14,7 @@ import {
   CalendarCheck,
   Upload, Cake,
   RadioTower,
+  Megaphone,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -62,6 +63,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/tables", label: "Mesas", icon: LayoutDashboard },
       { href: "/featured-order", label: "Orden Destacados", icon: Star },
       { href: "/loyalty", label: "Fidelización", icon: Award },
+      { href: "/promotions", label: "Promociones", icon: Megaphone },
       { href: "/coupons", label: "Cupones", icon: TicketPercent },
       { href: "/riders", label: "Repartidores", icon: Bike },
       { href: "/reservations", label: "Reservas", icon: CalendarCheck },
