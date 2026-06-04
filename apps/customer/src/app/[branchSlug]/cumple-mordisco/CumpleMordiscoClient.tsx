@@ -84,6 +84,16 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleDateString("es-AR", { month: "long", year: "numeric" });
 }
 
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text.slice(0, 220) || "Respuesta invalida del servidor" };
+  }
+}
+
 function qrCells(seed: string) {
   const chars = seed.split("").map((char) => char.charCodeAt(0));
   return Array.from({ length: 121 }, (_, index) => {
@@ -174,7 +184,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "verify", branchSlug, name, phone }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok || data.error) throw new Error(data.error || "No pudimos verificar tus beneficios");
       setVerification(data);
       if (data.settings) setEventInfo(data.settings);
@@ -232,7 +242,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           price: reservationTotal,
         }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok || data.error) throw new Error(data.error || "No pudimos generar la invitacion");
       if (accessMode === "ticket") {
         setVerification({

@@ -520,7 +520,9 @@ async function sendPaymentWhatsapp({
   favoriteBranchName: string;
   settings: AnniversarySettings;
 }) {
-  const whatsappToken = process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_API_TOKEN;
+  const whatsappToken = String(process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_API_TOKEN || "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
   if (!whatsappToken) return { skipped: true, reason: "WHATSAPP_TOKEN missing" };
 
   const whatsappPhone = normalizeArgWhatsapp(phone);
@@ -542,27 +544,35 @@ async function sendPaymentWhatsapp({
   const accessText = `${lotName}\nTitular: ${name}${companionText}${entryText}\nCantidad: ${attendeeCount} ${attendeeCount === 1 ? "entrada" : "entradas"}\nPrecio por entrada: *${unitPrice.toLocaleString("es-AR")}*`;
   const paymentMessage = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${settings.eventDate}\nHora: ${settings.eventTime}\nUbicacion: ${settings.eventLocation}\n\n*Tu acceso*\n${accessText}\n\nImporte total a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *${settings.paymentAlias}*\n\nTenes *${deadlineText}* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
   void message;
-  const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${whatsappToken}`,
-    },
-    body: JSON.stringify({
-      slug: "mordiscoburgers",
-      branchId: branchSlug,
-      phone: whatsappPhone,
-      message: paymentMessage,
-    }),
-  });
+  try {
+    const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${whatsappToken}`,
+      },
+      body: JSON.stringify({
+        slug: "mordiscoburgers",
+        branchId: branchSlug,
+        phone: whatsappPhone,
+        message: paymentMessage,
+      }),
+    });
 
-  const text = await response.text();
-  return {
-    ok: response.ok,
-    status: response.status,
-    branchName,
-    response: text,
-  };
+    const text = await response.text();
+    return {
+      ok: response.ok,
+      status: response.status,
+      branchName,
+      response: text,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "whatsapp_send_failed",
+      error: error instanceof Error ? error.message : "No se pudo enviar WhatsApp",
+    };
+  }
 }
 
 async function purchaseInvitation(body: {
