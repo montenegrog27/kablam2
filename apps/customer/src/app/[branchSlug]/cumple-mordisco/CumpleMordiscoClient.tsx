@@ -465,10 +465,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                   {verification ? `Beneficio: ${verification.benefit.label}` : "Ver mi categoria y beneficios"}
                 </button>
               </div>
-            ) : (
-              <p className="mt-4 rounded-2xl bg-white/[0.06] px-4 py-3 text-sm font-semibold leading-6 text-white/65">
-                Reservas tu asistencia sin compra de entrada. No se muestran categoria ni beneficios.
-              </p>
+            ) : (""
             )}
 
             <label className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-white/[0.06] px-4 py-3">
