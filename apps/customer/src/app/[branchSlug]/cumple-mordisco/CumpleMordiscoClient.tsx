@@ -439,7 +439,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 className={`rounded-2xl px-4 py-3 text-sm font-black transition ${accessMode === "ticket" ? "bg-[#d7b56d] text-black" : "bg-white/10 text-white"}`}
               >
                 Comprar entrada
-                <span className="mt-1 block text-[11px] font-semibold normal-case text-gray-900">Sorteos y beneficios</span>
+                <span className="mt-1 block text-[11px] font-semibold normal-case text-gray-100">Sorteos y beneficios</span>
               </button>
 
             </div>
