@@ -400,7 +400,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Reservas</p>
           <h2 className="mt-4 text-4xl font-black tracking-tight">Reserva tu lugar para el cumple</h2>
           <p className="mt-5 text-white/62">
-            Dejanos tu nombre, DNI y WhatsApp. Podes comprar entrada para participar de sorteos y beneficios, o solo reservar tu lugar sin beneficios.
+            Dejanos tu nombre, DNI y WhatsApp. Podes comprar entrada para participar de sorteos y beneficios.
           </p>
         </div>
 
@@ -486,10 +486,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 setCompanionName={setCompanionName}
                 companionDni={companionDni}
                 setCompanionDni={setCompanionDni}
-                openReservationModal={() => {
-                  setError("");
-                  setShowReservationModal(true);
-                }}
+                confirmReservation={purchase}
               />
             <div className={`hidden mt-6 overflow-hidden rounded-[24px] border p-5 ${isFounder ? "border-[#d7b56d]/70 bg-[#d7b56d]/12" : "border-white/12 bg-black/25"}`}>
               <div className="flex items-start justify-between gap-4">
@@ -783,7 +780,7 @@ function BenefitExperience({
   setCompanionName,
   companionDni,
   setCompanionDni,
-  openReservationModal,
+  confirmReservation,
 }: {
   verification: Verification;
   selectedLot?: Lot;
@@ -805,7 +802,7 @@ function BenefitExperience({
   setCompanionName: (value: string) => void;
   companionDni: string;
   setCompanionDni: (value: string) => void;
-  openReservationModal: () => void;
+  confirmReservation: () => void;
 }) {
   return (
     <div className="anniversary-reveal mt-6 overflow-hidden rounded-[32px] bg-[#070504] text-white shadow-[0_28px_90px_rgba(0,0,0,0.45)] sm:rounded-[36px]">
@@ -928,8 +925,8 @@ function BenefitExperience({
               )}
             </div>
 
-            <button onClick={openReservationModal} disabled={loading || !selectedLot || !selectedLot.isOpen} className="mt-5 w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black shadow-[0_18px_50px_rgba(255,255,255,0.14)] transition duration-300 hover:scale-[1.01] hover:bg-[#f6ead2] disabled:opacity-50">
-              Reservar mi lugar
+            <button onClick={confirmReservation} disabled={loading || !selectedLot || !selectedLot.isOpen} className="mt-5 w-full rounded-full bg-white px-5 py-4 text-sm font-black text-black shadow-[0_18px_50px_rgba(255,255,255,0.14)] transition duration-300 hover:scale-[1.01] hover:bg-[#f6ead2] disabled:opacity-50">
+              {loading ? "Confirmando..." : "Confirmar reserva y recibir WhatsApp"}
             </button>
           </section>
         </div>
