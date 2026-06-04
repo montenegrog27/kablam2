@@ -52,6 +52,12 @@ const defaultSettings = {
 
 type SettingsKey = "general" | "community" | "founder";
 
+function formatEntryNumbers(item: any) {
+  return Array.isArray(item.entry_numbers) && item.entry_numbers.length > 0
+    ? item.entry_numbers.join(", ")
+    : "-";
+}
+
 export default function AnniversaryDashboardPage() {
   const [items, setItems] = useState<any[]>([]);
   const [lots, setLots] = useState<any[]>([]);
@@ -85,7 +91,7 @@ export default function AnniversaryDashboardPage() {
     return items.filter((item) => {
       if (tier && item.benefit_tier !== tier) return false;
       if (!term) return true;
-      return [item.customer_name, item.whatsapp, item.dni, item.email, item.companion_name, item.companion_dni, item.invitation_code, item.lot_name]
+      return [item.customer_name, item.whatsapp, item.dni, item.email, item.companion_name, item.companion_dni, item.invitation_code, item.lot_name, formatEntryNumbers(item)]
         .join(" ")
         .toLowerCase()
         .includes(term);
@@ -425,7 +431,7 @@ export default function AnniversaryDashboardPage() {
                   onClick={() => {
                     setSelected(item);
                     setMessage(
-                      `Hola ${item.customer_name}! Tu invitacion ${item.invitation_code} para el Primer Aniversario Mordisco esta confirmada. Tu acceso: ${item.lot_name || "Cumple Mordisco"} (${currency.format(Number(item.price || 0))}).`,
+                      `Hola ${item.customer_name}! Tu invitacion ${item.invitation_code} para el Primer Aniversario Mordisco esta confirmada. Tu acceso: ${item.lot_name || "Cumple Mordisco"} (${currency.format(Number(item.price || 0))}). Numeros para sorteo: ${formatEntryNumbers(item)}.`,
                     );
                   }}
                   className={`grid w-full grid-cols-12 gap-2 border-b border-gray-800 px-4 py-3 text-left hover:bg-gray-800/60 ${
@@ -440,6 +446,7 @@ export default function AnniversaryDashboardPage() {
                   <div className="col-span-2 text-sm text-gray-400">
                     <p>{item.lot_name || "-"}</p>
                     <p className="text-xs text-gray-500">{item.attendee_count || 1} entradas</p>
+                    <p className="text-xs font-semibold text-amber-300">Nros: {formatEntryNumbers(item)}</p>
                   </div>
                   <div className="col-span-2 text-right text-sm font-semibold text-emerald-300">{currency.format(Number(item.price || 0))}</div>
                   <div className="col-span-1 flex justify-end">
@@ -462,6 +469,7 @@ export default function AnniversaryDashboardPage() {
                 <p className="text-sm text-gray-500">{selected.whatsapp}</p>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <InfoPill label="DNI" value={selected.dni || "-"} />
+                  <InfoPill label="Sorteo" value={formatEntryNumbers(selected)} />
                   <InfoPill label="Entradas" value={String(selected.attendee_count || 1)} />
                   <InfoPill label="Cumpleaños" value={selected.birthdate ? new Date(selected.birthdate).toLocaleDateString("es-AR") : "-"} />
                   <InfoPill label="Email" value={selected.email || "-"} wide />

@@ -56,6 +56,7 @@ type Invitation = {
   benefit_tier: string;
   lot_name?: string;
   price: number;
+  entry_numbers?: number[] | null;
   companion_name?: string | null;
   companion_dni?: string | null;
 };
@@ -438,7 +439,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 className={`rounded-2xl px-4 py-3 text-sm font-black transition ${accessMode === "ticket" ? "bg-[#d7b56d] text-black" : "bg-white/10 text-white"}`}
               >
                 Comprar entrada
-                <span className="mt-1 block text-[11px] font-semibold normal-case text-black/60">Sorteos y beneficios</span>
+                <span className="mt-1 block text-[11px] font-semibold normal-case text-gray-900">Sorteos y beneficios</span>
               </button>
               <button
                 type="button"
@@ -750,6 +751,12 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                   <p className="mt-2 text-2xl font-black">{invitation.customer_name}</p>
                   <p className="text-sm text-black/55">WhatsApp {invitation.whatsapp}</p>
                   <p className="mt-4 text-sm font-bold">Invitacion #{invitation.invitation_code}</p>
+                  {invitation.entry_numbers && invitation.entry_numbers.length > 0 && (
+                    <div className="mt-4 rounded-2xl bg-[#d7b56d] px-4 py-3 text-black">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/55">Numeros para sorteo</p>
+                      <p className="mt-1 text-3xl font-black">{invitation.entry_numbers.join(" · ")}</p>
+                    </div>
+                  )}
                   <div className="mt-5 space-y-1 text-sm font-semibold text-black/70">
                     <p>Fecha: {eventInfo.eventDate}</p>
                     <p>Hora: {eventInfo.eventTime}</p>

@@ -202,6 +202,28 @@ async function countSoldByLot(service: ReturnType<typeof createServiceClient>, t
   return counts;
 }
 
+async function nextEntryNumbers(
+  service: ReturnType<typeof createServiceClient>,
+  tenantId: string,
+  branchId: string,
+  count: number,
+) {
+  const { data, error } = await service
+    .from("anniversary_invitations")
+    .select("entry_numbers")
+    .eq("tenant_id", tenantId)
+    .eq("branch_id", branchId)
+    .neq("status", "cancelled");
+
+  if (error) throw new Error(`No se pudieron calcular los numeros de entrada: ${error.message}`);
+
+  const usedNumbers = (data || []).flatMap((row: { entry_numbers?: number[] | null }) =>
+    Array.isArray(row.entry_numbers) ? row.entry_numbers.map(Number) : [],
+  );
+  const maxNumber = usedNumbers.length > 0 ? Math.max(...usedNumbers) : 0;
+  return Array.from({ length: count }, (_, index) => maxNumber + index + 1);
+}
+
 async function lotsForTier(
   service: ReturnType<typeof createServiceClient>,
   tenantId: string,
@@ -469,6 +491,7 @@ async function sendPaymentWhatsapp({
   code,
   lotName,
   companionName,
+  entryNumbers,
   attendeeCount,
   unitPrice,
   price,
@@ -486,6 +509,7 @@ async function sendPaymentWhatsapp({
   code: string;
   lotName: string;
   companionName?: string | null;
+  entryNumbers: number[];
   attendeeCount: number;
   unitPrice: number;
   price: number;
@@ -514,7 +538,8 @@ async function sendPaymentWhatsapp({
   const deadlineText = settings.paymentDeadlineMinutes === 60 ? "1hs" : `${settings.paymentDeadlineMinutes} minutos`;
   const message = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${settings.eventDate}\nHora: ${settings.eventTime}\nUbicacion: ${settings.eventLocation}\n\n*Tu acceso*\n${lotName}\nMonto a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *${settings.paymentAlias}*\n\nTenes *${deadlineText}* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
   const companionText = companionName ? `\nAcompañante: ${companionName}` : "";
-  const accessText = `${lotName}\nTitular: ${name}${companionText}\nCantidad: ${attendeeCount} ${attendeeCount === 1 ? "entrada" : "entradas"}\nPrecio por entrada: *$${unitPrice.toLocaleString("es-AR")}*`;
+  const entryText = entryNumbers.length > 0 ? `\nNumeros para sorteo: *${entryNumbers.join(", ")}*` : "";
+  const accessText = `${lotName}\nTitular: ${name}${companionText}${entryText}\nCantidad: ${attendeeCount} ${attendeeCount === 1 ? "entrada" : "entradas"}\nPrecio por entrada: *${unitPrice.toLocaleString("es-AR")}*`;
   const paymentMessage = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${settings.eventDate}\nHora: ${settings.eventTime}\nUbicacion: ${settings.eventLocation}\n\n*Tu acceso*\n${accessText}\n\nImporte total a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *${settings.paymentAlias}*\n\nTenes *${deadlineText}* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
   void message;
   const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
@@ -597,6 +622,12 @@ async function purchaseInvitation(body: {
   if (selectedLot && selectedLot.available !== null && attendeeCount > selectedLot.available) {
     return NextResponse.json({ error: "Este lote no tiene cupo suficiente para la cantidad de entradas" }, { status: 409 });
   }
+  const entryNumbers = isFreeReservation
+    ? []
+    : await nextEntryNumbers(service, branch.tenant_id, branch.id, attendeeCount);
+  if (entryNumbers.some((number) => number > 100)) {
+    return NextResponse.json({ error: "Ya no quedan numeros disponibles para el sorteo" }, { status: 409 });
+  }
   const price = unitPrice * attendeeCount;
   const payload = {
     tenant_id: branch.tenant_id,
@@ -609,6 +640,7 @@ async function purchaseInvitation(body: {
     companion_name: hasCompanion ? body.companionName : null,
     companion_dni: hasCompanion ? body.companionDni : null,
     attendee_count: attendeeCount,
+    entry_numbers: entryNumbers,
     whatsapp: whatsappPhone,
     benefit_tier: body.benefitKey || tier.key,
     lot_key: isFreeReservation ? null : body.lotKey || selectedLot?.key,
@@ -640,6 +672,7 @@ async function purchaseInvitation(body: {
     code,
     lotName: payload.lot_name || "Reserva sin entrada",
     companionName: payload.companion_name,
+    entryNumbers,
     attendeeCount,
     unitPrice,
     price,
