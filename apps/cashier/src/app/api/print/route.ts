@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     // Cargar datos del pedido
     const { data: order } = await supabase
       .from("orders")
-      .select("*, order_items(*, products(*))")
+      .select("*, order_items(*, products(*), combos(*))")
       .eq("id", orderId)
       .single();
 
@@ -67,7 +67,9 @@ export async function POST(req: NextRequest) {
 
           if (assignedCatIds.length > 0) {
             // Cargar categorías de los productos
-            const productIds = itemsToPrint.map((i: any) => i.product_id);
+            const productIds = itemsToPrint
+              .map((i: any) => i.product_id)
+              .filter(Boolean);
             const { data: products } = await supabase
               .from("products")
               .select("id, category_id")
@@ -76,9 +78,10 @@ export async function POST(req: NextRequest) {
             const productCatMap: Record<string, string> = {};
             (products || []).forEach((p: any) => { productCatMap[p.id] = p.category_id; });
 
-            itemsToPrint = itemsToPrint.filter((item: any) =>
-              assignedCatIds.includes(productCatMap[item.product_id])
-            );
+            itemsToPrint = itemsToPrint.filter((item: any) => {
+              if (item.combo_id) return true;
+              return assignedCatIds.includes(productCatMap[item.product_id]);
+            });
           }
 
           dataToPrint = buildComanda(order, itemsToPrint, branchName, {

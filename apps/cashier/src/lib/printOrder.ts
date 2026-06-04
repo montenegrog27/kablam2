@@ -12,7 +12,7 @@ async function printToLocalAgent(job: PrintJob, logs: string[]): Promise<void> {
     // Cargar datos del pedido
     const { data: order } = await supabase
       .from("orders")
-      .select("*, order_items(*, products(*))")
+      .select("*, order_items(*, products(*), combos(*))")
       .eq("id", job.orderId)
       .single();
 
@@ -165,7 +165,7 @@ async function printUSBOrder(job: PrintJob, logs: string[]): Promise<void> {
     // Cargar datos para imprimir
     const { data: order } = await supabase
       .from("orders")
-      .select("*, order_items(*, products(*))")
+      .select("*, order_items(*, products(*), combos(*))")
       .eq("id", job.orderId)
       .single();
 

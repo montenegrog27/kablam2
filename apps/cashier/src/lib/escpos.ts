@@ -10,6 +10,16 @@ type PrinterConfig = {
   comanda_footer?: string;
 };
 
+function getItemName(item: any) {
+  return (
+    item.products?.name ||
+    item.combos?.name ||
+    item.combo?.name ||
+    item.name ||
+    (item.combo_id ? "Combo" : "Producto")
+  );
+}
+
 export function buildComanda(
   order: any,
   items: any[],
@@ -40,7 +50,7 @@ export function buildComanda(
 
   items.forEach((item: any) => {
     const qty = item.quantity || 1;
-    const name = item.products?.name || item.name || "Producto";
+    const name = getItemName(item);
     lines.push(`${qty}x ${name}`);
     if (item.note) {
       lines.push(`   NOTA: ${item.note}`);
@@ -92,7 +102,7 @@ export function buildTicket(
 
   items.forEach((item: any) => {
     const qty = item.quantity || 1;
-    const name = item.products?.name || item.name || "Producto";
+    const name = getItemName(item);
     const price = item.unit_price || item.price || 0;
     const lineTotal = qty * price;
     lines.push(`${qty}x ${name.padEnd(25)} $${lineTotal.toFixed(2).padStart(8)}`);
