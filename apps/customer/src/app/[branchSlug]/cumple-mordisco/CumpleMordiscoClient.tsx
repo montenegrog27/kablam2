@@ -840,69 +840,7 @@ function BenefitExperience({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,59,48,0.26),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.045),transparent_30%)]" />
         <div className="pointer-events-none absolute left-1/2 top-10 h-48 w-48 -translate-x-1/2 rounded-full border border-white/10" />
 
-        <section className="relative px-4 pb-8 pt-8 text-center sm:px-8 sm:pb-12 sm:pt-12">
-          <p className="fade-up text-[10px] font-black uppercase tracking-[0.34em] text-white/38">Primer Aniversario Mordisco</p>
-          <h3 className="fade-up level-glow mx-auto mt-3 max-w-[12ch] break-words text-[3.25rem] font-black uppercase leading-[0.8] tracking-normal text-white sm:text-[5.7rem]">
-            {levelName}
-          </h3>
-          {impressiveBadge && (
-            <div className="fade-up mx-auto mt-6 inline-flex max-w-full items-center gap-3 rounded-full bg-white px-4 py-3 text-black shadow-[0_22px_70px_rgba(255,255,255,0.16)] transition duration-300 hover:scale-[1.02] sm:mt-8 sm:px-5">
-              <span className="text-xl">{impressiveBadge.icon}</span>
-              <span className="text-xs font-black uppercase tracking-[0.12em]">{impressiveBadge.label}</span>
-            </div>
-          )}
-          <div className="fade-up mx-auto mt-5 max-w-sm overflow-hidden rounded-[28px] bg-white text-black shadow-[0_24px_80px_rgba(255,255,255,0.18)] sm:mt-7">
-            <div className="bg-[radial-gradient(circle_at_top_left,rgba(255,59,48,0.22),transparent_42%),linear-gradient(180deg,#ffffff,#f5efe5)] px-5 py-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-black/42">Beneficio desbloqueado</p>
-              <div className="mt-2 flex items-end justify-center gap-3">
-                <p className="text-[3.1rem] font-black leading-none tracking-normal text-black">
-                  BENEFICIOS
-                </p>
-                <p className="pb-1 text-2xl font-black leading-none text-[#ff3b30]">DESBLOQUEADOS</p>
-              </div>
-              <p className="mt-3 text-xs font-black uppercase tracking-[0.12em] text-black/46">
-                {hasDiscount ? `Por ser ${levelName}` : "Invitación habilitada"}
-              </p>
-            </div>
-            {selectedLot && (
-              <div className="grid grid-cols-2 bg-black text-white">
-                <div className="border-r border-white/10 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/36">Lote</p>
-                  <p className="mt-1 text-sm font-black">{currency.format(selectedLot.basePrice)}</p>
-                </div>
-                <div className="px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#d7b56d]">Tu precio</p>
-                  <p className="mt-1 text-sm font-black">{currency.format(selectedLot.finalPrice)}</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <div className="relative space-y-4 px-3 pb-4 sm:space-y-5 sm:px-6 sm:pb-6">
-          <section className="fade-up rounded-[26px] bg-white/[0.07] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl sm:rounded-[30px] sm:p-6">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d7b56d]">Tu historia</p>
-            <p className="mt-4 whitespace-pre-line text-base font-semibold leading-7 text-white/90 sm:text-xl sm:leading-9">{story}</p>
-          </section>
-
-          <section className="fade-up rounded-[26px] bg-[#11100e] p-4 sm:rounded-[30px] sm:p-5">
-            <div className="mb-4 flex items-end justify-between gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.24em] text-white/36">Comunidad</p>
-                <h4 className="mt-2 text-xl font-black text-white sm:text-2xl">Tus señales Mordisco</h4>
-              </div>
-              <p className="hidden max-w-36 text-right text-xs font-semibold leading-5 text-white/40 sm:block">
-                Datos que explican tu lugar en este aniversario.
-              </p>
-            </div>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              {historyStats.map((stat) => (
-                <StoryStat key={stat.label} {...stat} />
-              ))}
-            </div>
-          </section>
-
-          <section className="fade-up overflow-hidden rounded-[34px] bg-white text-black shadow-[0_28px_80px_rgba(255,255,255,0.13)]">
+            <section className="fade-up overflow-hidden rounded-[34px] bg-white text-black shadow-[0_28px_80px_rgba(255,255,255,0.13)]">
             <div className="bg-[radial-gradient(circle_at_top_left,rgba(255,59,48,0.18),transparent_36%),linear-gradient(180deg,#ffffff,#f4eee4)] p-6 text-center sm:p-8">
               <p className="text-[11px] font-black uppercase tracking-[0.28em] text-black/42">Beneficio desbloqueado</p>
               <p className="mt-4 text-[4.8rem] font-black leading-none tracking-normal text-black sm:text-[6.2rem]">
@@ -936,6 +874,31 @@ function BenefitExperience({
               </div>
             )}
           </section>
+
+        <div className="relative space-y-4 px-3 pb-4 sm:space-y-5 sm:px-6 sm:pb-6">
+          <section className="fade-up rounded-[26px] bg-white/[0.07] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl sm:rounded-[30px] sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#d7b56d]">Tu historia</p>
+            <p className="mt-4 whitespace-pre-line text-base font-semibold leading-7 text-white/90 sm:text-xl sm:leading-9">{story}</p>
+          </section>
+
+          <section className="fade-up rounded-[26px] bg-[#11100e] p-4 sm:rounded-[30px] sm:p-5">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-white/36">Comunidad</p>
+                <h4 className="mt-2 text-xl font-black text-white sm:text-2xl">Tus señales Mordisco</h4>
+              </div>
+              <p className="hidden max-w-36 text-right text-xs font-semibold leading-5 text-white/40 sm:block">
+                Datos que explican tu lugar en este aniversario.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {historyStats.map((stat) => (
+                <StoryStat key={stat.label} {...stat} />
+              ))}
+            </div>
+          </section>
+
+
 
           <section className="fade-up rounded-[30px] bg-white/[0.065] p-5 backdrop-blur-xl sm:p-6">
             <div className="mb-5">
