@@ -22,6 +22,8 @@ import {
   Minus,
   Trash2,
   X,
+  Home,
+  Building2,
 } from "lucide-react";
 
 function calculateDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -100,7 +102,10 @@ export default function CheckoutForm({
     name: "",
     phone: "",
     address: "",
+    floor: "",
+    apartment: "",
   });
+  const [addressKind, setAddressKind] = useState<"house" | "apartment">("house");
 
   const [customerLat, setCustomerLat] = useState<number | null>(null);
   const [customerLng, setCustomerLng] = useState<number | null>(null);
@@ -198,11 +203,30 @@ export default function CheckoutForm({
       .join(", ");
   }
 
+  function buildDeliveryAddress() {
+    if (orderMode !== "delivery") return customer.address;
+
+    return [
+      customer.address.trim(),
+      addressKind === "apartment" && customer.floor.trim()
+        ? `Piso ${customer.floor.trim()}`
+        : "",
+      addressKind === "apartment" && customer.apartment.trim()
+        ? `Depto ${customer.apartment.trim()}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
+
   function selectSavedAddress(address: SavedAddress) {
     setSelectedAddressId(address.id);
+    setAddressKind(address.floor || address.apartment ? "apartment" : "house");
     setCustomer((current) => ({
       ...current,
-      address: formatSavedAddress(address),
+      address: address.address,
+      floor: address.floor || "",
+      apartment: address.apartment || "",
     }));
 
     if (address.latitude && address.longitude) {
@@ -284,10 +308,16 @@ export default function CheckoutForm({
     autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
       if (place.geometry) {
-        setCustomer((prev) => ({ ...prev, address: place.formatted_address || input.value }));
+        setCustomer((prev) => ({
+          ...prev,
+          address: place.formatted_address || input.value,
+          floor: "",
+          apartment: "",
+        }));
         setCustomerLat(place.geometry.location.lat());
         setCustomerLng(place.geometry.location.lng());
         setSelectedAddressId("__autocomplete__");
+        setAddressKind("house");
       }
     });
   }, [orderMode]);
@@ -428,6 +458,7 @@ export default function CheckoutForm({
         customer: {
           ...customer,
           phone: phoneNormalized,
+          address: buildDeliveryAddress(),
         },
         items: cart.map((item) => ({
           itemType: item.itemType || "product",
@@ -575,6 +606,61 @@ export default function CheckoutForm({
                         className="w-full bg-white border border-gray-200 rounded-xl pl-4 pr-4 py-3.5 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-gray-900/20 focus:border-gray-400 transition-all text-base hover:border-gray-300"
                       />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddressKind("house");
+                          setCustomer((prev) => ({ ...prev, floor: "", apartment: "" }));
+                        }}
+                        className={`flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${
+                          addressKind === "house"
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-400"
+                        }`}
+                        style={{ fontFamily }}
+                      >
+                        <Home size={16} />
+                        Casa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddressKind("apartment")}
+                        className={`flex min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${
+                          addressKind === "apartment"
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-400"
+                        }`}
+                        style={{ fontFamily }}
+                      >
+                        <Building2 size={16} />
+                        Departamento
+                      </button>
+                    </div>
+
+                    {addressKind === "apartment" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          placeholder="Piso (opcional)"
+                          value={customer.floor}
+                          onChange={(e) => {
+                            setCustomer((prev) => ({ ...prev, floor: e.target.value }));
+                            setSelectedAddressId("");
+                          }}
+                          className="min-w-0 w-full bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-gray-900/20 focus:border-gray-400 transition-all text-base hover:border-gray-300"
+                        />
+                        <input
+                          placeholder="Depto (opcional)"
+                          value={customer.apartment}
+                          onChange={(e) => {
+                            setCustomer((prev) => ({ ...prev, apartment: e.target.value }));
+                            setSelectedAddressId("");
+                          }}
+                          className="min-w-0 w-full bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-gray-900/20 focus:border-gray-400 transition-all text-base hover:border-gray-300"
+                        />
+                      </div>
+                    )}
 
                     {/* <button
                       type="button"
