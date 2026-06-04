@@ -143,6 +143,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const hasFullName = name.trim().split(/\s+/).length >= 2;
   const hasDni = customerDni.replace(/\D/g, "").length >= 7;
   const hasWhatsapp = phone.replace(/\D/g, "").length >= 8;
+  const shouldShowNameBadge = name.trim().length > 0 && !hasFullName;
 
   useEffect(() => {
     let cancelled = false;
@@ -417,8 +418,18 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
         <div className="rounded-[28px] border border-white/12 bg-white/[0.06] p-4 shadow-2xl backdrop-blur-xl sm:p-5">
           <div className="grid gap-3">
             <label>
-              <span className="mb-1 block text-xs font-semibold text-white/55">Nombre y apellido</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none" />
+              <span className="mb-1 flex items-center justify-between gap-3 text-xs font-semibold text-white/55">
+                <span>Nombre y apellido</span>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] transition ${shouldShowNameBadge ? "bg-amber-400/18 text-amber-100 ring-1 ring-amber-300/25" : "bg-white/[0.07] text-white/38"}`}>
+                  {shouldShowNameBadge ? "Falta apellido" : "2 palabras"}
+                </span>
+              </span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-invalid={shouldShowNameBadge}
+                className={`w-full rounded-2xl border bg-black/35 px-4 py-3 text-[16px] outline-none transition ${shouldShowNameBadge ? "border-amber-300/45 shadow-[0_0_0_3px_rgba(251,191,36,0.08)]" : "border-white/12"}`}
+              />
             </label>
             <label>
               <span className="mb-1 block text-xs font-semibold text-white/55">DNI</span>

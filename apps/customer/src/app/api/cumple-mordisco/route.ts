@@ -667,6 +667,14 @@ async function purchaseInvitation(body: {
     .select("*")
     .single();
 
+  if (error) {
+    return NextResponse.json({
+      error: `No se pudo guardar la invitacion: ${error.message}`,
+      details: error.details,
+      code: error.code,
+    }, { status: 500 });
+  }
+
   const savedInvitation = data || {
     ...payload,
     id: code,
@@ -725,24 +733,30 @@ async function purchaseInvitation(body: {
     lots,
     message: pickMessage(settings, tier.key as keyof AnniversarySettings["messages"], body.name || stats.displayName, stats.orderCount, stats.firstOrderAt, stats.topPercentile, stats.favoriteBranch.name, phone),
     whatsapp: whatsappResult,
-    warning: error?.message || null,
+    warning: null,
   });
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const action = String(body.action || "verify");
+  try {
+    const body = await req.json();
+    const action = String(body.action || "verify");
 
-  if (action === "config") {
-    return getPublicConfig(String(body.branchSlug || ""));
-  }
-
-  if (action === "purchase") {
-    if (!body.name || !body.phone || !body.dni || !body.branchSlug) {
-      return NextResponse.json({ error: "Faltan datos para generar la invitacion" }, { status: 400 });
+    if (action === "config") {
+      return getPublicConfig(String(body.branchSlug || ""));
     }
-    return purchaseInvitation(body);
-  }
 
-  return verifyCustomer(String(body.branchSlug || ""), String(body.name || ""), String(body.phone || ""));
+    if (action === "purchase") {
+      if (!body.name || !body.phone || !body.dni || !body.branchSlug) {
+        return NextResponse.json({ error: "Faltan datos para generar la invitacion" }, { status: 400 });
+      }
+      return purchaseInvitation(body);
+    }
+
+    return verifyCustomer(String(body.branchSlug || ""), String(body.name || ""), String(body.phone || ""));
+  } catch (error) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : "No pudimos procesar la solicitud",
+    }, { status: 500 });
+  }
 }
