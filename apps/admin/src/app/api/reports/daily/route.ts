@@ -162,33 +162,101 @@ export async function GET(req: NextRequest) {
   const otherCosts = totalExpenses - deliveryCosts - marketingCosts - salaryCosts - fixedCosts;
 
   // ──────────────────────────────────────────────
-  // 7. CMV (Cost of Goods Sold) — ingredients + packaging
+  // 7. CMV (Cost of Goods Sold) — ingredients + packaging (including combos)
   // ──────────────────────────────────────────────
   let cmv = 0;
   let cmvDetails: { product: string; cost: number; type: string }[] = [];
   try {
-    const itemVariantIds = orders?.flatMap((o) =>
-      (o.order_items || []).map((i: any) => i.variant_id).filter(Boolean)
-    ) || [];
-    const uniqueVariantIds = [...new Set(itemVariantIds)];
+    // Separate regular items and combo items
+    const regularItems: any[] = [];
+    const comboIds: string[] = [];
+    orders?.forEach((o) => {
+      (o.order_items || []).forEach((item: any) => {
+        if (item.variant_id?.endsWith("-variant")) {
+          // Combo item: extract combo ID from variant_id (remove "-variant" suffix)
+          const cid = item.variant_id.replace(/-variant$/, "");
+          comboIds.push(cid);
+        } else {
+          regularItems.push(item);
+        }
+      });
+    });
 
-    if (uniqueVariantIds.length > 0) {
-      const variantCosts = await getVariantCostMap(supabase, uniqueVariantIds);
+    // Get variant costs for regular items
+    const regularVariantIds = [...new Set(regularItems.map((i: any) => i.variant_id).filter(Boolean))];
+    const variantCosts: Record<string, number> = {};
+    if (regularVariantIds.length > 0) {
+      const costs = await getVariantCostMap(supabase, regularVariantIds);
+      Object.assign(variantCosts, costs);
+    }
 
-      // Calculate CMV from order items
-      orders?.forEach((o) => {
-        (o.order_items || []).forEach((item: any) => {
-          const cost = variantCosts[item.variant_id] || 0;
-          const totalItemCost = cost * (item.quantity || 1);
-          cmv += totalItemCost;
-          cmvDetails.push({
-            product: item.products?.name || "N/A",
-            cost: totalItemCost,
-            type: cost > 0 ? "ingredientes+packaging" : "sin receta",
-          });
+    // Get combo costs: load combo_products then get cost of each product's default variant
+    const comboCosts: Record<string, number> = {};
+    const uniqueComboIds = [...new Set(comboIds)];
+    if (uniqueComboIds.length > 0) {
+      const { data: combosWithProducts } = await supabase
+        .from("combos")
+        .select("id, combo_products!left(product_id)")
+        .in("id", uniqueComboIds);
+
+      // Collect all product IDs from combos
+      const comboProductIds: string[] = [];
+      (combosWithProducts || []).forEach((c: any) => {
+        (c.combo_products || []).forEach((cp: any) => {
+          comboProductIds.push(cp.product_id);
         });
       });
+
+      if (comboProductIds.length > 0) {
+        // Find default variant for each product
+        const { data: variants } = await supabase
+          .from("product_variants")
+          .select("id, product_id")
+          .in("product_id", comboProductIds);
+
+        // Get the default variant per product (first one found)
+        const variantByProduct: Record<string, string> = {};
+        (variants || []).forEach((v: any) => {
+          if (!variantByProduct[v.product_id]) variantByProduct[v.product_id] = v.id;
+        });
+
+        const allComboVariantIds = Object.values(variantByProduct);
+        if (allComboVariantIds.length > 0) {
+          const comboVariantCosts = await getVariantCostMap(supabase, allComboVariantIds);
+          // Calculate cost per combo
+          (combosWithProducts || []).forEach((c: any) => {
+            let total = 0;
+            (c.combo_products || []).forEach((cp: any) => {
+              const vId = variantByProduct[cp.product_id];
+              if (vId) total += (comboVariantCosts[vId] || 0) * (cp.quantity || 1);
+            });
+            comboCosts[c.id] = total;
+          });
+        }
+      }
     }
+
+    // Calculate CMV from all order items
+    orders?.forEach((o) => {
+      (o.order_items || []).forEach((item: any) => {
+        let cost = 0;
+        let detailType = "sin receta";
+        if (item.variant_id?.endsWith("-variant")) {
+          const cid = item.variant_id.replace(/-variant$/, "");
+          cost = (comboCosts[cid] || 0) * (item.quantity || 1);
+          detailType = cost > 0 ? "combo" : "combo sin receta";
+        } else {
+          cost = (variantCosts[item.variant_id] || 0) * (item.quantity || 1);
+          detailType = cost > 0 ? "ingredientes+packaging" : "sin receta";
+        }
+        cmv += cost;
+        cmvDetails.push({
+          product: item.products?.name || "N/A",
+          cost,
+          type: detailType,
+        });
+      });
+    });
   } catch (e) {
     console.error("CMV error:", e);
   }
