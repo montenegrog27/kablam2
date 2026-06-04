@@ -863,16 +863,6 @@ function BenefitExperience({
                 </div>
               )}
             </div>
-
-            {selectedLot && (
-              <div className="grid gap-4 border-t border-black/8 bg-black px-5 py-5 text-center text-white sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
-                <PriceMoment label="Precio lote" value={currency.format(selectedLot.basePrice)} muted strike={hasDiscount} />
-                <span className="hidden text-2xl font-black text-white/24 sm:block">→</span>
-                <PriceMoment label="Entrada" value={currency.format(selectedLot.finalPrice)} highlight />
-                <span className="hidden text-2xl font-black text-white/24 sm:block">→</span>
-                <PriceMoment label={`Por ser ${levelName}`} value="Beneficios activos" />
-              </div>
-            )}
           </section>
 
         <div className="relative space-y-4 px-3 pb-4 sm:space-y-5 sm:px-6 sm:pb-6">
@@ -903,17 +893,7 @@ function BenefitExperience({
           <section className="fade-up rounded-[30px] bg-white/[0.065] p-5 backdrop-blur-xl sm:p-6">
             <div className="mb-5">
               <p className="text-xs font-black uppercase tracking-[0.24em] text-white/36">Reservá tu lugar</p>
-              <div className="mt-2 flex items-end justify-between gap-4">
-                <h4 className="text-2xl font-black text-white">Elegí el lote activo</h4>
-                {selectedLot && (
-                  <div className="text-right">
-                    <p className="text-2xl font-black text-[#d7b56d]">{currency.format(reservationTotal)}</p>
-                    <p className="mt-1 text-[11px] font-semibold text-white/42">
-                      {attendeeCount} {attendeeCount === 1 ? "entrada" : "entradas"}
-                    </p>
-                  </div>
-                )}
-              </div>
+
             </div>
 
             <div className="grid gap-3">
