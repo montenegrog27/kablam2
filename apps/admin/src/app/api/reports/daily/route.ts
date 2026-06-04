@@ -190,14 +190,20 @@ export async function GET(req: NextRequest) {
       Object.assign(variantCosts, costs);
     }
 
-    // Get combo costs: load combo_products then get cost of each product's default variant
+    // Get combo costs AND names
     const comboCosts: Record<string, number> = {};
+    const comboNameMap: Record<string, string> = {};
     const uniqueComboIds = [...new Set(comboIds)];
     if (uniqueComboIds.length > 0) {
       const { data: combosWithProducts } = await supabase
         .from("combos")
-        .select("id, combo_products!left(product_id)")
+        .select("id, name, combo_products!left(product_id)")
         .in("id", uniqueComboIds);
+
+      // Store combo names
+      (combosWithProducts || []).forEach((c: any) => {
+        comboNameMap[c.id] = c.name;
+      });
 
       // Collect all product IDs from combos
       const comboProductIds: string[] = [];
@@ -250,8 +256,9 @@ export async function GET(req: NextRequest) {
           detailType = cost > 0 ? "ingredientes+packaging" : "sin receta";
         }
         cmv += cost;
+        const productName = item.products?.name || comboNameMap[item.variant_id?.replace(/-variant$/, "")] || "N/A";
         cmvDetails.push({
-          product: item.products?.name || "N/A",
+          product: productName,
           cost,
           type: detailType,
         });

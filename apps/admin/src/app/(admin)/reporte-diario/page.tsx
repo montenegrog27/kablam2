@@ -361,14 +361,34 @@ export default function ReporteDiarioPage() {
             </div>
             {r.cmv_detalle.length > 0 && (
               <details className="bg-gray-800 rounded-xl p-4">
-                <summary className="text-xs font-semibold text-gray-400 cursor-pointer hover:text-gray-200">Ver detalle por producto ({r.cmv_detalle.length} items)</summary>
-                <div className="mt-3 space-y-1 max-h-60 overflow-y-auto">
-                  {r.cmv_detalle.map((d: any, i: number) => (
+                <summary className="text-xs font-semibold text-gray-400 cursor-pointer hover:text-gray-200">
+                  Ver detalle ({r.cmv_detalle.filter((d: any) => d.costo > 0).length} con costo · {r.cmv_detalle.filter((d: any) => d.costo === 0).length} sin receta)
+                </summary>
+                <div className="mt-3 space-y-1 max-h-72 overflow-y-auto">
+                  {r.cmv_detalle
+                    .filter((d: any) => d.costo > 0)
+                    .sort((a: any, b: any) => b.costo - a.costo)
+                    .map((d: any, i: number) => (
                     <div key={i} className="flex justify-between text-xs py-0.5">
-                      <span className="text-gray-300">{d.producto}</span>
-                      <span className="text-gray-400 tabular-nums">${d.costo.toLocaleString("es-AR")}</span>
+                      <span className="text-gray-300 truncate">{d.producto}</span>
+                      <span className="text-gray-400 tabular-nums flex-shrink-0 ml-2">${d.costo.toLocaleString("es-AR")}</span>
                     </div>
                   ))}
+                  {r.cmv_detalle.filter((d: any) => d.costo === 0).length > 0 && (
+                    <details className="mt-2 pt-2 border-t border-gray-700">
+                      <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-gray-400">
+                        {r.cmv_detalle.filter((d: any) => d.costo === 0).length} producto(s) sin receta (costo $0)
+                      </summary>
+                      <div className="mt-1 space-y-0.5">
+                        {r.cmv_detalle.filter((d: any) => d.costo === 0).map((d: any, i: number) => (
+                          <div key={i} className="flex justify-between text-[10px] py-0.5">
+                            <span className="text-gray-600">{d.producto}</span>
+                            <span className="text-gray-700">$0</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </div>
               </details>
             )}
