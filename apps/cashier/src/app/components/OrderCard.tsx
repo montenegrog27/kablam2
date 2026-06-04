@@ -42,6 +42,10 @@ export default function OrderCard({
   const isDelivery = order.type === "delivery";
   const canChange = canChangeRider && isDelivery;
   const paymentLabel = getPaymentLabel(order);
+  const promotionNames = Array.isArray(order.promotion_names)
+    ? order.promotion_names.filter(Boolean)
+    : [];
+  const promotionDiscount = Number(order.discount_amount || order.discount || 0);
 
   useEffect(() => {
     if (order.rider_id) {
@@ -195,6 +199,24 @@ export default function OrderCard({
           {isDelivery && order.shipping_cost > 0 && (
             <div className="text-lg text-gray-400">
               🚗 Envío: ${formatCurrency(order.shipping_cost)}
+            </div>
+          )}
+
+          {(promotionNames.length > 0 || promotionDiscount > 0) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {promotionNames.map((name: string) => (
+                <span
+                  key={name}
+                  className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 font-bold"
+                >
+                  PROMO · {name}
+                </span>
+              ))}
+              {promotionDiscount > 0 && (
+                <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold">
+                  Descuento ${formatCurrency(promotionDiscount)}
+                </span>
+              )}
             </div>
           )}
         </div>

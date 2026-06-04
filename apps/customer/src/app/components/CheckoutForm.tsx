@@ -468,6 +468,9 @@ export default function CheckoutForm({
           quantity: item.quantity,
           extras: item.extras,
           removedIngredients: item.removedIngredients,
+          promotion: item.promotion,
+          price: item.price,
+          name: item.name,
         })),
         total,
         shippingCost,
@@ -848,9 +851,31 @@ export default function CheckoutForm({
                     <p className="text-sm font-semibold text-gray-900 truncate">
                       {item.name}
                     </p>
+                    {item.itemType === "promotion" && item.promotion && (
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">
+                          {item.promotion.badge || "PROMO"}
+                        </span>
+                        <span className="text-[11px] font-semibold text-gray-400 line-through">
+                          ${item.promotion.originalPrice.toLocaleString("es-AR")}
+                        </span>
+                        <span className="text-[11px] font-bold text-emerald-600">
+                          Ahorras ${item.promotion.discountAmount.toLocaleString("es-AR")}
+                        </span>
+                      </div>
+                    )}
                     <p className="text-xs text-gray-400 mt-0.5">
                       ${item.price.toLocaleString("es-AR")} c/u
                     </p>
+                    {item.itemType === "promotion" && (item.promotion?.items?.length || 0) > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {(item.promotion?.items || []).map((promoItem) => (
+                          <span key={`${item.uid}-${promoItem.id}`} className="text-[10px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full">
+                            {promoItem.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {item.extras && item.extras.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {item.extras.map((ex: any, ei: number) => (

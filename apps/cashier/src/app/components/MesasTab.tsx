@@ -60,8 +60,14 @@ export default function MesasTab() {
       // Load existing order items if order exists
       if (session.order_id) {
         setLocalOrderId(session.order_id);
-        const { data: items } = await supabase.from("order_items").select("*").eq("order_id", session.order_id);
-        setConfirmedItems(items?.map((i: any) => ({ variant_id: i.variant_id, product_id: i.product_id, name: "", price: i.unit_price, qty: i.quantity, confirmed: true })) || []);
+        const { data: items } = await supabase
+          .from("order_items")
+          .select("*, products(name)")
+          .eq("order_id", session.order_id);
+        setConfirmedItems(items?.map((i: any) => ({
+          variant_id: i.variant_id, product_id: i.product_id,
+          name: i.products?.name || "", price: i.unit_price, qty: i.quantity, confirmed: true,
+        })) || []);
       }
     }
   };
@@ -99,11 +105,32 @@ export default function MesasTab() {
     // Create or reuse order
     let orderId = localOrderId;
     if (!orderId) {
+      // Find any open cash session for this branch, or create one automatically for table service
+      let { data: cashSessions } = await supabase
+        .from("cash_sessions")
+        .select("id")
+        .eq("branch_id", branchId)
+        .eq("status", "open")
+        .limit(1);
+
+      let cashSessionId = cashSessions?.[0]?.id || null;
+
+      if (!cashSessionId) {
+        // Auto-create a cash session for table service
+        const { data: newSession } = await supabase
+          .from("cash_sessions")
+          .insert({ branch_id: branchId, tenant_id: tenantId, status: "open", opened_at: new Date().toISOString() })
+          .select("id")
+          .single();
+        cashSessionId = newSession?.id || null;
+      }
+
       const { data: order } = await supabase.from("orders").insert({
         tenant_id: tenantId, branch_id: branchId, status: "unconfirmed",
-        type: "takeaway", sales_channel: "cashier",
+        type: "dine-in", sales_channel: "cashier",
         customer_name: `Mesa ${tables.find((t) => t.id === selectedTable)?.number}`,
         subtotal: 0, total: 0, paid_amount: 0, is_paid: false,
+        cash_session_id: cashSessionId,
       }).select().single();
       if (order) {
         orderId = order.id;

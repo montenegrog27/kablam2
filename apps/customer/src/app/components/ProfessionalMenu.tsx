@@ -18,6 +18,29 @@ type Props = {
   disabled?: boolean;
 };
 
+type CustomerPromotion = {
+  id: string;
+  name: string;
+  description?: string | null;
+  badge?: string | null;
+  image_type?: string | null;
+  image_url?: string | null;
+  promotion_type?: string | null;
+  promotion_targets?: Array<{ target_type: string; target_id: string }>;
+  promotion_rules?: Array<{
+    type?: string | null;
+    discount_type?: string | null;
+    discount_value?: number | null;
+  }>;
+};
+
+type PromotionPricing = {
+  baseTotal: number;
+  finalTotal: number;
+  discountAmount: number;
+  discountLabel: string;
+};
+
 export default function ProfessionalMenu({
   productos,
   combos,
@@ -31,6 +54,7 @@ export default function ProfessionalMenu({
   );
   const [scrolled, setScrolled] = useState(false);
   const [flashSales, setFlashSales] = useState<any[]>([]);
+  const [promotions, setPromotions] = useState<CustomerPromotion[]>([]);
   const [allCategoriesFromApi, setAllCategoriesFromApi] = useState<any[]>([]);
   const [now, setNow] = useState(Date.now());
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -140,6 +164,16 @@ export default function ProfessionalMenu({
     fetch(`/api/flash-sales?branchSlug=${slug}`)
       .then((r) => r.json())
       .then((data) => setFlashSales(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  // Fetch visible promotions
+  useEffect(() => {
+    const slug = window.location.pathname.split("/")[1];
+    if (!slug) return;
+    fetch(`/api/promotions?branchSlug=${slug}`)
+      .then((r) => r.json())
+      .then((data) => setPromotions(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
@@ -277,6 +311,126 @@ export default function ProfessionalMenu({
     }, 100);
   };
 
+  const getPromotionProducts = (promotion: CustomerPromotion) => {
+    const targets = promotion.promotion_targets || [];
+    const items = targets
+      .filter((target) => target.target_type === "combo" || target.target_type === "product")
+      .map((target) =>
+        allProductsInMenu.find((item) =>
+          target.target_type === "combo"
+            ? item.comboId === target.target_id || item.id === target.target_id
+            : item.id === target.target_id,
+        ),
+      )
+      .filter(Boolean) as Product[];
+
+    return items.filter((item, index, self) => self.findIndex((p) => p.id === item.id) === index);
+  };
+
+  const getPromotionCategoryTarget = (promotion: CustomerPromotion) => {
+    const targets = promotion.promotion_targets || [];
+    const categoryTarget = targets.find((target) => target.target_type === "category");
+    return categoryTarget?.target_id || null;
+  };
+
+  const getPromotionImage = (promotion: CustomerPromotion) => {
+    if (promotion.image_type === "custom" && promotion.image_url) return promotion.image_url;
+    const product = getPromotionProducts(promotion)[0];
+    return product ? getImage(product) : undefined;
+  };
+
+  const handlePromotionClick = (promotion: CustomerPromotion) => {
+    if (disabled) return;
+    const promotionProducts = getPromotionProducts(promotion);
+    if (promotionProducts.length > 0) {
+      handleAddProduct(createPromotionProduct(promotion, promotionProducts));
+      return;
+    }
+    const categoryId = getPromotionCategoryTarget(promotion);
+    if (categoryId) {
+      scrollToTab(categoryId);
+    }
+  };
+
+  const getPromotionPricing = (promotion: CustomerPromotion): PromotionPricing => {
+    const products = getPromotionProducts(promotion);
+    const baseTotal = products.reduce((sum, product) => sum + getPrice(product), 0);
+    const rule = promotion.promotion_rules?.[0];
+    const discountType = rule?.discount_type || rule?.type;
+    const discountValue = Number(rule?.discount_value || 0);
+    const percentFromBadge = Number(String(promotion.badge || "").match(/(\d+(?:[.,]\d+)?)\s*%/)?.[1]?.replace(",", ".") || 0);
+
+    let discountAmount = 0;
+    let discountLabel = promotion.badge || "PROMO";
+
+    if (discountType === "percentage" && discountValue > 0) {
+      discountAmount = baseTotal * (discountValue / 100);
+      discountLabel = `${discountValue}% OFF`;
+    } else if (discountType === "fixed" && discountValue > 0) {
+      discountAmount = discountValue;
+      discountLabel = `${formatPrice(discountValue)} OFF`;
+    } else if (discountType === "free_shipping") {
+      discountLabel = "ENVIO GRATIS";
+    } else if (percentFromBadge > 0) {
+      discountAmount = baseTotal * (percentFromBadge / 100);
+      discountLabel = `${percentFromBadge}% OFF`;
+    }
+
+    discountAmount = Math.min(baseTotal, Math.max(0, Math.round(discountAmount)));
+
+    return {
+      baseTotal,
+      finalTotal: Math.max(0, baseTotal - discountAmount),
+      discountAmount,
+      discountLabel,
+    };
+  };
+
+  const createPromotionProduct = (promotion: CustomerPromotion, products: Product[]): Product => {
+    const pricing = getPromotionPricing(promotion);
+    const categories = products.flatMap((product) => product.categories || []);
+    const image = getPromotionImage(promotion);
+
+    return {
+      id: `promotion-${promotion.id}`,
+      itemType: "promotion",
+      name: promotion.name,
+      description: promotion.description || products.map((product) => product.name).join(" + "),
+      allow_half: false,
+      is_hero: false,
+      is_featured: false,
+      is_suggestable: false,
+      show_in_menu: true,
+      categories,
+      product_variants: [
+        {
+          id: `promotion-${promotion.id}-variant`,
+          name: "Promo",
+          price: pricing.finalTotal,
+          is_default: true,
+          image_url: image,
+        },
+      ],
+      modifier_group_products: [],
+      product_ingredients_display: [],
+      product_extras: [],
+      promotion: {
+        id: promotion.id,
+        name: promotion.name,
+        badge: pricing.discountLabel,
+        originalPrice: pricing.baseTotal,
+        discountAmount: pricing.discountAmount,
+        finalPrice: pricing.finalTotal,
+        items: products.map((product) => ({
+          id: product.comboId || product.id,
+          name: product.name,
+          itemType: product.itemType === "combo" ? "combo" : "product",
+          price: getPrice(product),
+        })),
+      },
+    };
+  };
+
   return (
     <div className="min-h-screen bg-gray-50" style={{ fontFamily }}>
       {/* Hero Section */}
@@ -332,7 +486,7 @@ export default function ProfessionalMenu({
         const catIds = new Set((sale.flash_sale_categories || []).map((sc: any) => sc.category_id));
         const catNames = uniqueCategories.filter((c) => catIds.has(c.id)).map((c) => c.name);
         return (
-          <div key={sale.id} className="bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-3">
+          <div key={sale.id} className="bg-gradient-to-r from-red-100 to-red-500 text-white px-4 py-3">
             <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <span>🔥</span>
@@ -350,8 +504,7 @@ export default function ProfessionalMenu({
           </div>
         );
       })}
-
-      {/* Category Tabs */}
+            {/* Category Tabs */}
       <div
         ref={tabsRef}
         className={`sticky top-0 z-40 transition-all duration-300 ${
@@ -435,8 +588,55 @@ export default function ProfessionalMenu({
         </div>
       </div>
 
+      {/* Promotions */}
+      {promotions.length > 0 && !activeSubcategory && (
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <h3
+            className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"
+            style={{ fontFamily }}
+          >
+            <span
+              className="w-1 h-6 rounded-full"
+              style={{ backgroundColor: brandColor }}
+            />
+            Promociones
+          </h3>
+          <div className="flex md:hidden gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4 pb-2">
+            {promotions.map((promotion) => (
+              <div key={promotion.id} className="snap-start flex-shrink-0 w-[65vw] max-w-[280px]">
+                <PromotionCard
+                  promotion={promotion}
+                  brandColor={brandColor}
+                  fontFamily={fontFamily}
+                  image={getPromotionImage(promotion)}
+                  pricing={getPromotionPricing(promotion)}
+                  onClick={() => handlePromotionClick(promotion)}
+                  disabled={disabled}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {promotions.map((promotion) => (
+              <PromotionCard
+                key={promotion.id}
+                promotion={promotion}
+                brandColor={brandColor}
+                fontFamily={fontFamily}
+                image={getPromotionImage(promotion)}
+                pricing={getPromotionPricing(promotion)}
+                onClick={() => handlePromotionClick(promotion)}
+                disabled={disabled}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+
+
       {/* Featured Products Grid / Carousel */}
-      {featuredProducts.length > 0 && !activeSubcategory && (
+      {/* {featuredProducts.length > 0 && !activeSubcategory && (
         <div className="max-w-6xl mx-auto px-4 py-6">
           <h3
             className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"
@@ -448,7 +648,6 @@ export default function ProfessionalMenu({
             />
             Destacados
           </h3>
-          {/* Mobile: horizontal scroll carousel */}
           <div className="flex md:hidden gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4 pb-2">
             {featuredProducts.map((product) => (
               <div key={product.id} className="snap-start flex-shrink-0 w-[65vw] max-w-[280px]">
@@ -466,7 +665,6 @@ export default function ProfessionalMenu({
               </div>
             ))}
           </div>
-          {/* Desktop: grid */}
           <div className="hidden md:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {featuredProducts.map((product) => (
               <FeaturedCard
@@ -484,7 +682,7 @@ export default function ProfessionalMenu({
             ))}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* All Products - Full Width Horizontal List */}
       <div ref={productsRef} className="max-w-6xl mx-auto px-4 py-6">
@@ -580,6 +778,220 @@ export default function ProfessionalMenu({
           </div>
         </div>
       </footer>
+
+    </div>
+  );
+}
+
+function PromotionCard({
+  promotion,
+  brandColor,
+  fontFamily,
+  image,
+  pricing,
+  onClick,
+  disabled = false,
+}: {
+  promotion: CustomerPromotion;
+  brandColor: string;
+  fontFamily: string;
+  image?: string;
+  pricing: PromotionPricing;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div
+      className={`group relative bg-white rounded-2xl overflow-hidden shadow-sm transition-all duration-300 ring-2 ring-offset-2 ${
+        disabled ? "cursor-not-allowed opacity-75 grayscale-[0.25]" : "cursor-pointer hover:shadow-xl"
+      }`}
+      style={{ fontFamily }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
+    >
+      <div className="relative h-36 md:h-44 overflow-hidden">
+        {image ? (
+          <img
+            src={image}
+            alt={promotion.name}
+            className={`w-full h-full object-cover transition-transform duration-500 ${
+              isHovered ? "scale-110" : ""
+            }`}
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ backgroundColor: `${brandColor}20` }}
+          >
+            <span className="text-5xl" style={{ color: brandColor }}>
+              %
+            </span>
+          </div>
+        )}
+
+        <div
+          className="absolute top-2 left-2 px-3 py-1.5 rounded-full text-xs font-black text-white shadow-lg"
+          style={{ backgroundColor: "#ef4444" }}
+        >
+          {pricing.discountLabel}
+        </div>
+
+        <button
+          disabled={disabled}
+          className="absolute bottom-2 right-2 px-3 h-10 rounded-full flex items-center justify-center text-white shadow-lg text-xs font-bold transition-transform enabled:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-80"
+          style={{ backgroundColor: disabled ? "#6b7280" : brandColor }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!disabled) onClick();
+          }}
+        >
+          {disabled ? "Cerrado" : "Agregar"}
+        </button>
+      </div>
+
+      <div className="p-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] mb-1" style={{ color: brandColor }}>
+          Promo especial
+        </p>
+        <h4 className="font-bold text-gray-900 mb-1 line-clamp-2">
+          {promotion.name}
+        </h4>
+        <p className="text-sm text-gray-500 line-clamp-2 mb-3">
+          {promotion.description || "\u00A0"}
+        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            {pricing.baseTotal > pricing.finalTotal && (
+              <span className="block text-xs font-bold text-gray-400 line-through">
+                ${formatPriceLocal(pricing.baseTotal)}
+              </span>
+            )}
+            <span className="text-xl font-black" style={{ color: brandColor }}>
+              ${formatPriceLocal(pricing.finalTotal || pricing.baseTotal)}
+            </span>
+          </div>
+          {pricing.discountAmount > 0 && (
+            <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black text-emerald-700">
+              Ahorras ${formatPriceLocal(pricing.discountAmount)}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatPriceLocal(price: number) {
+  return new Intl.NumberFormat("es-AR").format(Math.round(price || 0));
+}
+
+function PromotionProductsModal({
+  promotion,
+  products,
+  brandColor,
+  fontFamily,
+  getPrice,
+  getImage,
+  formatPrice,
+  pricing,
+  disabled,
+  onClose,
+  onSelect,
+}: {
+  promotion: CustomerPromotion;
+  products: Product[];
+  brandColor: string;
+  fontFamily: string;
+  getPrice: (p: Product) => number;
+  getImage: (p: Product) => string | undefined;
+  formatPrice: (p: number) => string;
+  pricing: PromotionPricing;
+  disabled: boolean;
+  onClose: () => void;
+  onSelect: (product: Product) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 px-4 pb-4 pt-10 backdrop-blur-sm md:items-center md:pb-10">
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl" style={{ fontFamily }}>
+        <div className="relative px-5 pb-4 pt-5 text-white" style={{ backgroundColor: brandColor }}>
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/18 text-lg font-bold text-white"
+            aria-label="Cerrar promocion"
+          >
+            x
+          </button>
+          <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-black text-gray-950">
+            {promotion.badge || "PROMO"}
+          </span>
+          <h3 className="mt-3 pr-10 text-2xl font-black leading-tight">{promotion.name}</h3>
+          {promotion.description && (
+            <p className="mt-2 pr-8 text-sm font-medium text-white/82">{promotion.description}</p>
+          )}
+          <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-gray-950">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Precio promo</p>
+                {pricing.baseTotal > pricing.finalTotal && (
+                  <p className="mt-1 text-sm font-bold text-gray-400 line-through">
+                    ${formatPrice(pricing.baseTotal)}
+                  </p>
+                )}
+                <p className="text-3xl font-black" style={{ color: brandColor }}>
+                  ${formatPrice(pricing.finalTotal || pricing.baseTotal)}
+                </p>
+              </div>
+              <div className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-black text-white">
+                {pricing.discountLabel}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-h-[65vh] overflow-y-auto p-4">
+          <p className="mb-3 text-sm font-bold text-gray-700">Elegí qué querés agregar</p>
+          <div className="space-y-3">
+            {products.map((product) => {
+              const image = getImage(product);
+              return (
+                <button
+                  key={product.id}
+                  onClick={() => !disabled && onSelect(product)}
+                  disabled={disabled}
+                  className="grid w-full grid-cols-[72px_1fr_auto] items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-left shadow-sm transition enabled:hover:bg-white enabled:hover:shadow-md disabled:opacity-60"
+                >
+                  <div className="h-[72px] w-[72px] overflow-hidden rounded-xl" style={{ backgroundColor: `${brandColor}18` }}>
+                    {image ? (
+                      <img src={image} alt={product.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-2xl" style={{ color: brandColor }}>
+                        %
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-sm font-black text-gray-950">{product.name}</p>
+                    {product.description && (
+                      <p className="mt-1 line-clamp-1 text-xs text-gray-500">{product.description}</p>
+                    )}
+                    <p className="mt-2 text-sm font-black" style={{ color: brandColor }}>
+                      ${formatPrice(getPrice(product))}
+                    </p>
+                  </div>
+                  <span className="rounded-full px-3 py-2 text-xs font-black text-white" style={{ backgroundColor: disabled ? "#6b7280" : brandColor }}>
+                    {disabled ? "Cerrado" : "Agregar"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

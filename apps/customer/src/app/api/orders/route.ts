@@ -3,11 +3,13 @@ import { logAppError } from "@/lib/logAppError";
 import { getBranchAvailability } from "@/lib/branchAvailability";
 
 type OrderItemInput = {
-  itemType?: "product" | "combo";
+  itemType?: "product" | "combo" | "promotion";
   productId?: string;
   comboId?: string;
   variantId: string;
   quantity: number;
+  name?: string;
+  price?: number;
   extras?: Array<{ id: string; name: string; price: number }>;
   removedIngredients?: Array<{
     id: string;
@@ -15,6 +17,20 @@ type OrderItemInput = {
     productId?: string;
     productName?: string;
   }>;
+  promotion?: {
+    id: string;
+    name: string;
+    badge?: string | null;
+    originalPrice: number;
+    discountAmount: number;
+    finalPrice: number;
+    items: Array<{
+      id: string;
+      name: string;
+      itemType?: "product" | "combo";
+      price: number;
+    }>;
+  };
 };
 
 type VariantRow = {
@@ -38,7 +54,7 @@ type ComboRow = {
 };
 
 type OrderItemInsert = {
-  item_type: "product" | "combo";
+  item_type: "product" | "combo" | "promotion";
   product_id: string | null;
   combo_id: string | null;
   variant_id: string | null;
@@ -151,15 +167,17 @@ export async function POST(req: Request) {
 
     // Auto-detect combo items by variantId pattern (combo variants end with "-variant")
     const normalizedItems = items.map((item) => {
-      const isCombo = item.itemType === "combo" || item.variantId?.endsWith("-variant");
+      const isPromotion = item.itemType === "promotion";
+      const isCombo = !isPromotion && (item.itemType === "combo" || item.variantId?.endsWith("-variant"));
       return {
         ...item,
-        itemType: isCombo ? "combo" : "product",
+        itemType: isPromotion ? "promotion" : isCombo ? "combo" : "product",
         comboId: item.comboId || (isCombo ? item.variantId?.replace(/-variant$/, "") : undefined),
       };
     });
 
-    const productItems = normalizedItems.filter((item) => item.itemType !== "combo");
+    const promotionItems = normalizedItems.filter((item) => item.itemType === "promotion");
+    const productItems = normalizedItems.filter((item) => item.itemType === "product");
     const comboItems = normalizedItems.filter((item) => item.itemType === "combo");
     const variantIds = productItems.map((i) => i.variantId).filter(Boolean);
     const productIds = productItems
@@ -242,6 +260,10 @@ export async function POST(req: Request) {
     ========================= */
 
     let subtotal = 0;
+    let promotionDiscountAmount = 0;
+    const promotionIds: string[] = [];
+    const promotionNames: string[] = [];
+    const discountBreakdown: Array<Record<string, unknown>> = [];
 
     const itemsToInsert: OrderItemInsert[] = productItems.map((item) => {
       const variant =
@@ -318,6 +340,56 @@ export async function POST(req: Request) {
         unit_price: Number(combo.price),
         total: comboItemTotal,
         extras: comboExtrasArr.length > 0 ? comboExtrasArr : [],
+      });
+    });
+
+    promotionItems.forEach((item) => {
+      if (!item.promotion) throw new Error(`Promotion metadata missing: ${item.name || item.variantId}`);
+      const extrasArr: Array<{ type: string; name: string; price?: number }> = [];
+      const extrasTotal = (item.extras || []).reduce((sum, extra) => {
+        extrasArr.push({ type: "extra", name: extra.name, price: extra.price });
+        return sum + Number(extra.price || 0);
+      }, 0);
+      const quantity = Number(item.quantity || 1);
+      const promoUnitPrice = Number(item.promotion.finalPrice || item.price || 0);
+      const promoOriginalPrice = Number(item.promotion.originalPrice || promoUnitPrice);
+      const promoDiscount = Number(item.promotion.discountAmount || Math.max(0, promoOriginalPrice - promoUnitPrice));
+      const unitPrice = promoUnitPrice + extrasTotal;
+      const itemTotal = unitPrice * quantity;
+
+      subtotal += itemTotal;
+      promotionDiscountAmount += promoDiscount * quantity;
+      promotionIds.push(item.promotion.id);
+      promotionNames.push(item.promotion.name);
+      discountBreakdown.push({
+        promotionId: item.promotion.id,
+        promotionName: item.promotion.name,
+        badge: item.promotion.badge,
+        originalPrice: promoOriginalPrice,
+        finalPrice: promoUnitPrice,
+        discountAmount: promoDiscount,
+        quantity,
+        extrasTotal,
+        items: item.promotion.items || [],
+      });
+
+      itemsToInsert.push({
+        item_type: "promotion",
+        product_id: null,
+        combo_id: null,
+        variant_id: null,
+        quantity,
+        unit_price: unitPrice,
+        total: itemTotal,
+        extras: [
+          { type: "promotion", name: item.promotion.name, price: promoUnitPrice },
+          ...((item.promotion.items || []).map((promoItem) => ({
+            type: "incluye",
+            name: promoItem.name,
+            price: promoItem.price,
+          }))),
+          ...extrasArr,
+        ],
       });
     });
 
@@ -429,9 +501,15 @@ export async function POST(req: Request) {
 
         subtotal,
         total: orderTotal,
+        promotion_ids: promotionIds,
+        promotion_names: promotionNames,
+        discount_amount: promotionDiscountAmount,
+        discount_breakdown: discountBreakdown,
+        subtotal_before_discount: subtotal + promotionDiscountAmount,
+        final_total: orderTotal,
 
         shipping_cost: shippingCost || 0,
-        discount: 0,
+        discount: promotionDiscountAmount,
         paid_amount: 0,
         is_paid: false,
       })
@@ -530,7 +608,7 @@ export async function POST(req: Request) {
             conversationId: conversation.id,
             orderId: order.id,
             type: "template",
-            templateName: "confirmacion_pedido_detallado",
+            templateName: "confirmacion_pedido",
             params: [customer.name, orderText, orderTotal.toString()],
           }),
         });

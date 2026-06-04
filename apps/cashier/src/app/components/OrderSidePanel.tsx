@@ -284,16 +284,23 @@ export default function OrderSidePanel({
       setCart(
         items.map((item: any) => {
           const isCombo = item.item_type === "combo" || Boolean(item.combo_id);
+          const isPromotion = item.item_type === "promotion";
           const base = isCombo ? item.combos : item.products;
+          const promotionName = (item.extras || []).find(
+            (extra: any) => extra?.type === "promotion",
+          )?.name;
           return {
             variant: {
               ...base,
               id: item.combo_id || item.product_id || base?.id,
-              name: base?.name || (isCombo ? "Combo" : "Producto"),
+              name: isPromotion
+                ? promotionName || "Promo"
+                : base?.name || (isCombo ? "Combo" : "Producto"),
               product_id: item.product_id,
               combo_id: item.combo_id,
               variant_id: item.variant_id,
               is_combo: isCombo,
+              item_type: item.item_type,
               price:
                 item.unit_price ??
                 item.product_variants?.price ??

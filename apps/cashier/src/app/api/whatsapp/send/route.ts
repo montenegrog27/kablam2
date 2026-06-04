@@ -240,7 +240,7 @@ const {
   if (type === "template") {
 
     const hasParams = params && params.length > 0;
-    const hasButtons = templateName === "confirmacion_pedido_detallado";
+    const hasButtons = templateName === "confirmacion_pedido";
 
     const components: any[] = [];
 

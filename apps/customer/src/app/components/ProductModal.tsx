@@ -53,6 +53,7 @@ export default function ProductModal({
   }, [open, product]);
 
   const isCombo = product?.itemType === "combo";
+  const isPromotion = product?.itemType === "promotion";
 
   const modifierGroups: ModifierGroup[] = useMemo(
     () =>
@@ -185,10 +186,10 @@ export default function ProductModal({
 
     onAddToCart({
       uid: `${variant.id}-${uid}`,
-      itemType: isCombo ? "combo" : "product",
+      itemType: isPromotion ? "promotion" : isCombo ? "combo" : "product",
       comboId: isCombo ? product.comboId || product.id : undefined,
       variantId: variant.id,
-      productId: isCombo ? undefined : product.id,
+      productId: isCombo || isPromotion ? undefined : product.id,
       name: product.name,
       price: unitTotal,
       quantity,
@@ -198,11 +199,12 @@ export default function ProductModal({
       halves: halves || undefined,
       removedIngredients: removedIngredients.length > 0 ? removedIngredients : undefined,
       categories: product.categories,
+      promotion: product.promotion,
     });
     onClose();
   };
 
-  const addLabel = isCombo ? "Agregar" : product.allow_half ? "Agregar pizza" : "Agregar";
+  const addLabel = isPromotion ? "Agregar promo" : isCombo ? "Agregar" : product.allow_half ? "Agregar pizza" : "Agregar";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center">
@@ -232,6 +234,19 @@ export default function ProductModal({
               <div className="min-w-0">
            
                 <h2 className="mt-1 text-2xl font-black leading-tight text-gray-950">{product.name}</h2>
+                {isPromotion && product.promotion && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-red-500 px-3 py-1 text-xs font-black text-white">
+                      {product.promotion.badge || "PROMO"}
+                    </span>
+                    <span className="text-sm font-bold text-gray-400 line-through">
+                      ${formatPrice(product.promotion.originalPrice)}
+                    </span>
+                    <span className="text-sm font-black" style={{ color: primaryColor }}>
+                      ${formatPrice(product.promotion.finalPrice)}
+                    </span>
+                  </div>
+                )}
               </div>
   
             </div>
@@ -242,6 +257,21 @@ export default function ProductModal({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 pb-32">
+          {isPromotion && product.promotion && product.promotion.items.length > 0 && (
+            <Section title="Incluye la promo" hint={`${product.promotion.items.length} items`}>
+              <div className="space-y-1.5">
+                {product.promotion.items.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between rounded-xl bg-red-50 px-3.5 py-2.5">
+                    <span className="text-sm font-semibold text-gray-800">{item.name}</span>
+                    <span className="text-xs font-bold text-gray-500 line-through">
+                      ${formatPrice(item.price)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
           {isCombo && product.combo_products && product.combo_products.length > 0 && (
             <Section title="Incluye" hint={`${product.combo_products.length} items`}>
               <div className="space-y-1.5">
@@ -435,9 +465,17 @@ export default function ProductModal({
         </div>
 
         <div className="sticky bottom-0 border-t border-gray-200 bg-white px-5 py-4 shadow-[0_-16px_40px_-28px_rgba(0,0,0,.45)]">
-          {(modifiersTotal > 0 || extrasTotal > 0 || quantity > 1) && (
+          {(isPromotion || modifiersTotal > 0 || extrasTotal > 0 || quantity > 1) && (
             <div className="mb-3 space-y-1 rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
-              <PriceRow label="Base" value={variant?.price || 0} />
+              {isPromotion && product.promotion ? (
+                <>
+                  <PriceRow label="Precio normal" value={product.promotion.originalPrice} />
+                  <PriceRow label="Descuento promo" value={product.promotion.discountAmount} prefix="-" />
+                  <PriceRow label="Precio promo" value={product.promotion.finalPrice} />
+                </>
+              ) : (
+                <PriceRow label="Base" value={variant?.price || 0} />
+              )}
               {modifiersTotal > 0 && <PriceRow label="Opciones" value={modifiersTotal} prefix="+" />}
               {extrasTotal > 0 && <PriceRow label="Extras" value={extrasTotal} prefix="+" />}
               {quantity > 1 && <PriceRow label={`Cantidad x${quantity}`} value={total} />}

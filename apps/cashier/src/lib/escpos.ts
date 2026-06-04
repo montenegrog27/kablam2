@@ -11,6 +11,14 @@ type PrinterConfig = {
 };
 
 function getItemName(item: any) {
+  if (item.item_type === "promotion") {
+    return (
+      item.extras?.find((extra: any) => extra?.type === "promotion")?.name ||
+      item.name ||
+      "Promo"
+    );
+  }
+
   return (
     item.products?.name ||
     item.combos?.name ||
@@ -52,6 +60,12 @@ export function buildComanda(
     const qty = item.quantity || 1;
     const name = getItemName(item);
     lines.push(`${qty}x ${name}`);
+    if (item.item_type === "promotion") {
+      const included = (item.extras || []).filter((extra: any) => extra?.type === "incluye");
+      included.forEach((extra: any) => {
+        lines.push(`   incluye: ${extra.name}`);
+      });
+    }
     if (item.note) {
       lines.push(`   NOTA: ${item.note}`);
     }
@@ -106,6 +120,12 @@ export function buildTicket(
     const price = item.unit_price || item.price || 0;
     const lineTotal = qty * price;
     lines.push(`${qty}x ${name.padEnd(25)} $${lineTotal.toFixed(2).padStart(8)}`);
+    if (item.item_type === "promotion") {
+      const included = (item.extras || []).filter((extra: any) => extra?.type === "incluye");
+      included.forEach((extra: any) => {
+        lines.push(`   incluye: ${extra.name}`);
+      });
+    }
   });
 
   lines.push('');

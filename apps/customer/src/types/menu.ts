@@ -55,7 +55,7 @@ export type CartItem = {
   uid: string;
   variantId: string;
   productId?: string;
-  itemType?: "product" | "combo";
+  itemType?: "product" | "combo" | "promotion";
   comboId?: string;
   name: string;
   price: number;
@@ -71,13 +71,27 @@ export type CartItem = {
     productName?: string;
   }>;
   categories?: Category[];
+  promotion?: {
+    id: string;
+    name: string;
+    badge?: string | null;
+    originalPrice: number;
+    discountAmount: number;
+    finalPrice: number;
+    items: Array<{
+      id: string;
+      name: string;
+      itemType?: "product" | "combo";
+      price: number;
+    }>;
+  };
 };
 
 export type Product = {
   id: string;
   name: string;
   description?: string;
-  itemType?: "product" | "combo";
+  itemType?: "product" | "combo" | "promotion";
   comboId?: string;
   featured_order?: number;
   allow_half?: boolean;
@@ -90,6 +104,7 @@ export type Product = {
   modifier_group_products?: { modifier_groups: ModifierGroup }[];
   product_ingredients_display?: IngredientDisplay[];
   product_extras?: ProductExtra[];
+  promotion?: CartItem["promotion"];
   [key: string]: any;
 };
 

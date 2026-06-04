@@ -101,6 +101,13 @@ ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS subtotal_before_discount NUMERIC,
   ADD COLUMN IF NOT EXISTS final_total NUMERIC;
 
+ALTER TABLE order_items
+  DROP CONSTRAINT IF EXISTS order_items_item_type_check;
+
+ALTER TABLE order_items
+  ADD CONSTRAINT order_items_item_type_check
+  CHECK (item_type IN ('product', 'combo', 'promotion'));
+
 ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promotion_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promotion_targets ENABLE ROW LEVEL SECURITY;

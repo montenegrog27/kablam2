@@ -53,8 +53,10 @@ export default function SidebarCarritoDelivery({
 
     const cleanCart = carrito.map((item) => ({
       uid: item.uid,
+      itemType: item.itemType,
       variantId: item.variantId,
       productId: item.productId,
+      comboId: item.comboId,
       name: item.name,
       price: item.price,
       quantity: item.quantity,
@@ -64,6 +66,7 @@ export default function SidebarCarritoDelivery({
       halves: item.halves,
       removedIngredients: item.removedIngredients || [],
       categories: item.categories || [],
+      promotion: item.promotion,
     }));
 
     sessionStorage.setItem(`cart_${branchSlug}`, JSON.stringify(cleanCart));
@@ -120,9 +123,26 @@ export default function SidebarCarritoDelivery({
                 className="border border-gray-200 rounded-xl p-4 bg-gray-50 hover:bg-white transition-colors duration-200"
               >
                 <div className="flex justify-between items-start">
-                  <p className="font-semibold text-gray-900">{item.name}</p>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-gray-900">{item.name}</p>
+                      {item.itemType === "promotion" && (
+                        <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">
+                          {item.promotion?.badge || "PROMO"}
+                        </span>
+                      )}
+                    </div>
+                    {item.itemType === "promotion" && item.promotion && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        <span className="line-through">${item.promotion.originalPrice.toLocaleString("es-AR")}</span>
+                        <span className="ml-2 font-bold text-emerald-600">
+                          Ahorras ${item.promotion.discountAmount.toLocaleString("es-AR")}
+                        </span>
+                      </p>
+                    )}
+                  </div>
                   <span className="text-sm font-medium text-gray-600">
-                    ${item.price * item.quantity}
+                    ${(item.price * item.quantity).toLocaleString("es-AR")}
                   </span>
                 </div>
 
@@ -149,11 +169,19 @@ export default function SidebarCarritoDelivery({
                         </span>
                       ),
                   )}
+                  {item.itemType === "promotion" && item.promotion?.items?.map((promoItem) => (
+                    <span
+                      key={`${item.uid}-promo-${promoItem.id}`}
+                      className="text-xs px-2 py-0.5 bg-red-50 text-red-600 rounded-full"
+                    >
+                      {promoItem.name}
+                    </span>
+                  ))}
                 </div>
 
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-xs text-gray-500">
-                    ${item.price} x {item.quantity}
+                    ${item.price.toLocaleString("es-AR")} x {item.quantity}
                   </span>
                   <button
                     className="text-red-500 text-xs hover:text-red-700 transition-colors"
@@ -170,7 +198,7 @@ export default function SidebarCarritoDelivery({
         <div className="border-t border-gray-200 p-4 bg-white">
           <div className="flex justify-between text-gray-900 font-bold text-2xl mb-4">
             <span>Total</span>
-            <span>${total}</span>
+            <span>${total.toLocaleString("es-AR")}</span>
           </div>
 
           <button

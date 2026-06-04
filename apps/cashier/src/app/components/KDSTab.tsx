@@ -302,6 +302,28 @@ export default function KDSTab() {
     const expanded: ExpandedKdsItem[] = [];
 
     (order.order_items || []).forEach((item: any) => {
+      if (item.item_type === "promotion") {
+        const includes = (item.extras || []).filter((extra: any) => extra?.type === "incluye");
+        if (includes.length > 0) {
+          includes.forEach((included: any, index: number) => {
+            expanded.push({
+              id: `${item.id || "promo"}-included-${index}`,
+              quantity: item.quantity || 1,
+              variant_id: null,
+              products: {
+                id: `${item.id || "promo"}-${index}`,
+                name: included.name || "Producto promo",
+                is_preparable: true,
+              },
+              extras: (item.extras || []).filter((extra: any) => extra?.type === "extra" || extra?.type === "sin"),
+              note: `Promo: ${(item.extras || []).find((extra: any) => extra?.type === "promotion")?.name || "Promocion"}`,
+              parent_combo_name: "Promo",
+            });
+          });
+          return;
+        }
+      }
+
       const comboId = getComboIdFromOrderItem(item);
       const combo = comboId ? comboMap[comboId] : null;
 

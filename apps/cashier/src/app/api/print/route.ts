@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
             (products || []).forEach((p: any) => { productCatMap[p.id] = p.category_id; });
 
             itemsToPrint = itemsToPrint.filter((item: any) => {
+              if (item.item_type === "promotion") return true;
               if (item.combo_id) return true;
               return assignedCatIds.includes(productCatMap[item.product_id]);
             });
