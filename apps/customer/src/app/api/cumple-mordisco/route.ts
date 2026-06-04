@@ -31,12 +31,12 @@ const DEFAULT_SETTINGS = {
   founderMinOrders: 0,
   founderTopPercent: 10,
   generalDiscount: 0,
-  communityDiscount: 25,
-  founderDiscount: 50,
+  communityDiscount: 0,
+  founderDiscount: 0,
   perks: {
-    general: ["Acceso al evento aniversario", "Sorteos durante la noche"],
-    community: ["Acceso al evento aniversario", "Sorteos durante la noche", "Precio especial comunidad"],
-    founder: ["Acceso al evento aniversario", "Sorteos durante la noche", "5 tragos a eleccion"],
+    general: ["Entrada al evento", "Participacion en sorteos", "Descuentos exclusivos"],
+    community: ["Entrada al evento", "Participacion en sorteos", "Descuentos exclusivos", "1 trago free"],
+    founder: ["Entrada al evento", "Participacion en sorteos", "Descuentos exclusivos", "3 hamburguesas gratis", "5 tragos a eleccion"],
   },
   messages: {
     general: [
@@ -221,7 +221,7 @@ async function lotsForTier(
       discount,
       sold,
       available: lot.capacity > 0 ? Math.max(lot.capacity - sold, 0) : null,
-      finalPrice: Math.round(lot.basePrice * (1 - discount / 100)),
+      finalPrice: lot.basePrice,
       progress: lot.capacity > 0 ? Math.min(100, Math.round((sold / lot.capacity) * 100)) : 0,
       isSoldOut,
       isOpen: false,
@@ -457,6 +457,7 @@ async function getPublicConfig(branchSlug: string) {
       paymentAlias: settings.paymentAlias,
       paymentDeadlineMinutes: settings.paymentDeadlineMinutes,
     },
+    lots: await lotsForTier(service, branch.tenant_id, branch.id, 0),
   });
 }
 
@@ -499,6 +500,7 @@ async function sendPaymentWhatsapp({
   if (!whatsappToken) return { skipped: true, reason: "WHATSAPP_TOKEN missing" };
 
   const whatsappPhone = normalizeArgWhatsapp(phone);
+  if (!phone) return { skipped: true, reason: "phone_missing" };
   if (!whatsappPhone) return { ok: false, reason: "invalid_whatsapp_phone", phone };
 
   const sinceText = firstOrderAt
@@ -507,9 +509,7 @@ async function sendPaymentWhatsapp({
   const ordersText = orderCount > 0
     ? `Encontramos ${orderCount} pedidos tuyos en Mordisco.`
     : "Esta puede ser tu primera noche siendo parte de Mordisco.";
-  const discountText = discount > 0
-    ? `Por tu categoria *${benefitLabel}*, tu beneficio aplicado es de *${discount}% OFF*.`
-    : `Tu categoria es *${benefitLabel}*.`;
+  const discountText = `Tu categoria es *${benefitLabel}*.`;
 
   const deadlineText = settings.paymentDeadlineMinutes === 60 ? "1hs" : `${settings.paymentDeadlineMinutes} minutos`;
   const message = `Hola ${name}!\n\nTu invitacion *${code}* para el *Primer Aniversario Mordisco* quedo pre-reservada.\n\nA vos, que sos ${sinceText}, gracias por venir a celebrar este primer año con nosotros. ${ordersText}\n\nNo sos un invitado cualquiera: sos parte de la historia que empezo en ${favoriteBranchName || branchName}.\n\n${discountText}\n\n*Informacion del evento*\nFecha: ${settings.eventDate}\nHora: ${settings.eventTime}\nUbicacion: ${settings.eventLocation}\n\n*Tu acceso*\n${lotName}\nMonto a transferir: *$${price.toLocaleString("es-AR")}*\nAlias: *${settings.paymentAlias}*\n\nTenes *${deadlineText}* para transferir el monto de la compra. Cuando hagas la transferencia, responde este mensaje con el comprobante para confirmar tu entrada.\n\nNos vemos en el cumple de Mordisco.`;
@@ -577,21 +577,24 @@ async function purchaseInvitation(body: {
   );
   const settings = await loadSettings(service, branch.tenant_id, branch.id);
   const tier = getTier(stats.orderCount, stats.topPercentile, settings);
-  const lots = await lotsForTier(service, branch.tenant_id, branch.id, tier.discount);
-  const selectedLot = lots.find((lot) => lot.key === body.lotKey) || lots.find((lot) => lot.isOpen) || lots[0] || LOTS[0];
+  const lots = await lotsForTier(service, branch.tenant_id, branch.id, 0);
+  const isFreeReservation = body.lotKey === "sin_entrada";
+  const selectedLot = isFreeReservation
+    ? null
+    : lots.find((lot) => lot.key === body.lotKey) || lots.find((lot) => lot.isOpen) || lots[0] || LOTS[0];
   const openLot = lots.find((lot) => lot.isOpen);
-  if (openLot && selectedLot.key !== openLot.key) {
+  if (!isFreeReservation && openLot && selectedLot && selectedLot.key !== openLot.key) {
     return NextResponse.json({ error: "Este lote todavia no esta habilitado" }, { status: 409 });
   }
-  if ("isSoldOut" in selectedLot && selectedLot.isSoldOut) {
+  if (selectedLot && "isSoldOut" in selectedLot && selectedLot.isSoldOut) {
     return NextResponse.json({ error: "Este lote ya no tiene cupo disponible" }, { status: 409 });
   }
-  const discount = Number(tier.discount || body.discount || 0);
-  const basePrice = Number(selectedLot.basePrice || body.basePrice || 0);
-  const unitPrice = Math.round(basePrice * (1 - discount / 100));
-  const hasCompanion = Boolean(String(body.companionName || "").trim() && String(body.companionDni || "").trim());
+  const discount = 0;
+  const basePrice = selectedLot ? Number(selectedLot.basePrice || body.basePrice || 0) : 0;
+  const unitPrice = basePrice;
+  const hasCompanion = Boolean(String(body.companionName || "").trim());
   const attendeeCount = hasCompanion ? 2 : 1;
-  if (selectedLot.available !== null && attendeeCount > selectedLot.available) {
+  if (selectedLot && selectedLot.available !== null && attendeeCount > selectedLot.available) {
     return NextResponse.json({ error: "Este lote no tiene cupo suficiente para la cantidad de entradas" }, { status: 409 });
   }
   const price = unitPrice * attendeeCount;
@@ -608,8 +611,8 @@ async function purchaseInvitation(body: {
     attendee_count: attendeeCount,
     whatsapp: whatsappPhone,
     benefit_tier: body.benefitKey || tier.key,
-    lot_key: body.lotKey || selectedLot.key,
-    lot_name: body.lotName || selectedLot.name,
+    lot_key: isFreeReservation ? null : body.lotKey || selectedLot?.key,
+    lot_name: isFreeReservation ? "Reserva sin entrada" : body.lotName || selectedLot?.name,
     base_price: basePrice,
     discount_percent: discount,
     price,
@@ -635,7 +638,7 @@ async function purchaseInvitation(body: {
     name: body.name,
     phone: whatsappPhone,
     code,
-    lotName: payload.lot_name,
+    lotName: payload.lot_name || "Reserva sin entrada",
     companionName: payload.companion_name,
     attendeeCount,
     unitPrice,
@@ -661,6 +664,23 @@ async function purchaseInvitation(body: {
   return NextResponse.json({
     ok: true,
     invitation: savedInvitation,
+    customer: {
+      exists: Boolean(stats.customer || stats.orderCount > 0),
+      name: stats.displayName,
+      phone,
+      orderCount: stats.orderCount,
+      firstOrderAt: stats.firstOrderAt,
+      lastOrderAt: stats.lastOrderAt,
+      totalSpent: stats.totalSpent,
+      favoriteBranch: stats.favoriteBranch,
+      approximateDistanceKm: null,
+      frequency: Number(stats.frequency.toFixed(2)),
+      topPercentile: stats.topPercentile,
+    },
+    benefit: tier,
+    perks: settings.perks[tier.key as keyof AnniversarySettings["perks"]] || [],
+    lots,
+    message: pickMessage(settings, tier.key as keyof AnniversarySettings["messages"], body.name || stats.displayName, stats.orderCount, stats.firstOrderAt, stats.topPercentile, stats.favoriteBranch.name, phone),
     whatsapp: whatsappResult,
     warning: error?.message || null,
   });
@@ -675,7 +695,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "purchase") {
-    if (!body.name || !body.phone || !body.branchSlug) {
+    if (!body.name || !body.phone || !body.dni || !body.branchSlug) {
       return NextResponse.json({ error: "Faltan datos para generar la invitacion" }, { status: 400 });
     }
     return purchaseInvitation(body);

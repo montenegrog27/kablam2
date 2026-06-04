@@ -110,21 +110,28 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const [verification, setVerification] = useState<Verification | null>(null);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [eventInfo, setEventInfo] = useState<EventInfo>(defaultEventInfo);
+  const [publicLots, setPublicLots] = useState<Lot[]>([]);
+  const [accessMode, setAccessMode] = useState<"ticket" | "free" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const selectedLot = verification?.lots.find((lot) => lot.key === selectedLotKey) || verification?.lots[0];
+  const availableLots = verification?.lots.length ? verification.lots : publicLots;
+  const selectedLot = accessMode === "ticket"
+    ? availableLots.find((lot) => lot.key === selectedLotKey) || availableLots[0]
+    : undefined;
   const isFounder = verification?.benefit.key === "founder";
   const qr = useMemo(() => qrCells(invitation?.invitation_code || "MORDISCO"), [invitation]);
   const hasDiscount = Number(verification?.benefit.discount || 0) > 0;
   const savings = selectedLot ? Math.max(selectedLot.basePrice - selectedLot.finalPrice, 0) : 0;
   const attendeeCount = 1 + (companionEnabled ? 1 : 0);
-  const reservationTotal = selectedLot ? selectedLot.finalPrice * attendeeCount : 0;
+  const reservationTotal = accessMode === "ticket" && selectedLot ? selectedLot.finalPrice * attendeeCount : 0;
   const levelName = verification ? levelDisplayName(verification.benefit.key, verification.benefit.label) : "";
   const impressiveBadge = verification ? getImpressiveBadge(verification) : null;
   const story = verification ? verification.message || buildEmotionalStory(verification) : "";
   const historyStats = verification ? buildHistoryStats(verification) : [];
   const hasFullName = name.trim().split(/\s+/).length >= 2;
+  const hasDni = customerDni.replace(/\D/g, "").length >= 7;
+  const hasWhatsapp = phone.replace(/\D/g, "").length >= 8;
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +143,10 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
       .then((response) => response.json())
       .then((data) => {
         if (!cancelled && data.settings) setEventInfo(data.settings);
+        if (!cancelled && Array.isArray(data.lots)) {
+          setPublicLots(data.lots);
+          setSelectedLotKey(data.lots?.find((lot: Lot) => lot.isOpen)?.key || data.lots?.[0]?.key || "lote_1");
+        }
       })
       .catch(() => {});
     return () => {
@@ -146,6 +157,10 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const verify = async () => {
     if (!hasFullName) {
       setError("Ingresá nombre y apellido para personalizar tu beneficio.");
+      return;
+    }
+    if (!hasWhatsapp) {
+      setError("Ingresa un WhatsApp valido para verificar tu categoria.");
       return;
     }
     setLoading(true);
@@ -171,17 +186,21 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   };
 
   const purchase = async () => {
-    if (!verification || !selectedLot) return;
-    if (!hasFullName || !phone) {
-      setError("Completa nombre, apellido y WhatsApp para generar la invitacion.");
+    if (!accessMode) {
+      setError("Elegi si queres comprar entrada o solo reservar tu lugar.");
       return;
     }
-    if (!customerDni || !birthdate || !email) {
-      setError("Completa DNI, fecha de cumpleaños y correo electronico para reservar.");
+    if (accessMode === "ticket" && !selectedLot) return;
+    if (!hasFullName || !hasDni || !hasWhatsapp) {
+      setError("Completa nombre, apellido, DNI y WhatsApp para reservar.");
       return;
     }
-    if (companionEnabled && (!companionName || !companionDni)) {
-      setError("Completa nombre y DNI del acompañante.");
+    if (accessMode === "ticket" && !verification) {
+      setError("Verifica tu WhatsApp para ver tu categoria y beneficio antes de reservar.");
+      return;
+    }
+    if (companionEnabled && !companionName.trim()) {
+      setError("Completa el nombre del acompañante.");
       return;
     }
 
@@ -203,16 +222,25 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           companionName: companionEnabled ? companionName : "",
           companionDni: companionEnabled ? companionDni : "",
           attendeeCount,
-          benefitKey: verification.benefit.key,
-          lotKey: selectedLot.key,
-          lotName: selectedLot.name,
-          basePrice: selectedLot.basePrice,
-          discount: selectedLot.discount,
+          benefitKey: accessMode === "ticket" ? verification?.benefit.key : "general",
+          lotKey: accessMode === "free" ? "sin_entrada" : selectedLot?.key,
+          lotName: accessMode === "free" ? "Reserva sin entrada" : selectedLot?.name,
+          basePrice: selectedLot?.basePrice || 0,
+          discount: 0,
           price: reservationTotal,
         }),
       });
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || "No pudimos generar la invitacion");
+      if (accessMode === "ticket") {
+        setVerification({
+          customer: data.customer,
+          benefit: data.benefit,
+          perks: data.perks || [],
+          lots: data.lots || publicLots,
+          message: data.message || "",
+        });
+      }
       setInvitation(data.invitation);
       setShowReservationModal(false);
       if (data.whatsapp?.skipped) {
@@ -367,11 +395,10 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
 
       <section id="beneficios" className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-5 sm:py-16 lg:grid-cols-[0.58fr_1.42fr]">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Verificacion</p>
-          <h2 className="mt-4 text-4xl font-black tracking-tight">Qué tan Mordiscolover sos? Descubrilo!</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Reservas</p>
+          <h2 className="mt-4 text-4xl font-black tracking-tight">Reserva tu lugar para el cumple</h2>
           <p className="mt-5 text-white/62">
-            Ingresa tu WhatsApp y verificaremos automaticamente si formas parte de la comunidad Mordisco.
-            Despues elegís podes adquirir tu entrada con tu descuento aplicado.
+            Dejanos tu nombre, DNI y WhatsApp. Podes comprar entrada para participar de sorteos y beneficios, o solo reservar tu lugar sin beneficios.
           </p>
         </div>
 
@@ -382,23 +409,100 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
               <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none" />
             </label>
             <label>
-              <span className="mb-1 block text-xs font-semibold text-white/55">Numero de WhatsApp</span>
-              <input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none" />
+              <span className="mb-1 block text-xs font-semibold text-white/55">DNI</span>
+              <input value={customerDni} onChange={(e) => setCustomerDni(e.target.value.replace(/\D/g, ""))} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none" />
             </label>
+            <label>
+              <span className="mb-1 block text-xs font-semibold text-white/55">WhatsApp</span>
+              <input
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value.replace(/\D/g, ""));
+                  setVerification(null);
+                }}
+                placeholder="3794123456"
+                className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none"
+              />
+            </label>
+          </div>
+
+          <div className="mt-5 rounded-[24px] border border-white/10 bg-black/25 p-4">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-white/45">Tipo de reserva</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccessMode("ticket");
+                  setVerification(null);
+                }}
+                className={`rounded-2xl px-4 py-3 text-sm font-black transition ${accessMode === "ticket" ? "bg-[#d7b56d] text-black" : "bg-white/10 text-white"}`}
+              >
+                Comprar entrada
+                <span className="mt-1 block text-[11px] font-semibold normal-case text-black/60">Sorteos y beneficios</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAccessMode("free");
+                  setVerification(null);
+                }}
+                className={`rounded-2xl px-4 py-3 text-sm font-black transition ${accessMode === "free" ? "bg-[#d7b56d] text-black" : "bg-white/10 text-white"}`}
+              >
+                Solo reservar
+                <span className="mt-1 block text-[11px] font-semibold normal-case opacity-70">Sin beneficios</span>
+              </button>
+            </div>
+
+            {accessMode === "ticket" ? (
+              <div className="mt-4 grid gap-2">
+                <button
+                  type="button"
+                  onClick={verify}
+                  disabled={loading || !hasFullName || !hasDni || !hasWhatsapp}
+                  className="rounded-2xl border border-[#d7b56d]/45 bg-[#d7b56d]/10 px-4 py-3 text-sm font-black text-[#f3d994] disabled:opacity-45"
+                >
+                  {verification ? `Beneficio: ${verification.benefit.label}` : "Ver mi categoria y beneficios"}
+                </button>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-2xl bg-white/[0.06] px-4 py-3 text-sm font-semibold leading-6 text-white/65">
+                Reservas tu asistencia sin compra de entrada. No se muestran categoria ni beneficios.
+              </p>
+            )}
+
+            <label className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-white/[0.06] px-4 py-3">
+              <span>
+                <span className="block text-sm font-black text-white">Agregar acompañante</span>
+                <span className="mt-1 block text-xs font-semibold text-white/42">Opcional.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={companionEnabled}
+                onChange={(event) => setCompanionEnabled(event.target.checked)}
+                className="h-5 w-5 accent-[#d7b56d]"
+              />
+            </label>
+
+            {companionEnabled && (
+              <label className="mt-3 block">
+                <span className="mb-1 block text-xs font-semibold text-white/55">Nombre del acompañante</span>
+                <input value={companionName} onChange={(e) => setCompanionName(e.target.value)} className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-[16px] outline-none" />
+              </label>
+            )}
           </div>
 
           {error && <p className="mt-4 rounded-2xl bg-red-500/15 px-4 py-3 text-sm text-red-200">{error}</p>}
           {notice && <p className="mt-4 rounded-2xl bg-amber-500/15 px-4 py-3 text-sm text-amber-100">{notice}</p>}
 
           <button
-            onClick={verify}
-            disabled={loading}
+            onClick={purchase}
+            disabled={loading || !accessMode || (accessMode === "ticket" && (!verification || !selectedLot))}
             className="mt-5 w-full rounded-2xl bg-[#d7b56d] px-5 py-4 text-sm font-black text-black transition hover:bg-[#f0cf88] disabled:opacity-50"
           >
-            {loading ? "Verificando..." : "Ver mis beneficios"}
+            {loading ? "Reservando..." : "Reservar mi lugar"}
           </button>
 
-          {verification && (
+          {verification && !invitation && (
             <>
               <BenefitExperience
                 verification={verification}
@@ -602,6 +706,36 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
 
       {invitation && (
         <section ref={inviteRef} className="mx-auto max-w-3xl px-5 pb-20">
+          {verification && (
+            <div className="mb-6 overflow-hidden rounded-[32px] border border-[#d7b56d]/35 bg-white text-black shadow-2xl">
+              <div className="bg-[linear-gradient(180deg,#ffffff,#f4eee4)] p-6 text-center">
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-black/45">Tu categoria Mordisco</p>
+                <h2 className="mt-3 text-5xl font-black uppercase leading-none tracking-normal">{levelName}</h2>
+                <p className="mx-auto mt-4 max-w-md text-sm font-bold leading-6 text-black/58">
+                  {story}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-px bg-black/10 text-center sm:grid-cols-4">
+                <ResultMetric label="Pedidos" value={verification.customer.orderCount.toString()} />
+                <ResultMetric label="Gastado" value={currency.format(verification.customer.totalSpent)} />
+                <ResultMetric label="Desde" value={formatDate(verification.customer.firstOrderAt)} />
+                <ResultMetric label="Sucursal" value={verification.customer.favoriteBranch?.name || "Mordisco"} />
+              </div>
+              {verification.perks.length > 0 && (
+                <div className="bg-black p-5 text-white">
+                  <p className="text-center text-xs font-black uppercase tracking-[0.22em] text-[#d7b56d]">Tu beneficio por esta categoria</p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {verification.perks.map((perk) => (
+                      <div key={perk} className="rounded-2xl bg-white/[0.08] px-4 py-3 text-sm font-bold text-white/92">
+                        {perk}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="rounded-[32px] border border-[#d7b56d]/35 bg-[#120f0b] p-6 shadow-2xl">
             <p className="text-center text-sm font-semibold uppercase tracking-[0.24em] text-[#d7b56d]">Invitacion emitida</p>
             <h2 className="mt-4 text-center text-4xl font-black">Nos vemos en el aniversario.</h2>
@@ -651,6 +785,15 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-4">
       <p className="text-xs text-white/45">{label}</p>
       <p className="mt-1 text-sm font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function ResultMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-white px-3 py-4">
+      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-black/38">{label}</p>
+      <p className="mt-1 break-words text-sm font-black text-black">{value}</p>
     </div>
   );
 }
