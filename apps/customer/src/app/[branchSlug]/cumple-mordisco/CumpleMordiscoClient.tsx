@@ -122,8 +122,8 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
     : undefined;
   const isFounder = verification?.benefit.key === "founder";
   const qr = useMemo(() => qrCells(invitation?.invitation_code || "MORDISCO"), [invitation]);
-  const hasDiscount = Number(verification?.benefit.discount || 0) > 0;
-  const savings = selectedLot ? Math.max(selectedLot.basePrice - selectedLot.finalPrice, 0) : 0;
+  const hasDiscount = false;
+  const savings = 0;
   const attendeeCount = 1 + (companionEnabled ? 1 : 0);
   const reservationTotal = accessMode === "ticket" && selectedLot ? selectedLot.finalPrice * attendeeCount : 0;
   const levelName = verification ? levelDisplayName(verification.benefit.key, verification.benefit.label) : "";
@@ -441,17 +441,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                 Comprar entrada
                 <span className="mt-1 block text-[11px] font-semibold normal-case text-gray-900">Sorteos y beneficios</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAccessMode("free");
-                  setVerification(null);
-                }}
-                className={`rounded-2xl px-4 py-3 text-sm font-black transition ${accessMode === "free" ? "bg-[#d7b56d] text-black" : "bg-white/10 text-white"}`}
-              >
-                Solo reservar
-                <span className="mt-1 block text-[11px] font-semibold normal-case opacity-70">Sin beneficios</span>
-              </button>
+
             </div>
 
             {accessMode === "ticket" ? (
@@ -536,7 +526,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                   <p className="mt-2 text-sm text-white/55">{verification.benefit.description}</p>
                 </div>
                 <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-black">
-                  {verification.benefit.discount > 0 ? `-${verification.benefit.discount}%` : "General"}
+                  Beneficios
                 </div>
               </div>
 
@@ -547,9 +537,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d7b56d]">Beneficio desbloqueado</p>
                     <p className="mt-2 text-2xl font-black leading-tight">
-                      {hasDiscount
-                        ? `Por ser ${verification.benefit.label}, tenés ${verification.benefit.discount}% OFF en tu invitación.`
-                        : "Tenés acceso al Primer Aniversario Mordisco."}
+                      Por ser {verification.benefit.label}, tenés beneficios especiales para el aniversario.
                     </p>
                     <p className="mt-2 text-sm leading-6 text-white/62">
                       {hasDiscount
@@ -558,11 +546,11 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                     </p>
                   </div>
                   <div className="rounded-2xl bg-white p-4 text-black shadow-xl sm:min-w-40">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/45">Tu descuento</p>
-                    <p className="mt-1 text-3xl font-black">{hasDiscount ? `${verification.benefit.discount}%` : "Acceso"}</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/45">Tu beneficio</p>
+                    <p className="mt-1 text-3xl font-black">Acceso</p>
                     {selectedLot && (
                       <p className="mt-2 text-xs font-semibold text-black/55">
-                        {hasDiscount ? `Ahorrás ${currency.format(savings)}` : `Desde ${currency.format(selectedLot.finalPrice)}`}
+                        Desde {currency.format(selectedLot.finalPrice)}
                       </p>
                     )}
                   </div>
@@ -604,7 +592,6 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
                           </p>
                         </div>
                         <div className="text-right">
-                          {lot.discount > 0 && <p className="text-xs font-black text-[#d7b56d]">-{lot.discount}%</p>}
                           <p className="text-xl font-black">{currency.format(lot.finalPrice)}</p>
                         </div>
                       </div>
@@ -869,9 +856,9 @@ function BenefitExperience({
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-black/42">Beneficio desbloqueado</p>
               <div className="mt-2 flex items-end justify-center gap-3">
                 <p className="text-[3.1rem] font-black leading-none tracking-normal text-black">
-                  {hasDiscount ? `${verification.benefit.discount}%` : "VIP"}
+                  BENEFICIOS
                 </p>
-                <p className="pb-1 text-2xl font-black leading-none text-[#ff3b30]">{hasDiscount ? "OFF" : "ACCESS"}</p>
+                <p className="pb-1 text-2xl font-black leading-none text-[#ff3b30]">DESBLOQUEADOS</p>
               </div>
               <p className="mt-3 text-xs font-black uppercase tracking-[0.12em] text-black/46">
                 {hasDiscount ? `Por ser ${levelName}` : "Invitación habilitada"}
@@ -919,13 +906,11 @@ function BenefitExperience({
             <div className="bg-[radial-gradient(circle_at_top_left,rgba(255,59,48,0.18),transparent_36%),linear-gradient(180deg,#ffffff,#f4eee4)] p-6 text-center sm:p-8">
               <p className="text-[11px] font-black uppercase tracking-[0.28em] text-black/42">Beneficio desbloqueado</p>
               <p className="mt-4 text-[4.8rem] font-black leading-none tracking-normal text-black sm:text-[6.2rem]">
-                {hasDiscount ? `${verification.benefit.discount}%` : "VIP"}
+                BENEFICIOS
               </p>
-              <p className="text-3xl font-black leading-none text-[#ff3b30]">{hasDiscount ? "OFF" : "ACCESS"}</p>
+              <p className="text-3xl font-black leading-none text-[#ff3b30]">DESBLOQUEADOS</p>
               <p className="mx-auto mt-5 max-w-sm text-sm font-bold leading-6 text-black/58">
-                {hasDiscount
-                  ? `Precio privado por pertenecer a ${verification.benefit.label}. Tu historia con Mordisco ya tiene beneficio aplicado.`
-                  : "Acceso reservado para vivir el primer aniversario desde adentro."}
+                "Tu categoria habilita beneficios especiales para vivir el aniversario desde adentro."
               </p>
               {perks.length > 0 && (
                 <div className="mx-auto mt-6 max-w-md rounded-[26px] bg-black px-4 py-4 text-left text-white shadow-[0_20px_55px_rgba(0,0,0,0.18)]">
@@ -945,9 +930,9 @@ function BenefitExperience({
               <div className="grid gap-4 border-t border-black/8 bg-black px-5 py-5 text-center text-white sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
                 <PriceMoment label="Precio lote" value={currency.format(selectedLot.basePrice)} muted strike={hasDiscount} />
                 <span className="hidden text-2xl font-black text-white/24 sm:block">→</span>
-                <PriceMoment label="Tu precio" value={currency.format(selectedLot.finalPrice)} highlight />
+                <PriceMoment label="Entrada" value={currency.format(selectedLot.finalPrice)} highlight />
                 <span className="hidden text-2xl font-black text-white/24 sm:block">→</span>
-                <PriceMoment label={hasDiscount ? `Por ser ${levelName}` : "Entrada"} value={hasDiscount ? `Ahorrás ${currency.format(savings)}` : "Lugar reservado"} />
+                <PriceMoment label={`Por ser ${levelName}`} value="Beneficios activos" />
               </div>
             )}
           </section>
@@ -1111,7 +1096,7 @@ function BenefitExperienceLegacy({
             <div className="p-5 text-center">
               <p className="text-xs font-black uppercase tracking-[0.26em] text-[#ffb5ae]">Tu beneficio</p>
               <p className="mt-2 text-[4.2rem] font-black leading-none text-white drop-shadow-[0_0_26px_rgba(255,59,48,0.45)] sm:text-[5rem]">
-                {hasDiscount ? `${verification.benefit.discount}% OFF` : "ACCESO"}
+                "ACCESO"
               </p>
               <p className="mt-2 text-sm font-semibold text-white/70">
                 {hasDiscount ? `Precio exclusivo para ${verification.benefit.label}.` : "Acceso especial al aniversario."}
@@ -1122,9 +1107,9 @@ function BenefitExperienceLegacy({
               <div className="grid items-center gap-2 border-t border-white/10 bg-black/24 p-5 text-center sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
                 <PriceMoment label="Precio lote" value={currency.format(selectedLot.basePrice)} muted strike={hasDiscount} />
                 <span className="hidden text-2xl font-black text-white/30 sm:block">→</span>
-                <PriceMoment label="Tu precio" value={currency.format(selectedLot.finalPrice)} highlight />
+                <PriceMoment label="Entrada" value={currency.format(selectedLot.finalPrice)} highlight />
                 <span className="hidden text-2xl font-black text-white/30 sm:block">→</span>
-                <PriceMoment label={hasDiscount ? `Por ser ${levelName}` : "Entrada"} value={hasDiscount ? `Ahorrás ${currency.format(savings)}` : "Disponible"} />
+                <PriceMoment label={`Por ser ${levelName}`} value="Beneficios activos" />
               </div>
             )}
           </div>
@@ -1241,7 +1226,7 @@ function LotStepCard({ lot, index, selected, onSelect }: { lot: Lot; index: numb
           <p className={`mt-1 text-xs font-semibold ${selected && open ? "text-black/48" : "text-white/45"}`}>{status}</p>
         </div>
         <div className="text-right">
-          {lot.discount > 0 && <p className="text-xs font-black text-[#ff8b80]">-{lot.discount}%</p>}
+          
           <p className={`text-xl font-black ${selected && open ? "text-black" : "text-white"}`}>{currency.format(lot.finalPrice)}</p>
           <p className={`text-[11px] font-semibold ${selected && open ? "text-black/42" : "text-white/42"}`}>Base {currency.format(lot.basePrice)}</p>
         </div>

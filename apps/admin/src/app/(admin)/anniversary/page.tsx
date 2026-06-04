@@ -25,11 +25,11 @@ const defaultSettings = {
   founderMinOrders: 0,
   founderTopPercent: 10,
   generalDiscount: 0,
-  communityDiscount: 25,
-  founderDiscount: 50,
+  communityDiscount: 0,
+  founderDiscount: 0,
   perks: {
     general: ["Acceso al evento aniversario", "Sorteos durante la noche"],
-    community: ["Acceso al evento aniversario", "Sorteos durante la noche", "Precio especial comunidad"],
+    community: ["Acceso al evento aniversario", "Sorteos durante la noche", "1 trago free"],
     founder: ["Acceso al evento aniversario", "Sorteos durante la noche", "5 tragos a eleccion"],
   },
   messages: {
@@ -327,26 +327,19 @@ export default function AnniversaryDashboardPage() {
                 title="Invitado General"
                 minLabel="Min. pedidos"
                 minValue={settings.generalMinOrders}
-                discountValue={settings.generalDiscount}
                 onMin={(value) => updateSetting("generalMinOrders", Number(value || 0))}
-                onDiscount={(value) => updateSetting("generalDiscount", Number(value || 0))}
               />
               <TierConfig
                 title="Comunidad"
                 minLabel="Desde pedidos"
                 minValue={settings.communityMinOrders}
-                discountValue={settings.communityDiscount}
                 onMin={(value) => updateSetting("communityMinOrders", Number(value || 0))}
-                onDiscount={(value) => updateSetting("communityDiscount", Number(value || 0))}
               />
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-3">
                 <p className="mb-3 text-sm font-bold text-gray-100">Fundadores</p>
                 <AdminInput label="Desde pedidos" type="number" value={settings.founderMinOrders} onChange={(value) => updateSetting("founderMinOrders", Number(value || 0))} />
                 <div className="mt-3">
                   <AdminInput label="Y Top % clientes" type="number" value={settings.founderTopPercent} onChange={(value) => updateSetting("founderTopPercent", Number(value || 0))} />
-                </div>
-                <div className="mt-3">
-                  <AdminInput label="Descuento %" type="number" value={settings.founderDiscount} onChange={(value) => updateSetting("founderDiscount", Number(value || 0))} />
                 </div>
               </div>
             </div>
@@ -540,24 +533,17 @@ function TierConfig({
   title,
   minLabel,
   minValue,
-  discountValue,
   onMin,
-  onDiscount,
 }: {
   title: string;
   minLabel: string;
   minValue: number;
-  discountValue: number;
   onMin: (value: string) => void;
-  onDiscount: (value: string) => void;
 }) {
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-900 p-3">
       <p className="mb-3 text-sm font-bold text-gray-100">{title}</p>
       <AdminInput label={minLabel} type="number" value={minValue} onChange={onMin} />
-      <div className="mt-3">
-        <AdminInput label="Descuento %" type="number" value={discountValue} onChange={onDiscount} />
-      </div>
     </div>
   );
 }

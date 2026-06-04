@@ -34,9 +34,9 @@ const DEFAULT_SETTINGS = {
   communityDiscount: 0,
   founderDiscount: 0,
   perks: {
-    general: ["Entrada al evento", "Participacion en sorteos", "Descuentos exclusivos"],
-    community: ["Entrada al evento", "Participacion en sorteos", "Descuentos exclusivos", "1 trago free"],
-    founder: ["Entrada al evento", "Participacion en sorteos", "Descuentos exclusivos", "3 hamburguesas gratis", "5 tragos a eleccion"],
+    general: ["Entrada al evento", "Participacion en sorteos"],
+    community: ["Entrada al evento", "Participacion en sorteos", "1 trago free"],
+    founder: ["Entrada al evento", "Participacion en sorteos", "3 hamburguesas gratis", "5 tragos a eleccion"],
   },
   messages: {
     general: [
@@ -99,7 +99,7 @@ function getTier(orderCount: number, topPercentile: number, settings: Anniversar
       key: "founder",
       label: "Fundadores",
       badge: "Tu nivel de Mordiscolover es: ",
-      discount: Number(settings.founderDiscount || 0),
+      discount: 0,
       description: "Maximo beneficio por ser de los clientes mas frecuentes.",
     };
   }
@@ -109,8 +109,8 @@ function getTier(orderCount: number, topPercentile: number, settings: Anniversar
       key: "community",
       label: "Comunidad Mordisco",
       badge: "Comunidad Mordisco",
-      discount: Number(settings.communityDiscount || 0),
-      description: "Precio especial para clientes que ya son parte de la casa.",
+      discount: 0,
+      description: "Beneficios para clientes que ya son parte de la casa.",
     };
   }
 
@@ -118,7 +118,7 @@ function getTier(orderCount: number, topPercentile: number, settings: Anniversar
     key: "general",
     label: "Invitado General",
     badge: "Primer Cumple",
-    discount: Number(settings.generalDiscount || 0),
+    discount: 0,
     description: "Acceso general al primer aniversario.",
   };
 }
