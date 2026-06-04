@@ -112,7 +112,7 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [eventInfo, setEventInfo] = useState<EventInfo>(defaultEventInfo);
   const [publicLots, setPublicLots] = useState<Lot[]>([]);
-  const [accessMode, setAccessMode] = useState<"ticket" | "free" | null>(null);
+  const [accessMode, setAccessMode] = useState<"ticket" | "free">("ticket");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -186,11 +186,12 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
     }
   };
 
+  const startReservation = async () => {
+    setAccessMode("ticket");
+    await verify();
+  };
+
   const purchase = async () => {
-    if (!accessMode) {
-      setError("Elegi si queres comprar entrada o solo reservar tu lugar.");
-      return;
-    }
     if (accessMode === "ticket" && !selectedLot) return;
     if (!hasFullName || !hasDni || !hasWhatsapp) {
       setError("Completa nombre, apellido, DNI y WhatsApp para reservar.");
@@ -428,36 +429,6 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           </div>
 
           <div className="mt-5 rounded-[24px] border border-white/10 bg-black/25 p-4">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-white/45">Tipo de reserva</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAccessMode("ticket");
-                  setVerification(null);
-                }}
-                className={`rounded-2xl px-4 py-3 text-sm font-black transition ${accessMode === "ticket" ? "bg-[#d7b56d] text-black" : "bg-white/10 text-white"}`}
-              >
-                Comprar entrada
-                <span className="mt-1 block text-[11px] font-semibold normal-case text-gray-100">Sorteos y beneficios</span>
-              </button>
-
-            </div>
-
-            {accessMode === "ticket" ? (
-              <div className="mt-4 grid gap-2">
-                <button
-                  type="button"
-                  onClick={verify}
-                  disabled={loading || !hasFullName || !hasDni || !hasWhatsapp}
-                  className="rounded-2xl border border-[#d7b56d]/45 bg-[#d7b56d]/10 px-4 py-3 text-sm font-black text-[#f3d994] disabled:opacity-45"
-                >
-                  {verification ? `Beneficio: ${verification.benefit.label}` : "Ver mi categoria y beneficios"}
-                </button>
-              </div>
-            ) : (""
-            )}
-
             <label className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-white/[0.06] px-4 py-3">
               <span>
                 <span className="block text-sm font-black text-white">Agregar acompañante</span>
@@ -482,13 +453,15 @@ export default function CumpleMordiscoClient({ branchSlug }: { branchSlug: strin
           {error && <p className="mt-4 rounded-2xl bg-red-500/15 px-4 py-3 text-sm text-red-200">{error}</p>}
           {notice && <p className="mt-4 rounded-2xl bg-amber-500/15 px-4 py-3 text-sm text-amber-100">{notice}</p>}
 
-          <button
-            onClick={purchase}
-            disabled={loading || !accessMode || (accessMode === "ticket" && (!verification || !selectedLot))}
-            className="mt-5 w-full rounded-2xl bg-[#d7b56d] px-5 py-4 text-sm font-black text-black transition hover:bg-[#f0cf88] disabled:opacity-50"
-          >
-            {loading ? "Reservando..." : "Reservar mi lugar"}
-          </button>
+          {!verification && (
+            <button
+              onClick={startReservation}
+              disabled={loading || !hasFullName || !hasDni || !hasWhatsapp}
+              className="mt-5 w-full rounded-2xl bg-[#d7b56d] px-5 py-4 text-sm font-black text-black transition hover:bg-[#f0cf88] disabled:opacity-50"
+            >
+              {loading ? "Buscando beneficios..." : "Reservar mi lugar"}
+            </button>
+          )}
 
           {verification && !invitation && (
             <>
