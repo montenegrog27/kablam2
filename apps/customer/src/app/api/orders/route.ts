@@ -520,51 +520,9 @@ export async function POST(req: Request) {
       if (!cashierUrl) {
         console.error("WhatsApp URL not configured (NEXT_PUBLIC_CASHIER_APP_URL)");
       } else {
-        // Check if payment method is transferencia
-        let esTransferencia = false;
-        if (paymentMethodId) {
-          const { data: pm } = await supabase
-            .from("payment_methods")
-            .select("name")
-            .eq("id", paymentMethodId)
-            .single();
-          if (pm) {
-            const name = pm.name.toLowerCase();
-            esTransferencia = name.includes("transferencia") || name.includes("alias") || name.includes("cbU") || name.includes("mercadopago") || name.includes("depósito");
-          }
-        }
-
-        const esDelivery = orderMode === "delivery";
-
-        // Build confirmation message
-        let mensajeFinal = "";
-        if (esTransferencia) {
-          if (esDelivery) {
-            mensajeFinal = "✅ Pedido confirmado. Te avisaremos por acá cuando esté yendo el repartidor. ¡Gracias!\nALIAS: 👇👇👇";
-          } else {
-            mensajeFinal = "✅ Pedido confirmado. Te avisaremos por acá cuando esté listo para retiro. ¡Gracias!\nALIAS: 👇👇👇";
-          }
-        } else {
-          if (esDelivery) {
-            mensajeFinal = "✅ Pedido confirmado. Te avisaremos por acá cuando esté yendo el repartidor. ¡Gracias!";
-          } else {
-            mensajeFinal = "✅ Pedido confirmado. Te avisaremos por acá cuando esté listo para retiro. ¡Gracias!";
-          }
-        }
-
-        // Send confirmation message
-        await fetch(`${cashierUrl}/api/whatsapp/send`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            conversationId: conversation.id,
-            orderId: order.id,
-            type: "text",
-            text: mensajeFinal,
-          }),
-        });
-
-        // Send template for tracking
+        // First contact after checkout: ask the customer to confirm/reject.
+        // The confirmation/alias message is sent later from the cashier webhook
+        // when the customer taps the WhatsApp template button.
         await fetch(`${cashierUrl}/api/whatsapp/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -576,20 +534,6 @@ export async function POST(req: Request) {
             params: [customer.name, orderText, orderTotal.toString()],
           }),
         });
-
-        // For transferencia, send extra alias message
-        if (esTransferencia) {
-          await fetch(`${cashierUrl}/api/whatsapp/send`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              conversationId: conversation.id,
-              orderId: order.id,
-              type: "text",
-              text: "MORDISCO.ARG",
-            }),
-          });
-        }
       }
     } catch (e) {
       console.error("WhatsApp error:", e);

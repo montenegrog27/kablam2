@@ -255,14 +255,14 @@ export async function POST(req: Request) {
 
     const { data: order } = await supabase
       .from("orders")
-      .select("*")
+      .select("*, order_payments(payment_methods(name))")
       .eq("whatsapp_message_id", originalMessageId)
       .maybeSingle();
 
     // Fallback: buscar por teléfono y estado unconfirmed
     const orderByPhone = !order ? await supabase
       .from("orders")
-      .select("*")
+      .select("*, order_payments(payment_methods(name))")
       .eq("customer_phone", phone.replace(/^549/, "").replace(/^54/, ""))
       .eq("branch_id", branchId)
       .eq("status", "unconfirmed")
@@ -319,7 +319,17 @@ export async function POST(req: Request) {
       }
 
       const esDelivery = matchedOrder.type === "delivery";
-      const esTransfer = matchedOrder.payment_method === "transfer";
+      const esTransfer = (matchedOrder.order_payments || []).some((payment: any) => {
+        const name = payment.payment_methods?.name?.toLowerCase() || "";
+        return (
+          name.includes("transferencia") ||
+          name.includes("alias") ||
+          name.includes("cbu") ||
+          name.includes("mercadopago") ||
+          name.includes("depósito") ||
+          name.includes("deposito")
+        );
+      });
 
       let msg = "";
 
