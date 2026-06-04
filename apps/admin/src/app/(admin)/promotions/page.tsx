@@ -403,6 +403,26 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
           <p className="mt-2 max-w-2xl text-sm text-gray-400">
             Crea campañas visibles, reglas automáticas de checkout y mide el impacto financiero de cada acción.
           </p>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-800 bg-gray-900/80 p-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <Sparkles size={16} className="text-emerald-300" />
+                Promociones
+              </div>
+              <p className="mt-2 text-sm leading-6 text-gray-400">
+                Usalas para mostrar campañas al cliente: banners, badges, productos destacados, combos y ofertas visuales como "20% OFF" o "Combo finde".
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gray-800 bg-gray-900/80 p-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <Settings2 size={16} className="text-blue-300" />
+                Reglas
+              </div>
+              <p className="mt-2 text-sm leading-6 text-gray-400">
+                Usalas para que el descuento se aplique solo en checkout: monto mínimo, días, horarios, método de pago, 2x1, 3x2, segunda unidad o envío gratis.
+              </p>
+            </div>
+          </div>
         </div>
         <div className="flex rounded-xl border border-gray-800 bg-gray-900 p-1">
           {tabs.map((item) => (
@@ -640,6 +660,13 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
               <MultiSelect label="Categorias afectadas" items={categories} selected={promotionForm.categories} onChange={(categories) => setPromotionForm({ ...promotionForm, categories })} />
             </div>
 
+            <PromotionPreview
+              form={promotionForm}
+              products={products}
+              combos={combos}
+              categories={categories}
+            />
+
             <div className="rounded-2xl border border-gray-800 bg-gray-950 p-4">
               <h3 className="font-bold">Productos adicionales</h3>
               <p className="mt-1 text-sm text-gray-400">Ejemplo: comprando hamburguesa, bebida al 50% o papas gratis.</p>
@@ -824,6 +851,96 @@ function MultiSelect({ label, items, selected, onChange }: { label: string; item
           </button>
         ))}
         {visible.length === 0 && <p className="py-4 text-center text-xs text-gray-500">Sin resultados</p>}
+      </div>
+    </div>
+  );
+}
+
+function PromotionPreview({
+  form,
+  products,
+  combos,
+  categories,
+}: {
+  form: typeof emptyPromotionForm;
+  products: CatalogItem[];
+  combos: CatalogItem[];
+  categories: CatalogItem[];
+}) {
+  const selectedNames = [
+    ...products.filter((item) => form.products.includes(item.id)).map((item) => item.name),
+    ...combos.filter((item) => form.combos.includes(item.id)).map((item) => item.name),
+    ...categories.filter((item) => form.categories.includes(item.id)).map((item) => item.name),
+  ];
+  const reward = products.find((item) => item.id === form.additionalRewardId);
+  const title = form.name || "Cheese Burger 20% OFF";
+  const description = form.description || "Promo especial para mostrar en la app del cliente.";
+  const imageUrl = form.imageType === "custom" ? form.imageUrl : "";
+
+  return (
+    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="font-bold text-white">Vista previa cliente</h3>
+          <p className="text-sm text-gray-400">Referencia visual de cómo podría verse la promoción en home o destacados.</p>
+        </div>
+        <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200">
+          Preview
+        </span>
+      </div>
+
+      <div className="max-w-md overflow-hidden rounded-[28px] border border-white/10 bg-[#111827] shadow-2xl">
+        <div className="relative h-48 bg-gradient-to-br from-gray-800 via-gray-900 to-black">
+          {imageUrl ? (
+            <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <div className="rounded-3xl bg-white/8 p-6 text-gray-500">
+                <ImageIcon size={42} />
+              </div>
+            </div>
+          )}
+          <div className="absolute left-4 top-4 rounded-full bg-white px-3 py-1.5 text-xs font-black text-gray-950 shadow-lg">
+            {form.badge || "20% OFF"}
+          </div>
+          {form.showInHome && (
+            <div className="absolute right-4 top-4 rounded-full bg-emerald-400 px-3 py-1.5 text-xs font-black text-gray-950 shadow-lg">
+              HOME
+            </div>
+          )}
+        </div>
+
+        <div className="p-5">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">{form.promotionType || "Promocion"}</p>
+          <h4 className="mt-2 text-2xl font-black leading-tight text-white">{title}</h4>
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-gray-400">{description}</p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(selectedNames.length ? selectedNames : ["Producto destacado"]).slice(0, 4).map((name) => (
+              <span key={name} className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-gray-300">
+                {name}
+              </span>
+            ))}
+            {selectedNames.length > 4 && (
+              <span className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-gray-300">
+                +{selectedNames.length - 4}
+              </span>
+            )}
+          </div>
+
+          {reward && (
+            <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-amber-200">Producto adicional</p>
+              <p className="mt-1 text-sm font-bold text-white">
+                {reward.name} {form.additionalDiscountValue ? `al ${form.additionalDiscountValue}%` : "con beneficio"}
+              </p>
+            </div>
+          )}
+
+          <button type="button" className="mt-5 w-full rounded-full bg-white px-4 py-3 text-sm font-black text-gray-950">
+            Ver promoción
+          </button>
+        </div>
       </div>
     </div>
   );
