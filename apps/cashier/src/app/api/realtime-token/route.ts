@@ -31,8 +31,12 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createSupabaseServer();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const authUser = sessionData.session?.user;
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+  const { data: userData } = bearerToken
+    ? await supabase.auth.getUser(bearerToken)
+    : await supabase.auth.getUser();
+  const authUser = userData.user;
 
   if (!authUser) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

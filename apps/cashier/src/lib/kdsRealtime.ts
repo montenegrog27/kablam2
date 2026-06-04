@@ -1,4 +1,5 @@
 import { RealtimeClient, type RealtimeConnectionState, type RealtimeEvent } from "./realtimeClient";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
 export const KDS_ORDER_EVENT_TYPES = [
   "orders.created",
@@ -33,7 +34,11 @@ export function createKdsRealtimeClient(options: {
   const client = new RealtimeClient({
     url,
     tokenProvider: async () => {
-      const response = await fetch(`/api/realtime-token?branchId=${encodeURIComponent(options.branchId)}`);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch(`/api/realtime-token?branchId=${encodeURIComponent(options.branchId)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       const data = await response.json();
       if (!response.ok || !data.token) {
         throw new Error(data.error || "realtime_token_unavailable");
