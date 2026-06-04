@@ -36,6 +36,12 @@ type ExpandedKdsItem = {
   parent_combo_name?: string;
 };
 
+type KdsCategoryConfig = {
+  kds_sort_order?: number | null;
+  kds_dimmed?: boolean | null;
+  position?: number | null;
+};
+
 export default function KDSTab() {
   const { branchId, tenantId } = useCurrentBranch();
   const [allOrders, setAllOrders] = useState<any[]>([]);
@@ -49,6 +55,7 @@ export default function KDSTab() {
   const [ingredientOrder, setIngredientOrder] = useState<string[]>([]);
   const [recipeMap, setRecipeMap] = useState<Record<string, any[]>>({});
   const [comboMap, setComboMap] = useState<Record<string, any>>({});
+  const [categoryConfig, setCategoryConfig] = useState<Record<string, KdsCategoryConfig>>({});
   const [now, setNow] = useState(Date.now());
   const [showConfirmed, setShowConfirmed] = useState(false);
   const [realtimeStatus, setRealtimeStatus] =
@@ -154,11 +161,17 @@ export default function KDSTab() {
 
   const loadKdsConfig = async () => {
     if (!tenantId) return;
-    const { data } = await supabase
-      .from("kds_config")
-      .select("*, ingredients(id, name)")
-      .eq("tenant_id", tenantId)
-      .order("sort_order");
+    const [{ data }, { data: categories }] = await Promise.all([
+      supabase
+        .from("kds_config")
+        .select("*, ingredients(id, name)")
+        .eq("tenant_id", tenantId)
+        .order("sort_order"),
+      supabase
+        .from("categories")
+        .select("id, position, kds_sort_order, kds_dimmed")
+        .eq("tenant_id", tenantId),
+    ]);
     const map: Record<string, any> = {};
     const order: string[] = [];
     (data || []).forEach((item: any) => {
@@ -167,6 +180,16 @@ export default function KDSTab() {
     });
     setKdsIngredients(map);
     setIngredientOrder(order);
+
+    const categoryMap: Record<string, KdsCategoryConfig> = {};
+    (categories || []).forEach((category: any) => {
+      categoryMap[category.id] = {
+        kds_sort_order: category.kds_sort_order,
+        kds_dimmed: category.kds_dimmed,
+        position: category.position,
+      };
+    });
+    setCategoryConfig(categoryMap);
   };
 
   useEffect(() => {
@@ -308,6 +331,21 @@ export default function KDSTab() {
     return expanded;
   };
 
+  const getItemCategoryConfig = (item: any) => {
+    const categoryId = item.products?.category_id;
+    return categoryId ? categoryConfig[categoryId] : undefined;
+  };
+
+  const sortItemsForKds = (items: ExpandedKdsItem[]) =>
+    [...items].sort((a, b) => {
+      const aConfig = getItemCategoryConfig(a);
+      const bConfig = getItemCategoryConfig(b);
+      const aOrder = aConfig?.kds_sort_order ?? aConfig?.position ?? 9999;
+      const bOrder = bConfig?.kds_sort_order ?? bConfig?.position ?? 9999;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return (a.products?.name || "").localeCompare(b.products?.name || "");
+    });
+
   const getRecipe = (item: any) => recipeMap[item.variant_id] || [];
 
   // Total ingredients across all preparing orders
@@ -388,7 +426,7 @@ export default function KDSTab() {
   };
 
   const getPreparableItems = (order: any) =>
-    expandOrderItemsForKds(order).filter((i: any) => i.products?.is_preparable !== false);
+    sortItemsForKds(expandOrderItemsForKds(order).filter((i: any) => i.products?.is_preparable !== false));
 
   const allItemsCooked = (order: any) => {
     const preparable = getPreparableItems(order);
@@ -504,6 +542,7 @@ export default function KDSTab() {
                 onReady={markAsReady}
                 allItemsCooked={allItemsCooked}
                 getPreparableItems={getPreparableItems}
+                getItemCategoryConfig={getItemCategoryConfig}
                 calcIngredients={calcIngredients}
                 formatTime={formatTime}
                 getTimeColor={getTimeColor}
@@ -610,6 +649,7 @@ function PreparingCard({
   onReady,
   allItemsCooked,
   getPreparableItems,
+  getItemCategoryConfig,
   calcIngredients,
   formatTime,
   getTimeColor,
@@ -622,6 +662,7 @@ function PreparingCard({
   onReady: (order: any) => void;
   allItemsCooked: (order: any) => boolean;
   getPreparableItems: (order: any) => any[];
+  getItemCategoryConfig: (item: any) => KdsCategoryConfig | undefined;
   calcIngredients: (order: any) => [string, any][];
   formatTime: (t: string) => string;
   getTimeColor: (t: string) => string;
@@ -681,14 +722,18 @@ function PreparingCard({
         {preparable.slice(0, 8).map((item: any, i: number) => {
           const isCooked = cookedSet.has(i);
           const extras = item.extras || [];
+          const categoryConfig = getItemCategoryConfig(item);
+          const dimmed = categoryConfig?.kds_dimmed === true;
           return (
-            <div key={item.id}>
+            <div key={item.id} className={dimmed ? "opacity-55" : ""}>
               <button
                 onClick={() => onToggleCooking(order.id, i)}
                 className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-lg font-bold transition ${
                   isCooked
                     ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
-                    : "bg-gray-800 text-gray-200 hover:bg-gray-750 border border-transparent"
+                    : dimmed
+                      ? "bg-gray-900 text-gray-500 border border-gray-800"
+                      : "bg-gray-800 text-gray-200 hover:bg-gray-750 border border-transparent"
                 }`}
               >
                 {isCooked ? (

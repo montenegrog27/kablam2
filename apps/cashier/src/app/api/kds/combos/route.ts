@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 
     const { data: combos, error: combosError } = await supabase
       .from("combos")
-      .select("id, name, combo_products(id, product_id, quantity, products(id, name, is_preparable, product_variants(id, is_default)))")
+      .select("id, name, combo_products(id, product_id, quantity, products(id, name, category_id, is_preparable, product_variants(id, is_default)))")
       .or(`tenant_id.eq.${userRecord.tenant_id},branch_id.eq.${branchId}`);
 
     if (combosError) {
