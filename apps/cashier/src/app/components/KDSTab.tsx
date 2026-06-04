@@ -250,13 +250,30 @@ export default function KDSTab() {
     return null;
   };
 
-  const getComboExtrasForProduct = (extras: any[] = [], productName: string) =>
+  const normalizeItemExtras = (extras: any[] = [], productName?: string) =>
     extras
-      .filter((extra) => typeof extra?.name === "string" && extra.name.startsWith(`${productName}:`))
-      .map((extra) => ({
-        ...extra,
-        name: extra.name.replace(`${productName}:`, "").trim(),
-      }));
+      .filter((extra) => extra?.name)
+      .map((extra) => {
+        if (productName && typeof extra.name === "string" && extra.name.startsWith(`${productName}:`)) {
+          return { ...extra, name: extra.name.replace(`${productName}:`, "").trim() };
+        }
+        return extra;
+      });
+
+  const getComboExtrasForProduct = (extras: any[] = [], productName: string, includeComboLevel = false) =>
+    extras
+      .filter((extra) => {
+        if (typeof extra?.name !== "string") return false;
+        const belongsToProduct = extra.name.startsWith(`${productName}:`);
+        const belongsToCombo = !extra.name.includes(":");
+        return belongsToProduct || (includeComboLevel && belongsToCombo);
+      })
+      .map((extra) => {
+        if (typeof extra.name === "string" && extra.name.startsWith(`${productName}:`)) {
+          return { ...extra, name: extra.name.replace(`${productName}:`, "").trim() };
+        }
+        return extra;
+      });
 
   const expandOrderItemsForKds = (order: any): ExpandedKdsItem[] => {
     const expanded: ExpandedKdsItem[] = [];
@@ -266,7 +283,10 @@ export default function KDSTab() {
       const combo = comboId ? comboMap[comboId] : null;
 
       if (!combo) {
-        expanded.push(item);
+        expanded.push({
+          ...item,
+          extras: normalizeItemExtras(item.extras || [], item.products?.name),
+        });
         return;
       }
 
@@ -278,7 +298,7 @@ export default function KDSTab() {
           quantity: (item.quantity || 1) * (comboProduct.quantity || 1),
           variant_id: getDefaultVariantId(product),
           products: product,
-          extras: getComboExtrasForProduct(item.extras || [], productName),
+          extras: getComboExtrasForProduct(item.extras || [], productName, index === 0),
           note: item.note,
           parent_combo_name: combo.name,
         });
@@ -677,7 +697,14 @@ function PreparingCard({
                   <span className="w-5 h-5 rounded-full border-2 border-gray-500 flex-shrink-0" />
                 )}
                 <span className="font-black">{item.quantity}</span>
-                <span className="truncate">{item.products?.name || "Producto"}</span>
+                <span className="min-w-0 flex flex-col">
+                  {item.parent_combo_name && (
+                    <span className="truncate text-xs font-semibold uppercase tracking-wide text-blue-300">
+                      {item.parent_combo_name}
+                    </span>
+                  )}
+                  <span className="truncate">{item.products?.name || "Producto"}</span>
+                </span>
               </button>
               {extras.length > 0 && (
                 <div className="ml-12 flex flex-wrap gap-1.5 mt-1.5">
