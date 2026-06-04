@@ -91,6 +91,7 @@ import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import SalesTab from "./SalesTab";
 import DeliveredTab from "./DeliveredTab";
 import KDSTab from "./KDSTab";
+import MesasTab from "./MesasTab";
 import CloseCash from "./CloseCash";
 import CashClosuresTab from "./CashClosuresTab";
 import CustomerChatList from "./CustomerChatList";
@@ -116,6 +117,7 @@ export default function CashierTabs({ session }: any) {
 
   const allTabs = [
     { id: "orders", label: "Pedidos", perm: "cashier.orders.view" },
+    { id: "mesas", label: "Mesas", perm: "cashier.orders.view" },
     { id: "kds", label: "Cocina", perm: "cashier.kds.view" },
     { id: "delivered", label: "Entregados", perm: "cashier.orders.view" },
     { id: "whatsapp", label: "WhatsApp", perm: "cashier.chat.view" },
@@ -300,6 +302,8 @@ export default function CashierTabs({ session }: any) {
             onCloseCash={() => setShowCloseModal(true)}
           />
         )}
+
+        {tab === "mesas" && can("cashier.orders.view") && <MesasTab />}
       </div>
 
       {/* MODAL CIERRE */}

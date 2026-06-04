@@ -59,6 +59,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/upsells", label: "Sugerencias Checkout", icon: ShoppingBag },
     ]},
     { section: "Operaciones", items: [
+      { href: "/tables", label: "Mesas", icon: LayoutDashboard },
       { href: "/featured-order", label: "Orden Destacados", icon: Star },
       { href: "/loyalty", label: "Fidelización", icon: Award },
       { href: "/coupons", label: "Cupones", icon: TicketPercent },
