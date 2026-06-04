@@ -743,11 +743,7 @@ function PreparingCard({
                 )}
                 <span className="font-black">{item.quantity}</span>
                 <span className="min-w-0 flex flex-col">
-                  {item.parent_combo_name && (
-                    <span className="truncate text-xs font-semibold uppercase tracking-wide text-blue-300">
-                      {item.parent_combo_name}
-                    </span>
-                  )}
+      
                   <span className="truncate">{item.products?.name || "Producto"}</span>
                 </span>
               </button>
