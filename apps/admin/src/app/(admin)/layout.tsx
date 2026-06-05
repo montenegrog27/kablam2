@@ -94,6 +94,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/users", label: "Usuarios", icon: UserCog },
       { href: "/delivery-settings", label: "Delivery", icon: Truck },
       { href: "/payment-methods", label: "Métodos de Pago", icon: CreditCard },
+      { href: "/settings/financial", label: "Finanzas", icon: Calculator },
       { href: "/customer-hub", label: "Hub Cliente", icon: LinkIcon },
       { href: "/settings", label: "Configuración", icon: Settings },
     ]},

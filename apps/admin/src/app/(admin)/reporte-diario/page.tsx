@@ -5,14 +5,29 @@ import {
   Download, Calendar, FileText, TrendingUp, TrendingDown,
   DollarSign, ShoppingCart, Truck, Percent, Clock, Award,
   PieChart, BarChart3, ChevronDown, ChevronUp, Printer,
+  Users, Package, Receipt, Calculator,
 } from "lucide-react";
+
+function argentinaDateString(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function addLocalDays(dateStr: string, days: number) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().split("T")[0];
+}
 
 export default function ReporteDiarioPage() {
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(() => {
-    const d = new Date(Date.now() - 86400000);
-    return d.toISOString().split("T")[0];
+    return addLocalDays(argentinaDateString(), -1);
   });
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -44,14 +59,11 @@ export default function ReporteDiarioPage() {
 
   // Navigation helpers
   const prevDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() - 1);
-    setDate(d.toISOString().split("T")[0]);
+    setDate(addLocalDays(date, -1));
   };
   const nextDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + 1);
-    if (d <= new Date()) setDate(d.toISOString().split("T")[0]);
+    const next = addLocalDays(date, 1);
+    if (next <= argentinaDateString()) setDate(next);
   };
 
   const downloadJSON = () => {
@@ -73,9 +85,9 @@ export default function ReporteDiarioPage() {
     // Sheet 1: Resumen
     csv += "RESUMEN EJECUTIVO\n";
     csv += `Indicador,Valor\n`;
-    csv += `Ingresos Brutos,$${r.resumen_ejecutivo.ingresos_brutos.toLocaleString("es-AR")}\n`;
+    csv += `Venta Bruta sin Envio,$${r.resumen_ejecutivo.ingresos_brutos.toLocaleString("es-AR")}\n`;
     csv += `Descuentos,$${r.resumen_ejecutivo.descuentos.toLocaleString("es-AR")}\n`;
-    csv += `Ingresos Netos,$${r.resumen_ejecutivo.ingresos_netos.toLocaleString("es-AR")}\n`;
+    csv += `Venta Neta sin Envio,$${r.resumen_ejecutivo.ingresos_netos.toLocaleString("es-AR")}\n`;
     csv += `CMV,$${r.resumen_ejecutivo.cmv.toLocaleString("es-AR")}\n`;
     csv += `Ganancia Bruta,$${r.resumen_ejecutivo.ganancia_bruta.toLocaleString("es-AR")}\n`;
     csv += `Margen Bruto,${r.resumen_ejecutivo.margen_bruto}%\n`;
@@ -92,7 +104,7 @@ export default function ReporteDiarioPage() {
     csv += `Subtotal,$${r.ventas.subtotal}\n`;
     csv += `Envío,$${r.ventas.envio}\n`;
     csv += `Descuentos,$${r.ventas.descuentos}\n`;
-    csv += `Total,$${r.ventas.total}\n\n`;
+    csv += `Venta sin envio,$${r.ventas.total}\n\n`;
 
     // Sheet 3: Top productos
     csv += "TOP PRODUCTOS\n";
@@ -151,9 +163,15 @@ export default function ReporteDiarioPage() {
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
               className="border border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-800 text-gray-100 text-center font-semibold" />
           </div>
-          <button onClick={nextDay} disabled={date >= new Date().toISOString().split("T")[0]}
+          <button onClick={nextDay} disabled={date >= argentinaDateString()}
             className="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 text-sm disabled:opacity-30">Siguiente &rarr;</button>
         </div>
+        {r?.rango_operativo && (
+          <div className="mt-3 text-center text-xs text-gray-500">
+            Rango contado: <span className="font-semibold text-gray-300">{r.rango_operativo.etiqueta}</span>
+            {!r.rango_operativo.usa_horarios_sucursal && <span> (sin horarios de sucursal configurados)</span>}
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -192,7 +210,7 @@ export default function ReporteDiarioPage() {
             <div className="p-5">
               {/* Main KPI */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <KPICard label="Ingresos Brutos" value={`$${r.resumen_ejecutivo.ingresos_brutos.toLocaleString("es-AR")}`} icon={DollarSign} color="text-emerald-400" />
+                <KPICard label="Venta Bruta sin Envio" value={`$${r.resumen_ejecutivo.ingresos_brutos.toLocaleString("es-AR")}`} icon={DollarSign} color="text-emerald-400" />
                 <KPICard label="Ganancia Bruta" value={`$${r.resumen_ejecutivo.ganancia_bruta.toLocaleString("es-AR")}`} icon={TrendingUp} color={r.resumen_ejecutivo.ganancia_bruta >= 0 ? "text-emerald-400" : "text-red-400"} />
                 <KPICard label="Gastos" value={`$${r.resumen_ejecutivo.gastos_operativos.toLocaleString("es-AR")}`} icon={TrendingDown} color="text-red-400" />
                 <KPICard label="Ganancia Neta" value={`$${r.resumen_ejecutivo.ganancia_neta.toLocaleString("es-AR")}`} icon={DollarSign} color={r.resumen_ejecutivo.ganancia_neta >= 0 ? "text-emerald-400" : "text-red-400"} />
@@ -223,7 +241,7 @@ export default function ReporteDiarioPage() {
               {/* Mini income statement */}
               <div className="mt-6 space-y-2 text-sm border border-gray-800 rounded-xl p-4">
                 <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Estado de Resultados</p>
-                <IncomeRow label="Ingresos Brutos" value={r.resumen_ejecutivo.ingresos_brutos} />
+                <IncomeRow label="Venta bruta sin envio" value={r.resumen_ejecutivo.ingresos_brutos} />
                 <IncomeRow label="Descuentos" value={-r.resumen_ejecutivo.descuentos} indent />
                 <IncomeRow label="CMV" value={-r.resumen_ejecutivo.cmv} indent />
                 <div className="border-t border-gray-700 pt-1.5 mt-1.5">
@@ -237,10 +255,65 @@ export default function ReporteDiarioPage() {
             </div>
           </div>
 
+          {r.owner_profit && (
+            <Section title="Rentabilidad Operativa" icon={Calculator} defaultOpen>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+                <KPICard label="Ventas Netas" value={`$${r.resumen_ejecutivo.ingresos_netos.toLocaleString("es-AR")}`} icon={DollarSign} color="text-emerald-400" />
+                <KPICard label="CMV" value={`$${r.resumen_ejecutivo.cmv.toLocaleString("es-AR")}`} icon={BarChart3} color="text-orange-400" />
+                <KPICard label="Costo Laboral" value={`$${r.owner_profit.labor_cost.toLocaleString("es-AR")}`} icon={Users} color="text-blue-400" />
+                <KPICard label="Packaging" value={`$${r.owner_profit.packaging_cost.toLocaleString("es-AR")}`} icon={Package} color="text-cyan-400" />
+                <KPICard label="Margen Contribucion" value={`$${(r.owner_profit.contribution_margin || 0).toLocaleString("es-AR")}`} icon={TrendingUp} color={(r.owner_profit.contribution_margin || 0) >= 0 ? "text-emerald-400" : "text-red-400"} />
+                <KPICard label="% Contribucion" value={`${r.owner_profit.contribution_margin_pct || 0}%`} icon={Percent} color={(r.owner_profit.contribution_margin_pct || 0) >= 25 ? "text-emerald-400" : (r.owner_profit.contribution_margin_pct || 0) >= 20 ? "text-amber-400" : "text-red-400"} />
+                <KPICard label="Costos Fijos" value={`$${r.owner_profit.fixed_cost_allocated.toLocaleString("es-AR")}`} icon={Receipt} color="text-purple-400" />
+                <KPICard label="Ganancia Operativa" value={`$${r.owner_profit.operating_profit.toLocaleString("es-AR")}`} icon={TrendingUp} color={r.owner_profit.operating_profit >= 0 ? "text-emerald-400" : "text-red-400"} />
+                <KPICard label="Ganancia x Pedido" value={`$${r.owner_profit.profit_per_order.toLocaleString("es-AR")}`} icon={ShoppingCart} color={r.owner_profit.profit_per_order >= 0 ? "text-emerald-400" : "text-red-400"} />
+                <KPICard label="Margen Operativo" value={`${r.owner_profit.operating_margin}%`} icon={Percent} color={r.owner_profit.operating_margin >= 20 ? "text-emerald-400" : r.owner_profit.operating_margin >= 10 ? "text-amber-400" : "text-red-400"} />
+                <KPICard label="Pedidos p/ $100k" value={String(r.owner_profit.orders_needed_for_100k_profit || 0)} icon={ShoppingCart} color="text-blue-400" />
+                <KPICard label="Break-even" value={String(r.owner_profit.orders_needed_for_break_even || r.owner_profit.break_even_orders || 0)} icon={Calculator} color="text-purple-400" />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">KPIs de costo</h3>
+                  <div className="space-y-2 text-sm">
+                    <MetricRow label="Food cost" value={`${r.financial_kpis?.food_cost_pct || 0}%`} />
+                    <MetricRow label="Labor cost" value={`${r.financial_kpis?.labor_cost_pct || 0}%`} />
+                    <MetricRow label="Packaging" value={`${r.financial_kpis?.packaging_cost_pct || 0}%`} />
+                    <MetricRow label="Costos fijos" value={`${r.financial_kpis?.fixed_cost_pct || 0}%`} />
+                    <MetricRow label="Margen contribucion" value={`${r.financial_kpis?.contribution_margin_pct || 0}%`} />
+                    <MetricRow label="Pedidos para cubrir costos" value={String(r.owner_profit.orders_needed_for_break_even || r.owner_profit.break_even_orders || 0)} />
+                    <MetricRow label="Pedidos para $100k" value={String(r.owner_profit.orders_needed_for_100k_profit || 0)} />
+                  </div>
+                </div>
+
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Insights</h3>
+                  <div className="space-y-2">
+                    {(r.financial_insights || []).map((insight: string, index: number) => (
+                      <p key={index} className="text-sm text-gray-300">{insight}</p>
+                    ))}
+                    {r.owner_profit.packaging_usage?.length > 0 && (
+                      <div className="pt-2 border-t border-gray-700 text-xs text-gray-500">
+                        {r.owner_profit.packaging_usage.map((item: any) => (
+                          <div key={`${item.name}-${item.type}`} className="flex justify-between">
+                            <span>{item.name} x {item.units}</span>
+                            <span>${item.cost.toLocaleString("es-AR")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Section>
+          )}
+
           {/* === VENTAS === */}
           <Section title="Ventas del día" icon={ShoppingCart} defaultOpen>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
               <KPICard label="Total Pedidos" value={r.ventas.total_pedidos.toString()} icon={ShoppingCart} color="text-blue-400" />
+              <KPICard label="Venta sin Envio" value={`$${r.ventas.total.toLocaleString("es-AR")}`} icon={DollarSign} color="text-emerald-400" />
+              <KPICard label="Envios" value={`$${r.ventas.envio.toLocaleString("es-AR")}`} icon={Truck} color="text-cyan-400" />
               <KPICard label="Ticket Promedio" value={`$${r.ventas.ticket_promedio.toLocaleString("es-AR")}`} icon={DollarSign} color="text-purple-400" />
               <KPICard label="Delivery" value={r.ventas.delivery.toString()} icon={Truck} color="text-purple-400" />
               <KPICard label="Takeaway" value={r.ventas.takeaway.toString()} icon={ShoppingCart} color="text-amber-400" />
@@ -476,7 +549,7 @@ export default function ReporteDiarioPage() {
           {/* === CASHFLOW === */}
           <Section title="Cashflow" icon={DollarSign}>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <KPICard label="Ingresos (Cash In)" value={`$${r.cashflow.cash_in.toLocaleString("es-AR")}`} icon={TrendingUp} color="text-emerald-400" />
+              <KPICard label="Venta Cobrada sin Envio" value={`$${r.cashflow.cash_in.toLocaleString("es-AR")}`} icon={TrendingUp} color="text-emerald-400" />
               <KPICard label="Egresos (Cash Out)" value={`-$${r.cashflow.cash_out.toLocaleString("es-AR")}`} icon={TrendingDown} color="text-red-400" />
               <KPICard label="Saldo del día" value={`$${r.cashflow.current_cash.toLocaleString("es-AR")}`} icon={DollarSign} color={r.cashflow.current_cash >= 0 ? "text-emerald-400" : "text-red-400"} />
               <KPICard label="Proyectado 7d" value={`$${r.cashflow.projected_7d.toLocaleString("es-AR")}`} icon={Calendar} color="text-blue-400" />
@@ -534,6 +607,15 @@ function IncomeRow({ label, value, indent, bold, color }: { label: string; value
       <span className={`${color || (value >= 0 ? "text-gray-100" : "text-red-400")} tabular-nums font-medium`}>
         {value >= 0 ? "$" : "-$"}{Math.abs(value).toLocaleString("es-AR")}
       </span>
+    </div>
+  );
+}
+
+function MetricRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between border-b border-gray-700/60 pb-1 last:border-0">
+      <span className="text-gray-400">{label}</span>
+      <span className="font-semibold tabular-nums text-gray-100">{value}</span>
     </div>
   );
 }

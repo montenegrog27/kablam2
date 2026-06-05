@@ -93,11 +93,12 @@ import DeliveredTab from "./DeliveredTab";
 import KDSTab from "./KDSTab";
 import MesasTab from "./MesasTab";
 import CloseCash from "./CloseCash";
+import CashierExpenses from "./CashierExpenses";
 import CashClosuresTab from "./CashClosuresTab";
 import CustomerChatList from "./CustomerChatList";
 import { useBranch } from "../(cashier)/context/BranchContext";
 import { usePermissions } from "../../hooks/usePermissions";
-import { LogOut, MapPin, Settings, X, Check } from "lucide-react";
+import { LogOut, MapPin, Settings, X, Check, Receipt } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function CashierTabs({ session }: any) {
@@ -108,6 +109,7 @@ export default function CashierTabs({ session }: any) {
   const [waUnread, setWaUnread] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showRiderModal, setShowRiderModal] = useState(false);
+  const [showExpenses, setShowExpenses] = useState(false);
   const [riders, setRiders] = useState<any[]>([]);
   const [savingRiders, setSavingRiders] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -255,6 +257,14 @@ export default function CashierTabs({ session }: any) {
             MODO OWNER
           </div>
         )}
+        {session && (
+          <button
+            onClick={() => setShowExpenses(true)}
+            className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2"
+          >
+            <Receipt size={15} /> Gastos
+          </button>
+        )}
         {can("cashier.close_cash.view") && session && (
           <button
             onClick={() => setShowCloseModal(true)}
@@ -353,6 +363,13 @@ export default function CashierTabs({ session }: any) {
             </div>
           </div>
         </div>
+      )}
+      {/* MODAL GASTOS */}
+      {showExpenses && session && (
+        <CashierExpenses
+          session={session}
+          onClose={() => setShowExpenses(false)}
+        />
       )}
     </div>
   );

@@ -34,17 +34,15 @@ export default function RecipePage() {
         .select("*")
         .eq("tenant_id", userRecord.tenant_id);
 
-      setIngredients(ing || []);
-
-      await loadRecipe();
-
       const { data: variantData } = await supabase
         .from("product_variants")
-        .select("*")
+        .select("*, products(has_recipe)")
         .eq("id", variantId)
         .single();
 
       setVariant(variantData);
+      setIngredients(ing || []);
+      await loadRecipe(variantData);
     }
 
     loadData();
@@ -61,7 +59,7 @@ export default function RecipePage() {
         },
         async () => {
           // Si cambia cualquier ingrediente → recargamos receta
-          await loadRecipe();
+          await loadRecipe(variant);
         }
       )
       .subscribe();
@@ -71,14 +69,16 @@ export default function RecipePage() {
     };
   }, [variantId]);
 
-  const loadRecipe = async () => {
+  const loadRecipe = async (currentVariant = variant) => {
     const { data: recipe } = await supabase
       .from("product_recipes")
       .select("*, ingredients(*)")
       .eq("variant_id", variantId);
 
     setRecipeItems(recipe || []);
-    await updateVariantCost(recipe || []);
+    if (currentVariant && currentVariant.products?.has_recipe !== false) {
+      await updateVariantCost(recipe || [], currentVariant);
+    }
   };
 
   const calculateTotalCost = (items: any[]) => {
@@ -88,7 +88,8 @@ export default function RecipePage() {
     }, 0);
   };
 
-  const updateVariantCost = async (items: any[]) => {
+  const updateVariantCost = async (items: any[], currentVariant = variant) => {
+    if (currentVariant?.products?.has_recipe === false) return;
     const total = calculateTotalCost(items);
 
     await supabase
@@ -105,6 +106,10 @@ export default function RecipePage() {
     e.preventDefault();
 
     if (!selectedIngredient || !quantity) return;
+    if (variant?.products?.has_recipe === false) {
+      alert("Este producto esta marcado como sin receta. Edita el costo manual desde Productos.");
+      return;
+    }
 
     await supabase.from("product_recipes").insert({
       variant_id: variantId,

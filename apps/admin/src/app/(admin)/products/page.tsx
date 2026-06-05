@@ -24,6 +24,7 @@ export default function ProductsPage() {
   const [isFeatured, setIsFeatured] = useState(false);
   const [isHero, setIsHero] = useState(false);
   const [isPreparable, setIsPreparable] = useState(true);
+  const [hasRecipe, setHasRecipe] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [dayParts, setDayParts] = useState<any[]>([]);
   const [modifierGroups, setModifierGroups] = useState<any[]>([]);
@@ -168,6 +169,10 @@ export default function ProductsPage() {
       alert("Completa los campos obligatorios");
       return;
     }
+    if (!hasRecipe && !cost) {
+      alert("Cargá el costo manual para productos sin receta");
+      return;
+    }
 
     let imageUrl = null;
     if (imageFile) {
@@ -194,6 +199,7 @@ export default function ProductsPage() {
         is_featured: isFeatured,
         is_hero: isHero,
         is_preparable: isPreparable,
+        has_recipe: hasRecipe,
       })
       .select()
       .single();
@@ -238,6 +244,7 @@ export default function ProductsPage() {
     setCost("");
     setAllowHalf(false);
     setIsPreparable(true);
+    setHasRecipe(true);
     setImageFile(null);
 
     const { data: prods } = await supabase
@@ -324,6 +331,7 @@ export default function ProductsPage() {
     setIsFeatured(product.is_featured);
     setIsHero(product.is_hero);
     setIsPreparable(product.is_preparable !== false);
+    setHasRecipe(product.has_recipe !== false);
 
     // Obtener la variante principal (primera o default)
     const mainVariant = product.product_variants?.[0];
@@ -339,6 +347,7 @@ export default function ProductsPage() {
     setName("");
     setDescription("");
     setCategoryId(null);
+    setHasRecipe(true);
   };
 
   const handleDeleteProduct = async (product: any) => {
@@ -372,6 +381,10 @@ export default function ProductsPage() {
       alert("Completa los campos obligatorios");
       return;
     }
+    if (!hasRecipe && !cost) {
+      alert("Cargá el costo manual para productos sin receta");
+      return;
+    }
 
     let imageUrl = editingProduct.product_variants?.[0]?.image_url || null;
     if (imageFile) {
@@ -397,6 +410,7 @@ export default function ProductsPage() {
         is_featured: isFeatured,
         is_hero: isHero,
         is_preparable: isPreparable,
+        has_recipe: hasRecipe,
       })
       .eq("id", editingProduct.id);
 
@@ -421,6 +435,13 @@ export default function ProductsPage() {
       if (variantError) {
         alert(variantError.message);
         return;
+      }
+
+      if (!hasRecipe) {
+        await Promise.all([
+          supabase.from("product_recipes").delete().eq("variant_id", mainVariant.id),
+          supabase.from("product_packaging").delete().eq("variant_id", mainVariant.id),
+        ]);
       }
     }
 
@@ -670,7 +691,7 @@ export default function ProductsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Costo (opcional)
+                    {hasRecipe ? "Costo manual de respaldo" : "Costo manual *"}
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -686,6 +707,11 @@ export default function ProductsPage() {
                       step="0.01"
                     />
                   </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {hasRecipe
+                      ? "Si la receta no tiene costo, se usa este valor como respaldo."
+                      : "Se usa directo para CMV, reportes, combos y promociones."}
+                  </p>
                 </div>
               </div>
 
@@ -806,6 +832,21 @@ export default function ProductsPage() {
                       />
                       <span className="text-sm text-gray-300">
                         Preparable (aparece en KDS)
+                      </span>
+                    </label>
+
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-700 bg-gray-800/70 p-3">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
+                        checked={!hasRecipe}
+                        onChange={(e) => setHasRecipe(!e.target.checked)}
+                      />
+                      <span className="text-sm text-gray-300">
+                        <span className="block font-medium text-gray-100">Producto sin receta</span>
+                        <span className="text-xs text-gray-500">
+                          Para bebidas o reventa. Usa el costo manual y no calcula ingredientes.
+                        </span>
                       </span>
                     </label>
                   </div>
@@ -967,7 +1008,7 @@ export default function ProductsPage() {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Costo
+                            {hasRecipe ? "Costo manual de respaldo" : "Costo manual *"}
                           </label>
                           <input
                             type="number"
@@ -976,6 +1017,9 @@ export default function ProductsPage() {
                             value={cost}
                             onChange={(e) => setCost(e.target.value)}
                           />
+                          <p className="mt-1 text-xs text-gray-500">
+                            {hasRecipe ? "Fallback si no hay costo de receta." : "Costo directo para CMV y reportes."}
+                          </p>
                         </div>
                       </div>
 
@@ -1059,6 +1103,20 @@ export default function ProductsPage() {
                             Solo sugerencias
                           </span>
                         </div>
+                        <label className="flex items-start gap-3 rounded-lg border border-gray-700 bg-gray-800/70 p-3">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
+                            checked={!hasRecipe}
+                            onChange={(e) => setHasRecipe(!e.target.checked)}
+                          />
+                          <span className="text-sm text-gray-300">
+                            <span className="block font-medium text-gray-100">Producto sin receta</span>
+                            <span className="text-xs text-gray-500">
+                              Usa el costo manual. Ideal para bebidas o productos de reventa.
+                            </span>
+                          </span>
+                        </label>
                       </div>
 
                       <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
@@ -1213,12 +1271,20 @@ export default function ProductsPage() {
                       </div>
 
                       {/* Receta e ingredientes unificados */}
-                      {product.product_variants?.[0] && (
+                      {product.product_variants?.[0] && product.has_recipe !== false && (
                         <RecipeSection
                           variantId={product.product_variants[0].id}
                           productId={product.id}
                           tenantId={tenantId}
                         />
+                      )}
+                      {product.product_variants?.[0] && product.has_recipe === false && (
+                        <div className="pt-4 border-t border-gray-700">
+                          <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-200">
+                            Producto sin receta: usa costo manual de $
+                            {Number(product.product_variants[0].cost || 0).toLocaleString("es-AR")} para reportes, combos y promociones.
+                          </div>
+                        </div>
                       )}
 
                       {/* Extras disponibles (modifier groups) */}

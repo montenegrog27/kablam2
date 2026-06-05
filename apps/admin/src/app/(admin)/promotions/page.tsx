@@ -73,6 +73,7 @@ type PromotionRule = {
 };
 type AnalyticsRow = {
   id: string;
+  order_id?: string | null;
   promotion_id?: string | null;
   promotion_name: string;
   promotion_type: string;
@@ -202,7 +203,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
   const promotionMap = useMemo(() => Object.fromEntries(promotions.map((promo) => [promo.id, promo.name])), [promotions]);
 
   const analyticsSummary = useMemo(() => {
-    const ordersWithPromo = new Set(analytics.map((row) => row.id));
+    const ordersWithPromo = new Set(analytics.map((row) => row.order_id || row.id));
     const totalDiscount = sum(analytics, "discount_amount");
     const totalSales = sum(analytics, "final_total");
     return {
@@ -233,6 +234,18 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
       items: rows.reduce((total, row) => total + Number(row.items_count || 0), 0),
     })).sort((a, b) => b.sales - a.sales);
   }, [analytics, promotionMap]);
+
+  const promotionStatsMap = useMemo(() => {
+    const map = new Map<string, { uses: number; sales: number; discount: number }>();
+    analyticsByPromotion.forEach((row) => {
+      map.set(row.id, {
+        uses: row.uses,
+        sales: row.sales,
+        discount: row.discount,
+      });
+    });
+    return map;
+  }, [analyticsByPromotion]);
 
   async function loadData() {
     setLoading(true);
@@ -278,14 +291,66 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
       return;
     }
 
-    const [rulesRes, analyticsRes] = await Promise.all([
+    const [rulesRes, analyticsRes, ordersWithPromosRes] = await Promise.all([
       supabase.from("promotion_rules").select("*").eq("tenant_id", userRecord.tenant_id).order("priority", { ascending: false }),
       supabase.from("promotion_analytics").select("*").eq("tenant_id", userRecord.tenant_id).order("created_at", { ascending: false }).limit(500),
+      supabase
+        .from("orders")
+        .select("id, customer_id, promotion_ids, promotion_names, discount_amount, discount_breakdown, subtotal_before_discount, final_total, total, created_at")
+        .eq("tenant_id", userRecord.tenant_id)
+        .order("created_at", { ascending: false })
+        .limit(500),
     ]);
 
     setPromotions(promotionsRes.data || []);
     setRules(rulesRes.data || []);
-    setAnalytics(analyticsRes.data || []);
+    const persistedAnalytics = analyticsRes.data || [];
+    const persistedKeys = new Set(
+      persistedAnalytics.map((row: any) => `${row.order_id || ""}:${row.promotion_id || row.promotion_name}`),
+    );
+    const reconstructedAnalytics = (ordersWithPromosRes.data || []).flatMap((order: any) => {
+      const breakdown = Array.isArray(order.discount_breakdown) ? order.discount_breakdown : [];
+      if (breakdown.length > 0) {
+        return breakdown.map((entry: any, index: number) => {
+          const quantity = Number(entry.quantity || 1);
+          return {
+            id: `order-${order.id}-${entry.promotionId || index}`,
+            order_id: order.id,
+            promotion_id: entry.promotionId || null,
+            promotion_name: entry.promotionName || order.promotion_names?.[index] || "Promocion",
+            promotion_type: "visual",
+            subtotal_before_discount: Number(entry.originalPrice || 0) * quantity,
+            discount_amount: Number(entry.discountAmount || 0) * quantity,
+            final_total: Number(entry.finalPrice || 0) * quantity,
+            extras_total: Number(entry.extrasTotal || 0) * quantity,
+            items_count: Array.isArray(entry.items) ? entry.items.length * quantity : quantity,
+            created_at: order.created_at,
+          };
+        });
+      }
+
+      const ids = Array.isArray(order.promotion_ids) ? order.promotion_ids : [];
+      const names = Array.isArray(order.promotion_names) ? order.promotion_names : [];
+      return ids.map((id: string, index: number) => ({
+        id: `order-${order.id}-${id}`,
+        order_id: order.id,
+        promotion_id: id,
+        promotion_name: names[index] || "Promocion",
+        promotion_type: "visual",
+        subtotal_before_discount: Number(order.subtotal_before_discount || order.total || 0),
+        discount_amount: Number(order.discount_amount || 0),
+        final_total: Number(order.final_total || order.total || 0),
+        extras_total: 0,
+        items_count: 1,
+        created_at: order.created_at,
+      }));
+    }).filter((row: AnalyticsRow) => row.promotion_id || row.promotion_name);
+
+    const missingAnalytics = reconstructedAnalytics.filter(
+      (row: AnalyticsRow) => !persistedKeys.has(`${row.order_id || ""}:${row.promotion_id || row.promotion_name}`),
+    );
+
+    setAnalytics([...persistedAnalytics, ...missingAnalytics]);
     setLoading(false);
   }
 
@@ -454,9 +519,9 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
             <section className="space-y-5">
               <div className="grid gap-4 md:grid-cols-4">
                 <MetricCard label="Activas" value={promotions.filter((p) => p.active).length.toString()} />
-                <MetricCard label="Usos" value={promotions.reduce((total, p) => total + Number(p.usage_count || 0), 0).toString()} />
-                <MetricCard label="Ventas generadas" value={currency.format(promotions.reduce((total, p) => total + Number(p.generated_sales || 0), 0))} />
-                <MetricCard label="Descuento otorgado" value={currency.format(promotions.reduce((total, p) => total + Number(p.discount_granted || 0), 0))} />
+                <MetricCard label="Usos" value={promotions.reduce((total, p) => total + Math.max(Number(p.usage_count || 0), Number(promotionStatsMap.get(p.id)?.uses || 0)), 0).toString()} />
+                <MetricCard label="Ventas generadas" value={currency.format(promotions.reduce((total, p) => total + Math.max(Number(p.generated_sales || 0), Number(promotionStatsMap.get(p.id)?.sales || 0)), 0))} />
+                <MetricCard label="Descuento otorgado" value={currency.format(promotions.reduce((total, p) => total + Math.max(Number(p.discount_granted || 0), Number(promotionStatsMap.get(p.id)?.discount || 0)), 0))} />
               </div>
 
               <div className="rounded-2xl border border-gray-800 bg-gray-900">
@@ -506,9 +571,9 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
                           <td className="px-5 py-4 text-gray-300">{promo.promotion_type || "Visual"}</td>
                           <td className="px-5 py-4 text-gray-400">{formatDate(promo.start_date)}</td>
                           <td className="px-5 py-4 text-gray-400">{formatDate(promo.end_date)}</td>
-                          <td className="px-5 py-4 font-semibold">{promo.usage_count || 0}</td>
-                          <td className="px-5 py-4">{currency.format(Number(promo.generated_sales || 0))}</td>
-                          <td className="px-5 py-4 text-rose-300">{currency.format(Number(promo.discount_granted || 0))}</td>
+                          <td className="px-5 py-4 font-semibold">{Math.max(Number(promo.usage_count || 0), Number(promotionStatsMap.get(promo.id)?.uses || 0))}</td>
+                          <td className="px-5 py-4">{currency.format(Math.max(Number(promo.generated_sales || 0), Number(promotionStatsMap.get(promo.id)?.sales || 0)))}</td>
+                          <td className="px-5 py-4 text-rose-300">{currency.format(Math.max(Number(promo.discount_granted || 0), Number(promotionStatsMap.get(promo.id)?.discount || 0)))}</td>
                         </tr>
                       ))}
                       {promotions.length === 0 && <EmptyRow colSpan={9} label="No hay promociones creadas." />}

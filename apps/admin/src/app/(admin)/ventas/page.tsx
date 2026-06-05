@@ -19,6 +19,100 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-900/40 text-red-300",
 };
 
+const SALE_STATUSES = ["delivered", "sent", "ready", "confirmed", "preparing"];
+const ARGENTINA_OFFSET = "-03:00";
+const MIN_OVERNIGHT_REPORT_END = 90;
+
+type BranchHour = {
+  branch_id: string;
+  day_of_week: number;
+  open_time?: string | null;
+  close_time?: string | null;
+  is_closed?: boolean | null;
+};
+
+function argentinaDateString(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function addLocalDays(dateStr: string, days: number) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().split("T")[0];
+}
+
+function dayOfWeek(dateStr: string) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+function timeToMinutes(value?: string | null) {
+  if (!value) return null;
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function minutesToUtcIso(dateStr: string, absoluteMinutes: number) {
+  const date = addLocalDays(dateStr, Math.floor(absoluteMinutes / 1440));
+  const minutes = ((absoluteMinutes % 1440) + 1440) % 1440;
+  const hour = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const minute = String(minutes % 60).padStart(2, "0");
+  return new Date(`${date}T${hour}:${minute}:00${ARGENTINA_OFFSET}`).toISOString();
+}
+
+function buildBusinessWindow(dateStr: string, branchHours: BranchHour[]) {
+  const ranges = branchHours
+    .filter((hour) => Number(hour.day_of_week) === dayOfWeek(dateStr) && !hour.is_closed)
+    .map((hour) => {
+      const open = timeToMinutes(hour.open_time);
+      const close = timeToMinutes(hour.close_time);
+      if (open === null || close === null) return null;
+      const crossesMidnight = close <= open;
+      return {
+        open,
+        close: crossesMidnight ? Math.max(close + 1440, 1440 + MIN_OVERNIGHT_REPORT_END) : close,
+      };
+    })
+    .filter((range): range is { open: number; close: number } => Boolean(range));
+
+  if (ranges.length === 0) {
+    return {
+      start: minutesToUtcIso(dateStr, 0),
+      end: minutesToUtcIso(dateStr, 1440),
+      label: "00:00 a 00:00",
+      usesBusinessHours: false,
+    };
+  }
+
+  const startMinutes = Math.min(...ranges.map((range) => range.open));
+  const endMinutes = Math.max(...ranges.map((range) => range.close));
+  const startLabel = `${String(Math.floor(startMinutes / 60)).padStart(2, "0")}:${String(startMinutes % 60).padStart(2, "0")}`;
+  const endLocalMinutes = endMinutes % 1440;
+  const endLabel = `${String(Math.floor(endLocalMinutes / 60)).padStart(2, "0")}:${String(endLocalMinutes % 60).padStart(2, "0")}`;
+
+  return {
+    start: minutesToUtcIso(dateStr, startMinutes),
+    end: minutesToUtcIso(dateStr, endMinutes),
+    label: `${startLabel} a ${endLabel}${endMinutes >= 1440 ? " del dia siguiente" : ""}`,
+    usesBusinessHours: true,
+  };
+}
+
+function getBusinessWindowStartLabel(label: string) {
+  return label.split(" a ")[0] || label;
+}
+
+function getBusinessWindowEndLabel(label: string) {
+  const end = label.split(" a ")[1] || label;
+  return end.replace(" del dia siguiente", "");
+}
+
 export default function VentasPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
@@ -26,6 +120,7 @@ export default function VentasPage() {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState("");
+  const [branchHours, setBranchHours] = useState<BranchHour[]>([]);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [periodSummary, setPeriodSummary] = useState({
@@ -45,9 +140,10 @@ export default function VentasPage() {
 
   // Filters
   const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date(); d.setDate(1); return d.toISOString().split("T")[0];
+    const today = argentinaDateString();
+    return `${today.slice(0, 8)}01`;
   });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
+  const [dateTo, setDateTo] = useState(() => argentinaDateString());
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
@@ -58,6 +154,20 @@ export default function VentasPage() {
 
   const riderMap = useMemo(() => Object.fromEntries(riders.map((r) => [r.id, r.name])), [riders]);
   const couponMap = useMemo(() => Object.fromEntries(coupons.map((c) => [c.id, c.code])), [coupons]);
+  const businessRange = useMemo(() => {
+    const startWindow = dateFrom ? buildBusinessWindow(dateFrom, branchHours) : null;
+    const endWindow = dateTo ? buildBusinessWindow(dateTo, branchHours) : null;
+    return {
+      start: startWindow?.start || null,
+      end: endWindow?.end || null,
+      label: startWindow && endWindow
+        ? dateFrom === dateTo
+          ? startWindow.label
+          : `${dateFrom} ${getBusinessWindowStartLabel(startWindow.label)} -> ${dateTo} ${getBusinessWindowEndLabel(endWindow.label)}`
+        : "",
+      usesBusinessHours: Boolean(startWindow?.usesBusinessHours || endWindow?.usesBusinessHours),
+    };
+  }, [dateFrom, dateTo, branchHours]);
 
   const loadMeta = async () => {
     const { data: u } = await supabase.auth.getUser();
@@ -66,14 +176,23 @@ export default function VentasPage() {
     if (!r) return;
     setTenantId(r.tenant_id);
 
-    const [{ data: pm }, { data: rd }, { data: cp }] = await Promise.all([
+    const [{ data: pm }, { data: rd }, { data: cp }, { data: branches }] = await Promise.all([
       supabase.from("payment_methods").select("*").eq("is_active", true).or(`tenant_id.eq.${r.tenant_id},tenant_id.is.null`),
       supabase.from("riders").select("*").eq("branch_id", r.branch_id).eq("is_active", true).order("name"),
       supabase.from("coupons").select("id, code"),
+      supabase.from("branches").select("id").eq("tenant_id", r.tenant_id),
     ]);
     setPaymentMethods(pm || []);
     setRiders(rd || []);
     setCoupons(cp || []);
+    const branchIds = (branches || []).map((branch: any) => branch.id);
+    if (branchIds.length > 0) {
+      const { data: hours } = await supabase
+        .from("branch_hours")
+        .select("branch_id, day_of_week, open_time, close_time, is_closed")
+        .in("branch_id", branchIds);
+      setBranchHours((hours || []) as BranchHour[]);
+    }
   };
 
   const applyFilters = (query: any) => {
@@ -81,13 +200,14 @@ export default function VentasPage() {
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false });
 
-    if (dateFrom) next = next.gte("created_at", `${dateFrom}T00:00:00`);
-    if (dateTo) next = next.lte("created_at", `${dateTo}T23:59:59`);
+    if (businessRange.start) next = next.gte("created_at", businessRange.start);
+    if (businessRange.end) next = next.lt("created_at", businessRange.end);
     if (typeFilter) next = next.eq("type", typeFilter);
     if (paymentFilter) next = next.eq("order_payments.payment_method_id", paymentFilter);
     if (riderFilter === "__none__") next = next.is("rider_id", null);
     else if (riderFilter) next = next.eq("rider_id", riderFilter);
     if (statusFilter.length > 0) next = next.in("status", statusFilter);
+    else next = next.in("status", SALE_STATUSES);
     if (search) next = next.or(`customer_name.ilike.%${search}%,id.ilike.%${search}%`);
 
     return next;
@@ -122,10 +242,11 @@ export default function VentasPage() {
       rows.forEach((order: any) => {
         const total = Number(order.total || 0);
         const shipping = Number(order.shipping_cost || 0);
+        const saleTotal = Math.max(0, total - shipping);
         totals.subtotal += Number(order.subtotal || total);
         totals.shipping += shipping;
-        totals.total += total;
-        if (order.is_paid) totals.paid += total;
+        totals.total += saleTotal;
+        if (order.is_paid) totals.paid += saleTotal;
         if (order.type === "delivery") {
           totals.delivery += 1;
           totals.deliveryShipping += shipping;
@@ -162,7 +283,7 @@ export default function VentasPage() {
   };
 
   useEffect(() => { loadMeta(); }, []);
-  useEffect(() => { load(); }, [tenantId, page, dateFrom, dateTo, statusFilter, typeFilter, paymentFilter, riderFilter, couponFilter, search]);
+  useEffect(() => { load(); }, [tenantId, page, dateFrom, dateTo, branchHours, statusFilter, typeFilter, paymentFilter, riderFilter, couponFilter, search]);
 
   const toggleStatus = (s: string) => {
     setStatusFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -170,9 +291,9 @@ export default function VentasPage() {
   };
 
   const resetFilters = () => {
-    const d = new Date(); d.setDate(1);
-    setDateFrom(d.toISOString().split("T")[0]);
-    setDateTo(new Date().toISOString().split("T")[0]);
+    const today = argentinaDateString();
+    setDateFrom(`${today.slice(0, 8)}01`);
+    setDateTo(today);
     setStatusFilter([]); setTypeFilter(""); setPaymentFilter(""); setRiderFilter(""); setCouponFilter("");
     setSearch(""); setPage(0);
   };
@@ -189,11 +310,11 @@ export default function VentasPage() {
   const deliveryShippingSum = periodSummary.deliveryShipping;
 
   const exportCSV = () => {
-    const headers = ["ID", "Cliente", "Tipo", "Estado", "Items", "Cupón", "Subtotal", "Envío", "Total", "Repartidor", "Pago", "Pagado", "Fecha"];
+    const headers = ["ID", "Cliente", "Tipo", "Estado", "Items", "Cupon", "Subtotal", "Envio", "Venta sin envio", "Repartidor", "Pago", "Pagado", "Fecha"];
     const rows = orders.map((o) => [
       o.id.slice(-8), o.customer_name || "", o.type, o.status,
       o.order_items?.length || 0, couponMap[o.coupon_id] || "",
-      Number(o.subtotal || o.total), Number(o.shipping_cost || 0), Number(o.total),
+      Number(o.subtotal || o.total), Number(o.shipping_cost || 0), Math.max(0, Number(o.total || 0) - Number(o.shipping_cost || 0)),
       riderMap[o.rider_id] || "", (o.order_payments?.[0]?.payment_method_id) || "",
       o.is_paid ? "Sí" : "No", new Date(o.created_at).toLocaleString(),
     ]);
@@ -230,11 +351,11 @@ export default function VentasPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-6">
         {[
-          { label: "Total recaudado", value: `$${totalSum.toLocaleString("es-AR")}`, color: "text-emerald-400" },
-          { label: "Sin envío", value: `$${(totalSum - shippingSum).toLocaleString("es-AR")}`, color: "text-emerald-400" },
-          { label: "Ganancia envíos", value: `$${deliveryShippingSum.toLocaleString("es-AR")}`, color: "text-blue-400" },
-          { label: "Cobrado", value: `$${totalPaid.toLocaleString("es-AR")}`, color: "text-green-400" },
-          { label: "Pedidos", value: orders.length.toString(), color: "text-blue-400" },
+          { label: "Venta sin envio", value: `$${totalSum.toLocaleString("es-AR")}`, color: "text-emerald-400" },
+          { label: "Envios", value: `$${shippingSum.toLocaleString("es-AR")}`, color: "text-cyan-400" },
+          { label: "Envio delivery", value: `$${deliveryShippingSum.toLocaleString("es-AR")}`, color: "text-blue-400" },
+          { label: "Cobrado sin envio", value: `$${totalPaid.toLocaleString("es-AR")}`, color: "text-green-400" },
+          { label: "Pedidos", value: totalCount.toString(), color: "text-blue-400" },
           { label: "Delivery", value: deliveryCount.toString(), color: "text-purple-400" },
           { label: "Takeaway", value: takeawayCount.toString(), color: "text-amber-400" },
         ].map((s) => (
@@ -264,14 +385,28 @@ export default function VentasPage() {
               className="border border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-800 text-gray-100" />
             {["today", "week", "month"].map((p) => {
               const setPreset = () => {
-                const now = new Date();
-                if (p === "today") { setDateFrom(now.toISOString().split("T")[0]); setDateTo(now.toISOString().split("T")[0]); }
-                else if (p === "week") { const d = new Date(now); d.setDate(d.getDate() - d.getDay()); setDateFrom(d.toISOString().split("T")[0]); setDateTo(now.toISOString().split("T")[0]); }
-                else { const d = new Date(now); d.setDate(1); setDateFrom(d.toISOString().split("T")[0]); setDateTo(now.toISOString().split("T")[0]); }
+                const today = argentinaDateString();
+                if (p === "today") {
+                  setDateFrom(today);
+                  setDateTo(today);
+                } else if (p === "week") {
+                  const [year, month, day] = today.split("-").map(Number);
+                  const localToday = new Date(Date.UTC(year, month - 1, day));
+                  const weekStart = addLocalDays(today, -localToday.getUTCDay());
+                  setDateFrom(weekStart);
+                  setDateTo(today);
+                } else {
+                  setDateFrom(`${today.slice(0, 8)}01`);
+                  setDateTo(today);
+                }
                 setPage(0);
               };
               return <button key={p} onClick={setPreset} className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-400 hover:text-gray-200">{p === "today" ? "Hoy" : p === "week" ? "Semana" : "Mes"}</button>;
             })}
+          </div>
+          <div className="text-xs text-gray-500">
+            Rango operativo contado: <span className="font-semibold text-gray-300">{businessRange.label || "sin rango"}</span>
+            {!businessRange.usesBusinessHours && <span> (sin horarios de sucursal configurados)</span>}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -339,7 +474,7 @@ export default function VentasPage() {
             <div className="col-span-1">Cupón</div>
             <div className="col-span-1 text-right">Envío</div>
             <div className="col-span-1 text-right">Subtotal</div>
-            <div className="col-span-1 text-right">Total</div>
+            <div className="col-span-1 text-right">Venta</div>
           </div>
         </div>
 
@@ -402,7 +537,7 @@ export default function VentasPage() {
                         ${Number(order.subtotal || order.total).toLocaleString("es-AR")}
                       </div>
                       <div className="col-span-1 text-xs font-semibold text-gray-100 text-right tabular-nums">
-                        ${Number(order.total).toLocaleString("es-AR")}
+                        ${Math.max(0, Number(order.total || 0) - Number(order.shipping_cost || 0)).toLocaleString("es-AR")}
                       </div>
                     </div>
                   </div>
@@ -439,7 +574,8 @@ export default function VentasPage() {
                             <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="text-gray-300">${Number(order.subtotal || order.total).toLocaleString("es-AR")}</span></div>
                             {Number(order.shipping_cost) > 0 && <div className="flex justify-between"><span className="text-gray-500">Envío</span><span className="text-gray-300">+${Number(order.shipping_cost).toLocaleString("es-AR")}</span></div>}
                             {Number(order.discount) > 0 && <div className="flex justify-between"><span className="text-gray-500">Descuento</span><span className="text-emerald-400">-${Number(order.discount).toLocaleString("es-AR")}</span></div>}
-                            <div className="flex justify-between border-t border-gray-700 pt-1.5 mt-1.5"><span className="text-gray-100 font-semibold">Total</span><span className="text-gray-100 font-bold">${Number(order.total).toLocaleString("es-AR")}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-500">Total cobrado</span><span className="text-gray-300">${Number(order.total).toLocaleString("es-AR")}</span></div>
+                            <div className="flex justify-between border-t border-gray-700 pt-1.5 mt-1.5"><span className="text-gray-100 font-semibold">Venta sin envio</span><span className="text-gray-100 font-bold">${Math.max(0, Number(order.total || 0) - Number(order.shipping_cost || 0)).toLocaleString("es-AR")}</span></div>
                           </div>
                         </div>
                       </div>

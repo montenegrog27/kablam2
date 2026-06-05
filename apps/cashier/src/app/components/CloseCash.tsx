@@ -184,6 +184,15 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
 
     movementsSummary.net = movementsSummary.in - movementsSummary.out;
 
+    // ================= GASTOS =================
+    const { data: expensesData } = await supabase
+      .from("expenses")
+      .select("description, total, expense_categories(name)")
+      .eq("cash_session_id", session.id)
+      .order("created_at", { ascending: false });
+    const totalExpenses = (expensesData || []).reduce((s: number, e: any) => s + Number(e.total), 0);
+    expectedCash -= totalExpenses;
+
     // ================= PRODUCTOS =================
     const { data: itemsData } = await supabase
       .from("order_items")
@@ -261,6 +270,8 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
       profit: totalRevenue - totalCost,
       products: productSummary,
       movements: movementsSummary,
+      expenses: expensesData || [],
+      totalExpenses,
     });
 
     setLoading(false);
@@ -640,6 +651,25 @@ if (freshSession.status !== "open") {
           </div>
         )}
       </div>
+
+      {/* Gastos de caja */}
+      {summary.expenses?.length > 0 && (
+        <div className="bg-gray-900 p-6 rounded-lg space-y-3">
+          <h3 className="font-bold text-red-400">Gastos de caja</h3>
+          <div className="flex justify-between text-red-300">
+            <span>Total gastos</span>
+            <span>-${formatCurrency(summary.totalExpenses)}</span>
+          </div>
+          <div className="space-y-2 pt-2">
+            {summary.expenses.map((exp: any, index: number) => (
+              <div key={index} className="flex justify-between text-sm text-gray-400">
+                <span>{exp.description}{exp.expense_categories?.name ? ` (${exp.expense_categories.name})` : ""}</span>
+                <span>-${formatCurrency(Number(exp.total))}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="border-t border-gray-700 pt-2 flex justify-between font-bold text-lg">
         <span>Efectivo esperado</span>

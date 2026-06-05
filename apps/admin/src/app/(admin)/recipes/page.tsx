@@ -91,6 +91,10 @@ export default function RecipesPage() {
 
   const saveRecipe = async () => {
     if (!selectedVariantId) return;
+    if (selectedVariant?.product_has_recipe === false) {
+      alert("Este producto esta marcado como sin receta. Edita el costo manual desde Productos.");
+      return;
+    }
     setSaving(true);
 
     const allIngredientRows = [...recipe, ...packagingRecipe.map((p) => ({
@@ -126,7 +130,7 @@ export default function RecipesPage() {
   const totalCost = ingredientCost + packagingCost;
 
   const allVariants = products.flatMap((p) =>
-    (p.product_variants || []).map((v: any) => ({ ...v, product_name: p.name }))
+    (p.product_variants || []).map((v: any) => ({ ...v, product_name: p.name, product_has_recipe: p.has_recipe !== false }))
   ).filter((v: any) => search ? v.product_name.toLowerCase().includes(search.toLowerCase()) || v.name.toLowerCase().includes(search.toLowerCase()) : true)
   .sort((a: any, b: any) => a.product_name.localeCompare(b.product_name));
 

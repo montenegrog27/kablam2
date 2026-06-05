@@ -61,7 +61,7 @@ type OrderItemInsert = {
   quantity: number;
   unit_price: number;
   total: number;
-  extras: Array<{ type: string; name: string; price?: number }>;
+  extras: Array<{ type: string; name: string; price?: number; id?: string; itemType?: "product" | "combo" }>;
 };
 
 const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
@@ -385,6 +385,8 @@ export async function POST(req: Request) {
           { type: "promotion", name: item.promotion.name, price: promoUnitPrice },
           ...((item.promotion.items || []).map((promoItem) => ({
             type: "incluye",
+            id: promoItem.id,
+            itemType: promoItem.itemType,
             name: promoItem.name,
             price: promoItem.price,
           }))),
@@ -580,6 +582,58 @@ export async function POST(req: Request) {
           error: "Order payment could not be created",
         });
       }
+    }
+
+    if (discountBreakdown.length > 0) {
+      const analyticsRows = discountBreakdown.map((entry) => {
+        const items = Array.isArray(entry.items) ? entry.items : [];
+        const quantity = Number(entry.quantity || 1);
+        return {
+          tenant_id: branch.tenant_id,
+          promotion_id: entry.promotionId,
+          promotion_name: String(entry.promotionName || "Promocion"),
+          promotion_type: "visual",
+          order_id: order.id,
+          customer_id: customerDB.id,
+          subtotal_before_discount: Number(entry.originalPrice || 0) * quantity,
+          discount_amount: Number(entry.discountAmount || 0) * quantity,
+          final_total: Number(entry.finalPrice || 0) * quantity,
+          extras_total: Number(entry.extrasTotal || 0) * quantity,
+          items_count: items.length * quantity,
+        };
+      });
+
+      const { error: analyticsError } = await supabase
+        .from("promotion_analytics")
+        .insert(analyticsRows);
+
+      if (analyticsError) {
+        await logAppError("customer", "Promotion analytics could not be saved", {
+          tenantId: branch.tenant_id,
+          branchId: branch.id,
+          code: analyticsError.code,
+          context: { orderId: order.id, phase: "promotion_analytics_insert" },
+        });
+      }
+
+      await Promise.all(discountBreakdown.map(async (entry) => {
+        if (!entry.promotionId) return;
+        const quantity = Number(entry.quantity || 1);
+        const { data: promo } = await supabase
+          .from("promotions")
+          .select("usage_count, generated_sales, discount_granted")
+          .eq("id", entry.promotionId)
+          .maybeSingle();
+
+        await supabase
+          .from("promotions")
+          .update({
+            usage_count: Number(promo?.usage_count || 0) + quantity,
+            generated_sales: Number(promo?.generated_sales || 0) + Number(entry.finalPrice || 0) * quantity,
+            discount_granted: Number(promo?.discount_granted || 0) + Number(entry.discountAmount || 0) * quantity,
+          })
+          .eq("id", entry.promotionId);
+      }));
     }
 
     /* =========================
