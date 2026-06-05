@@ -10,19 +10,12 @@ alter column variant_id drop not null;
 alter table public.order_items
 alter column product_id drop not null;
 
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_constraint
-    where conname = 'order_items_item_type_check'
-      and conrelid = 'public.order_items'::regclass
-  ) then
-    alter table public.order_items
-    add constraint order_items_item_type_check
-    check (item_type in ('product', 'combo'));
-  end if;
-end $$;
+alter table public.order_items
+drop constraint if exists order_items_item_type_check;
+
+alter table public.order_items
+add constraint order_items_item_type_check
+check (item_type in ('product', 'combo', 'promotion'));
 
 update public.order_items oi
 set
