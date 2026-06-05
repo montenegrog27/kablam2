@@ -296,7 +296,7 @@ export async function POST(req: Request) {
 
     // CONFIRM ORDER
 
-    if (payload === "confirmacion_pedido_detallado") {
+    if (payload === "confirmacion_pedido") {
       debugLog("CONFIRMING ORDER:", matchedOrder.id);
       const { error: updateError } = await supabase
         .from("orders")
