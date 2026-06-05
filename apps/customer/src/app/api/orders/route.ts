@@ -608,7 +608,7 @@ export async function POST(req: Request) {
             conversationId: conversation.id,
             orderId: order.id,
             type: "template",
-            templateName: "confirmacion_pedido_detallado",
+            templateName: "confirmacion_pedido",
             params: [customer.name, orderText, orderTotal.toString()],
           }),
         });
