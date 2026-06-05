@@ -44,6 +44,8 @@ type Props = {
   onUnreadChange: (count: number) => void;
 };
 
+const CONVERSATIONS_PAGE_SIZE = 25;
+
 function getMediaIcon(t?: string) {
   if (!t) return null;
   if (t.startsWith("image")) return <Image size={20} />;
@@ -75,6 +77,8 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
   const [notificationPermission, setNotificationPermission] = useState<string>("default");
   const [loading, setLoading] = useState(true);
+  const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
+  const [allConversationsLoaded, setAllConversationsLoaded] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -100,6 +104,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const cachedConvs = useRef<Conversation[] | null>(null);
   const cachedMsgs = useRef<Map<string, Message[]>>(new Map());
   const msgPageRef = useRef<Map<string, number>>(new Map());
+  const convPageRef = useRef(0);
   const conversationsRef = useRef<Conversation[]>([]);
 
   useEffect(() => {
@@ -108,8 +113,10 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
 
   useEffect(() => {
     if (!branchId) return;
+    convPageRef.current = 0;
+    setAllConversationsLoaded(false);
     if (cachedConvs.current) { setConversations(cachedConvs.current); setLoading(false); }
-    else loadConversations();
+    else loadConversations(0);
     loadUnreadCounts();
     loadOrdersFilter();
     setNotificationPermission(getWhatsAppNotificationPermission());
@@ -148,19 +155,47 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     onUnreadChange(total);
   }, [unreadMap, activeConv]);
 
-  const loadConversations = async () => {
-    const { data, error } = await supabase.from("conversations").select("id, customer_id, last_message_at").eq("branch_id", branchId).order("last_message_at", { ascending: false, nullsFirst: true });
+  const loadConversations = async (page = 0) => {
+    const from = page * CONVERSATIONS_PAGE_SIZE;
+    const to = from + CONVERSATIONS_PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .from("conversations")
+      .select("id, customer_id, last_message_at")
+      .eq("branch_id", branchId)
+      .order("last_message_at", { ascending: false, nullsFirst: true })
+      .range(from, to);
+
     if (error || !data) { console.error("Error loading conversations:", error); setLoading(false); return; }
-    const ids = [...new Set(data.map((c: any) => c.customer_id))];
-    const { data: customers } = await supabase.from("customers").select("id, name, phone").in("id", ids);
+
+    const ids = [...new Set(data.map((c: any) => c.customer_id).filter(Boolean))];
+    const { data: customers } = ids.length
+      ? await supabase.from("customers").select("id, name, phone").in("id", ids)
+      : { data: [] };
     const map: Record<string, any> = {}; (customers || []).forEach((c: any) => map[c.id] = c);
     const withLastMsg = await Promise.all(data.map(async (conv: any) => {
       const { data: m } = await supabase.from("messages").select("message, media_type").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1).single();
       return { ...conv, customers: map[conv.customer_id] || { id: conv.customer_id, name: "Cliente", phone: "" }, last_message: m?.message || getMediaLabel(m?.media_type) || "Sin mensajes", last_media_type: m?.media_type };
     }));
-    cachedConvs.current = withLastMsg as Conversation[];
-    setConversations(withLastMsg as Conversation[]);
+    setAllConversationsLoaded(data.length < CONVERSATIONS_PAGE_SIZE);
+    convPageRef.current = page;
+    setConversations((prev) => {
+      const merged = page === 0
+        ? withLastMsg as Conversation[]
+        : sortConversations([
+            ...prev,
+            ...(withLastMsg as Conversation[]).filter((conv) => !prev.some((current) => current.id === conv.id)),
+          ]);
+      cachedConvs.current = merged;
+      return merged;
+    });
     setLoading(false);
+  };
+
+  const loadMoreConversations = async () => {
+    if (loadingMoreConversations || allConversationsLoaded) return;
+    setLoadingMoreConversations(true);
+    await loadConversations(convPageRef.current + 1);
+    setLoadingMoreConversations(false);
   };
 
   const hydrateConversation = async (convId: string): Promise<Conversation | null> => {
@@ -561,6 +596,17 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
               ><X size={14} /></button>
             </div>
           ))}
+          {!allConversationsLoaded && (
+            <div className="p-3">
+              <button
+                onClick={loadMoreConversations}
+                disabled={loadingMoreConversations}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingMoreConversations ? "Cargando chats..." : "Cargar mas chats"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
