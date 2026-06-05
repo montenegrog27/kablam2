@@ -92,6 +92,11 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const cachedConvs = useRef<Conversation[] | null>(null);
   const cachedMsgs = useRef<Map<string, Message[]>>(new Map());
   const msgPageRef = useRef<Map<string, number>>(new Map());
+  const conversationsRef = useRef<Conversation[]>([]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -116,9 +121,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
             notifyNewMessage(msg);
           }
           // Siempre mover la conversación al tope (como WhatsApp)
-          setConversations((prev) => prev.map((c) => c.id === msg.conversation_id
-            ? { ...c, last_message: msg.message || getMediaLabel(msg.media_type), last_message_at: msg.created_at } : c)
-            .sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime()));
+          upsertConversationFromMessage(msg);
         }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [branchId, activeConv]);
@@ -150,6 +153,75 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     cachedConvs.current = withLastMsg as Conversation[];
     setConversations(withLastMsg as Conversation[]);
     setLoading(false);
+  };
+
+  const hydrateConversation = async (convId: string): Promise<Conversation | null> => {
+    const { data: conv, error } = await supabase
+      .from("conversations")
+      .select("id, customer_id, last_message_at")
+      .eq("id", convId)
+      .maybeSingle();
+
+    if (error || !conv) {
+      console.error("Error loading incoming conversation:", error);
+      return null;
+    }
+
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("id, name, phone, address, tags")
+      .eq("id", conv.customer_id)
+      .maybeSingle();
+
+    return {
+      ...conv,
+      customers: customer || { id: conv.customer_id, name: "Cliente", phone: "" },
+      last_message: "Sin mensajes",
+      unread_count: 0,
+    } as Conversation;
+  };
+
+  const sortConversations = (items: Conversation[]) =>
+    [...items].sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+
+  const upsertConversationFromMessage = async (msg: Message & { conversation_id: string }) => {
+    const lastMessage = msg.message || getMediaLabel(msg.media_type);
+
+    if (conversationsRef.current.some((c) => c.id === msg.conversation_id)) {
+      setConversations((prev) => {
+        const next = sortConversations(prev.map((c) =>
+          c.id === msg.conversation_id
+            ? {
+                ...c,
+                last_message: lastMessage,
+                last_media_type: msg.media_type,
+                last_message_at: msg.created_at,
+              }
+            : c,
+        ));
+        cachedConvs.current = next;
+        return next;
+      });
+      return;
+    }
+
+    const hydrated = await hydrateConversation(msg.conversation_id);
+    if (!hydrated) return;
+
+    setConversations((prev) => {
+      if (prev.some((c) => c.id === msg.conversation_id)) return prev;
+      const next = sortConversations([
+        {
+          ...hydrated,
+          last_message: lastMessage,
+          last_media_type: msg.media_type,
+          last_message_at: msg.created_at,
+        },
+        ...prev,
+      ]);
+      cachedConvs.current = next;
+      return next;
+    });
   };
 
   const loadUnreadCounts = async () => {
