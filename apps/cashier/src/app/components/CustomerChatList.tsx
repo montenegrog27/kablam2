@@ -6,6 +6,14 @@ import {
   MessageSquare, Send, X, Paperclip, Image, Video, Music,
   FileText, MapPin, Phone, User, ChevronLeft, Check, CheckCheck, Camera, Mic, Square,
 } from "lucide-react";
+import {
+  getWhatsAppMessagePreview,
+  getWhatsAppNotificationPermission,
+  getWhatsAppReadMap,
+  markWhatsAppConversationRead,
+  notifyIncomingWhatsApp,
+  requestWhatsAppNotificationPermission,
+} from "@/lib/whatsappNotifications";
 
 type Conversation = {
   id: string;
@@ -65,7 +73,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const [text, setText] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<string>("default");
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
@@ -104,7 +112,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     else loadConversations();
     loadUnreadCounts();
     loadOrdersFilter();
-    setNotificationsEnabled(typeof Notification !== "undefined" && Notification.permission === "granted");
+    setNotificationPermission(getWhatsAppNotificationPermission());
   }, [branchId]);
 
   useEffect(() => {
@@ -226,8 +234,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
 
   const loadUnreadCounts = async () => {
     // Obtener marcas de leído de localStorage
-    let readMap: Record<string, number> = {};
-    try { readMap = JSON.parse(localStorage.getItem("wa_read") || "{}"); } catch {}
+    const readMap = getWhatsAppReadMap();
 
     const { data } = await supabase.from("messages").select("conversation_id, created_at").eq("branch_id", branchId).eq("sender_type", "customer");
     const counts: Record<string, number> = {};
@@ -293,51 +300,23 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
 
   const markAsRead = (convId: string) => {
     setUnreadMap((p) => ({ ...p, [convId]: 0 }));
-    // Persistir en localStorage
-    try {
-      const read = JSON.parse(localStorage.getItem("wa_read") || "{}");
-      read[convId] = Date.now();
-      localStorage.setItem("wa_read", JSON.stringify(read));
-    } catch {}
+    markWhatsAppConversationRead(convId);
   };
 
   const requestNotifications = async () => {
-    if (typeof Notification === "undefined") return;
-    const permission = await Notification.requestPermission();
-    setNotificationsEnabled(permission === "granted");
-  };
-
-  const playNotificationSound = () => {
-    try {
-      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextCtor) return;
-      const ctx = new AudioContextCtor();
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      oscillator.frequency.value = 820;
-      gain.gain.value = 0.04;
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start();
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
-      oscillator.stop(ctx.currentTime + 0.2);
-    } catch {}
+    const permission = await requestWhatsAppNotificationPermission();
+    setNotificationPermission(permission);
   };
 
   const notifyNewMessage = (msg: Message & { conversation_id: string }) => {
-    playNotificationSound();
-
-    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-
-    const conv = conversations.find((c) => c.id === msg.conversation_id);
-    const title = conv?.customers.name || conv?.customers.phone || "Nuevo mensaje";
-    const body = msg.message || getMediaLabel(msg.media_type);
-
-    new Notification(`WhatsApp - ${title}`, {
-      body,
-      tag: `wa-${msg.conversation_id}`,
-      silent: true,
+    const conv = conversationsRef.current.find((c) => c.id === msg.conversation_id);
+    const title = conv?.customers.name || conv?.customers.phone || "Cliente";
+    notifyIncomingWhatsApp({
+      messageId: msg.id,
+      conversationId: msg.conversation_id,
+      title: `WhatsApp - ${title}`,
+      body: getWhatsAppMessagePreview(msg.media_type, msg.message),
+      tagPrefix: "customer-whatsapp",
     });
   };
 
@@ -518,10 +497,22 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
           <div className="flex items-center gap-1">
             <button
               onClick={requestNotifications}
-              className={`px-2 py-1 rounded-full text-[11px] font-medium ${notificationsEnabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+              className={`px-2 py-1 rounded-full text-[11px] font-medium ${
+                notificationPermission === "granted"
+                  ? "bg-green-100 text-green-700"
+                  : notificationPermission === "denied"
+                    ? "bg-red-100 text-red-700"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
               title="Activar notificaciones del navegador"
             >
-              {notificationsEnabled ? "Notifs on" : "Notifs"}
+              {notificationPermission === "granted"
+                ? "Alertas on"
+                : notificationPermission === "denied"
+                  ? "Bloqueadas"
+                  : notificationPermission === "unsupported"
+                    ? "No soportado"
+                    : "Activar alertas"}
             </button>
             <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100"><X size={18} /></button>
           </div>

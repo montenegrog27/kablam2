@@ -4,6 +4,12 @@ import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import OrderCard from "./OrderCard";
 import { useState, useEffect } from "react";
 import { publishOrderRealtimeEvent } from "../../lib/publishOrderRealtimeEvent";
+import {
+  getWhatsAppMessagePreview,
+  getWhatsAppReadMap,
+  markWhatsAppConversationRead,
+  notifyIncomingWhatsApp,
+} from "@/lib/whatsappNotifications";
 
 const STATUSES = ["unconfirmed", "confirmed", "preparing", "ready", "sent"];
 const STATUS_META: any = {
@@ -53,9 +59,46 @@ export default function OrdersBoard({
   useEffect(() => {
     setBoardOrders(orders);
   }, [orders]);
+
   useEffect(() => {
+    const conversationIds = orders.map((order: any) => order.conversation_id).filter(Boolean);
+    if (!conversationIds.length) {
+      setUnread({});
+      return;
+    }
+
+    const loadInitialUnread = async () => {
+      const readMap = getWhatsAppReadMap();
+      const { data } = await supabase
+        .from("messages")
+        .select("conversation_id, created_at")
+        .in("conversation_id", conversationIds)
+        .eq("sender_type", "customer");
+
+      const counts: Record<string, number> = {};
+      data?.forEach((message: any) => {
+        const lastRead = readMap[message.conversation_id];
+        if (!lastRead || new Date(message.created_at).getTime() > lastRead) {
+          counts[message.conversation_id] = (counts[message.conversation_id] || 0) + 1;
+        }
+      });
+
+      setUnread(counts);
+    };
+
+    loadInitialUnread();
+  }, [orders]);
+
+  useEffect(() => {
+    const branchId = boardOrders.find((order: any) => order.branch_id)?.branch_id;
+    const orderByConversation = new Map(
+      boardOrders
+        .filter((order: any) => order.conversation_id)
+        .map((order: any) => [order.conversation_id, order]),
+    );
+
     const channel = supabase
-      .channel("messages-board")
+      .channel(`messages-board-${branchId || "all"}-${activeConversationId || "none"}`)
 
       .on(
         "postgres_changes",
@@ -66,19 +109,31 @@ export default function OrdersBoard({
         },
         (payload) => {
           const msg = payload.new;
+          if (branchId && msg.branch_id !== branchId) return;
+          if (msg.sender_type !== "customer") return;
 
 
           // si el chat ya está abierto no mostramos badge
           if (msg.conversation_id === activeConversationId) {
+            markWhatsAppConversationRead(msg.conversation_id);
             return;
           }
-
-          if (msg.sender_type !== "customer") return;
 
           setUnread((prev: any) => ({
             ...prev,
             [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1,
           }));
+
+          const order = orderByConversation.get(msg.conversation_id);
+          notifyIncomingWhatsApp({
+            messageId: msg.id,
+            conversationId: msg.conversation_id,
+            title: order
+              ? `Pedido #${order.id.slice(-6).toUpperCase()} - ${order.customer_name || "Cliente"}`
+              : "Mensaje de cliente",
+            body: getWhatsAppMessagePreview(msg.media_type, msg.message),
+            tagPrefix: "order-chat",
+          });
         },
       )
 
@@ -87,7 +142,7 @@ export default function OrdersBoard({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [activeConversationId, boardOrders]);
 
   useEffect(() => {
     const channel = supabase
@@ -495,6 +550,9 @@ export default function OrdersBoard({
                         onNextStatus={() => handleNextStatus(order)}
                         onMarkAsPaid={handleMarkAsPaid}
                         onMessages={() => {
+                          if (order.conversation_id) {
+                            markWhatsAppConversationRead(order.conversation_id);
+                          }
                           // limpiar contador de mensajes
                           setUnread((prev: any) => ({
                             ...prev,

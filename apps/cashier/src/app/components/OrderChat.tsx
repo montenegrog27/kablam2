@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { Paperclip, Send, Image, FileText, Camera, MapPin, User, X } from "lucide-react";
+import { markWhatsAppConversationRead } from "@/lib/whatsappNotifications";
 
 export default function OrderChat({ order, session, onClose }: any) {
   const [messages, setMessages] = useState<any[]>([]);
@@ -92,6 +93,7 @@ export default function OrderChat({ order, session, onClose }: any) {
     }
 
     setConversationId(conv.id);
+    markWhatsAppConversationRead(conv.id);
 
     // link order
     await supabase.from("conversation_orders").upsert({
@@ -147,6 +149,9 @@ export default function OrderChat({ order, session, onClose }: any) {
             if (exists) return prev;
             return [...prev, newMessage];
           });
+          if (newMessage.sender_type === "customer") {
+            markWhatsAppConversationRead(conversationId);
+          }
         },
       )
 
@@ -158,6 +163,9 @@ export default function OrderChat({ order, session, onClose }: any) {
           if (exists) return prev;
           return [...prev, newMessage];
         });
+        if (newMessage.sender_type === "customer") {
+          markWhatsAppConversationRead(conversationId);
+        }
       })
 
       .subscribe();
