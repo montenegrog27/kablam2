@@ -118,6 +118,7 @@ export default function CheckoutForm({
   const [branchLng, setBranchLng] = useState<number | null>(null);
   const [deliverySettings, setDeliverySettings] = useState<any>(null);
   const [shippingCost, setShippingCost] = useState(0);
+  const [deliveryOutOfZone, setDeliveryOutOfZone] = useState(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<any>(null);
@@ -236,13 +237,23 @@ export default function CheckoutForm({
   }
 
   async function loadDeliveryData() {
-    const { data: branch } = await supabase.from("branches").select("id, lat, lng").eq("slug", branchSlug).single();
+    const { data: branch } = await supabase.from("branches").select("id, tenant_id, lat, lng").eq("slug", branchSlug).single();
     if (!branch) return;
     setBranchLat(branch.lat ? Number(branch.lat) : null);
     setBranchLng(branch.lng ? Number(branch.lng) : null);
 
-    const { data: settings } = await supabase.from("delivery_settings").select("*").eq("branch_id", branch.id).maybeSingle();
-    if (settings) setDeliverySettings(settings);
+    const { data: settings } = await supabase
+      .from("delivery_settings")
+      .select("*")
+      .eq("tenant_id", branch.tenant_id)
+      .or(`branch_id.eq.${branch.id},branch_id.is.null`);
+
+    const selectedSettings =
+      settings?.find((item) => item.branch_id === branch.id) ||
+      settings?.find((item) => !item.branch_id) ||
+      settings?.[0];
+
+    setDeliverySettings(selectedSettings || null);
 
     // Cargar direcciones guardadas
     try {
@@ -285,10 +296,12 @@ export default function CheckoutForm({
   useEffect(() => {
     if (orderMode !== "delivery" || !customerLat || !customerLng || !branchLat || !branchLng || !deliverySettings) {
       setShippingCost(0);
+      setDeliveryOutOfZone(false);
       return;
     }
     const distance = calculateDistanceKm(branchLat, branchLng, customerLat, customerLng);
     const cost = calculateShippingCost(distance, deliverySettings);
+    setDeliveryOutOfZone(cost === null);
     setShippingCost(cost ?? 0);
   }, [customerLat, customerLng, branchLat, branchLng, deliverySettings, orderMode]);
 
@@ -382,6 +395,7 @@ export default function CheckoutForm({
     if (!customer.name || !customer.phone) return false;
     if (orderMode === "delivery" && !customer.address) return false;
     if (orderMode === "delivery" && !customerLat && !mapLat && !customer.address) return false;
+    if (orderMode === "delivery" && deliveryOutOfZone) return false;
     if (!selectedPaymentMethod) return false;
     if (selectedMethod?.requires_reference && !paymentReference.trim())
       return false;
@@ -437,6 +451,11 @@ export default function CheckoutForm({
   const handleSubmit = async () => {
     if (!branchIsOpen) {
       setSubmitError(closedMessage);
+      return;
+    }
+
+    if (orderMode === "delivery" && deliveryOutOfZone) {
+      setSubmitError("La direccion esta fuera de la zona de entrega.");
       return;
     }
 
@@ -677,6 +696,12 @@ export default function CheckoutForm({
                       <div className="text-sm text-gray-600 flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 rounded-xl">
                         <Truck size={15} className="text-emerald-600" />
                         <span className="font-medium text-emerald-700">Envío: ${shippingCost.toLocaleString("es-AR")}</span>
+                      </div>
+                    )}
+                    {customerLat && customerLng && deliveryOutOfZone && (
+                      <div className="text-sm flex items-center gap-2 bg-red-50 border border-red-200 px-3.5 py-2.5 rounded-xl">
+                        <AlertCircle size={15} className="text-red-600" />
+                        <span className="font-medium text-red-700">Direccion fuera de zona de entrega</span>
                       </div>
                     )}
                     {customerLat && customerLng && shippingCost === 0 && deliverySettings?.free_shipping_radius && (
@@ -942,7 +967,9 @@ export default function CheckoutForm({
                     Envío
                   </span>
                   <span className="font-medium text-gray-900 tabular-nums">
-                    {shipping === 0 && deliverySettings?.free_shipping_radius
+                    {deliveryOutOfZone
+                      ? <span className="text-red-600">Fuera de zona</span>
+                      : shipping === 0 && deliverySettings?.free_shipping_radius
                       ? <span className="text-emerald-600">Gratis</span>
                       : `$${shipping.toLocaleString("es-AR")}`}
                   </span>

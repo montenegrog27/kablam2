@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
 export default function OpenCash({
@@ -9,8 +9,36 @@ export default function OpenCash({
   onOpened,
 }: any) {
   const [amount, setAmount] = useState("");
+  const [pettyCashBalance, setPettyCashBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    void Promise.resolve().then(loadPettyCashBalance);
+  }, [selectedRegister?.id]);
+
+  const loadPettyCashBalance = async () => {
+    if (!userRecord?.tenant_id || !selectedRegister?.id) return;
+
+    const { data: accountId } = await supabase.rpc("ensure_petty_cash_account", {
+      p_tenant_id: userRecord.tenant_id,
+      p_branch_id: selectedRegister.branch_id || userRecord.branch_id,
+      p_cash_register_id: selectedRegister.id,
+      p_name: `Caja chica - ${selectedRegister.name}`,
+    });
+
+    if (!accountId) return;
+
+    const { data } = await supabase
+      .from("central_cash_accounts")
+      .select("balance")
+      .eq("id", accountId)
+      .maybeSingle();
+
+    const balance = Number(data?.balance || 0);
+    setPettyCashBalance(balance);
+    setAmount(String(balance));
+  };
 
 const handleOpen = async () => {
   if (!amount || loading) return;
@@ -94,6 +122,11 @@ if (error) {
             onChange={(e) => setAmount(e.target.value)}
             className="bg-gray-800 border border-gray-700 p-2 w-full rounded text-white"
           />
+          {pettyCashBalance !== null && (
+            <p className="text-xs text-emerald-300">
+              Sugerido por caja chica: ${pettyCashBalance.toLocaleString("es-AR")}
+            </p>
+          )}
         </div>
 
         {error && (

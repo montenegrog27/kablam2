@@ -104,18 +104,26 @@ export default function OrderSidePanel({
   };
 
   const loadDeliverySettings = async () => {
+    if (!tenantId) {
+      setDeliverySettings(null);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("delivery_settings")
       .select("*")
       .eq("tenant_id", tenantId)
-      .eq("branch_id", branchId);
+      .or(branchId ? `branch_id.eq.${branchId},branch_id.is.null` : "branch_id.is.null");
 
     debugLog("DELIVERY RAW DATA:", data);
     debugLog("DELIVERY ERROR:", error);
 
-    if (data && data.length > 0) {
-      setDeliverySettings(data[0]);
-    }
+    const selectedSettings =
+      data?.find((item) => item.branch_id === branchId) ||
+      data?.find((item) => !item.branch_id) ||
+      data?.[0];
+
+    setDeliverySettings(selectedSettings || null);
   };
 
   const addressRef = useRef<HTMLInputElement | null>(null);

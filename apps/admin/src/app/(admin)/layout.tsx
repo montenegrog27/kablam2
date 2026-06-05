@@ -15,6 +15,9 @@ import {
   Upload, Cake,
   RadioTower,
   Megaphone,
+  Wallet,
+  BadgeDollarSign,
+  Landmark,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -78,6 +81,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/ventas", label: "Ventas", icon: DollarSign },
       { href: "/ventas/productos", label: "Ventas x Producto", icon: BarChart3 },
       { href: "/arqueos", label: "Arqueos de Caja", icon: Calculator },
+      { href: "/central-cash", label: "Caja Central", icon: Wallet },
+      { href: "/mercadopago-treasury", label: "Mercado Pago", icon: Landmark },
+      { href: "/debts", label: "Deudas", icon: BadgeDollarSign },
       { href: "/reporte-diario", label: "Reporte Diario", icon: FileText },
       { href: "/reports", label: "Reportes", icon: Receipt },
       { href: "/migration", label: "Importar ventas", icon: Upload },

@@ -257,12 +257,12 @@ export default function CashierTabs({ session }: any) {
             MODO OWNER
           </div>
         )}
-        {session && (
+        {session && can("cashier.expenses.create") && (
           <button
             onClick={() => setShowExpenses(true)}
             className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2"
           >
-            <Receipt size={15} /> Gastos
+            <Receipt size={15} /> Agregar gasto
           </button>
         )}
         {can("cashier.close_cash.view") && session && (
@@ -369,6 +369,7 @@ export default function CashierTabs({ session }: any) {
         <CashierExpenses
           session={session}
           onClose={() => setShowExpenses(false)}
+          canDelete={can("cashier.expenses.delete")}
         />
       )}
     </div>

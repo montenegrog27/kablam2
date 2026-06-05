@@ -14,6 +14,13 @@ create table if not exists public.financial_settings (
 
 alter table public.financial_settings enable row level security;
 
+alter table public.financial_settings
+add column if not exists fixed_cost_items jsonb not null default '[]'::jsonb,
+add column if not exists payroll_items jsonb not null default '[]'::jsonb,
+add column if not exists daily_report_whatsapp_enabled boolean not null default false,
+add column if not exists daily_report_whatsapp_phone text,
+add column if not exists daily_report_whatsapp_recipients jsonb not null default '[]'::jsonb;
+
 drop policy if exists "financial_settings_tenant_select" on public.financial_settings;
 create policy "financial_settings_tenant_select"
 on public.financial_settings for select

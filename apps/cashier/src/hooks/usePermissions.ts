@@ -9,6 +9,9 @@ const ADMIN_PERMISSIONS: PermissionsMap = {
   "cashier.kds.view": true,
   "cashier.chat.view": true,
   "cashier.close_cash.view": true,
+  "cashier.expenses.view": true,
+  "cashier.expenses.create": true,
+  "cashier.expenses.delete": true,
 };
 
 export function usePermissions() {

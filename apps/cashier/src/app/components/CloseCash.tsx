@@ -43,6 +43,12 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
   const [carryOver, setCarryOver] = useState("");
   const [differenceReason, setDifferenceReason] = useState("");
   const [paymentChecks, setPaymentChecks] = useState<Record<string, string>>({});
+  const [expenseCategories, setExpenseCategories] = useState<any[]>([]);
+  const [expenseDescription, setExpenseDescription] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseCategoryId, setExpenseCategoryId] = useState("");
+  const [addingExpense, setAddingExpense] = useState(false);
+  const [expenseError, setExpenseError] = useState("");
 
   const [bills, setBills] = useState<BillsState>({
     10: 0,
@@ -187,11 +193,19 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
     // ================= GASTOS =================
     const { data: expensesData } = await supabase
       .from("expenses")
-      .select("description, total, expense_categories(name)")
+      .select("id, description, total, expense_categories(name)")
       .eq("cash_session_id", session.id)
       .order("created_at", { ascending: false });
     const totalExpenses = (expensesData || []).reduce((s: number, e: any) => s + Number(e.total), 0);
     expectedCash -= totalExpenses;
+
+    const { data: categoriesData } = await supabase
+      .from("expense_categories")
+      .select("*")
+      .eq("tenant_id", session.tenant_id)
+      .eq("is_active", true)
+      .order("name");
+    setExpenseCategories(categoriesData || []);
 
     // ================= PRODUCTOS =================
     const { data: itemsData } = await supabase
@@ -275,6 +289,48 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
     });
 
     setLoading(false);
+  };
+
+  const addExpenseDuringClose = async () => {
+    if (!expenseDescription.trim() || Number(expenseAmount) <= 0) return;
+
+    setAddingExpense(true);
+    setExpenseError("");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setExpenseError("No hay sesion activa.");
+      setAddingExpense(false);
+      return;
+    }
+
+    const response = await fetch("/api/cashier-expenses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        cashSessionId: session.id,
+        categoryId: expenseCategoryId || null,
+        description: expenseDescription,
+        amount: Number(expenseAmount),
+      }),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setExpenseError(data.error || "No se pudo cargar el gasto.");
+      setAddingExpense(false);
+      return;
+    }
+
+    setExpenseDescription("");
+    setExpenseAmount("");
+    setExpenseCategoryId("");
+    setAddingExpense(false);
+    await calculateSummary();
   };
 
   const handleClose = async () => {
@@ -372,11 +428,17 @@ if (freshSession.status !== "open") {
 
         payments: summary.payments ?? {},
         payment_verification: paymentVerification,
+        central_cash_deposit: Math.max(0, Number(countedCash) - Number(carryOver || 0)),
+        central_transfer_deposit: Object.values(paymentVerification).reduce(
+          (sum: number, verification: any) =>
+            sum + Number(verification.counted || verification.expected || 0),
+          0,
+        ),
         products: summary.products ?? {},
         cash_movements: summary.movements ?? {},
       };
 
-      const { error: closeError } = await supabase.rpc(
+      const { data: closureId, error: closeError } = await supabase.rpc(
         "close_cash_session_atomic",
         {
           p_cash_session_id: session.id,
@@ -389,6 +451,20 @@ if (freshSession.status !== "open") {
         console.error("ERROR CERRANDO CAJA:", closeError);
         alert("No se pudo cerrar la caja. Revisar base.");
         return;
+      }
+
+      if (closureId) {
+        const token = authData.session?.access_token;
+        fetch("/api/cash-closure-report", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ closureId }),
+        }).catch((reportError) => {
+          console.error("No se pudo enviar reporte por WhatsApp:", reportError);
+        });
       }
 
       onClosed();
@@ -452,6 +528,11 @@ if (freshSession.status !== "open") {
     });
   const paymentDifference = paymentVerificationPreview.reduce(
     (sum, payment) => sum + Math.abs(payment.difference),
+    0,
+  );
+  const centralCashDeposit = Math.max(0, Number(countedCash || 0) - Number(carryOver || 0));
+  const centralTransferDeposit = paymentVerificationPreview.reduce(
+    (sum, payment) => sum + Number(payment.counted || payment.expected || 0),
     0,
   );
   const hasAnyDifference = difference !== 0 || paymentDifference !== 0;
@@ -652,10 +733,58 @@ if (freshSession.status !== "open") {
         )}
       </div>
 
-      {/* Gastos de caja */}
-      {summary.expenses?.length > 0 && (
-        <div className="bg-gray-900 p-6 rounded-lg space-y-3">
+      <div className="bg-gray-900 p-6 rounded-lg space-y-4">
+        <div>
           <h3 className="font-bold text-red-400">Gastos de caja</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Carga gastos del turno, como cadeteria, compras chicas o pagos que salieron de esta caja.
+          </p>
+        </div>
+
+        {expenseError && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {expenseError}
+          </div>
+        )}
+
+        <div className="grid gap-2 md:grid-cols-[1fr_130px_180px_auto]">
+          <input
+            value={expenseDescription}
+            onChange={(event) => setExpenseDescription(event.target.value)}
+            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+            placeholder="Descripcion del gasto"
+          />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={expenseAmount}
+            onChange={(event) => setExpenseAmount(event.target.value)}
+            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+            placeholder="Monto"
+          />
+          <select
+            value={expenseCategoryId}
+            onChange={(event) => setExpenseCategoryId(event.target.value)}
+            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+          >
+            <option value="">Sin categoria</option>
+            {expenseCategories.map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={addExpenseDuringClose}
+            disabled={addingExpense || !expenseDescription.trim() || Number(expenseAmount) <= 0}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-40"
+          >
+            {addingExpense ? "Agregando..." : "Agregar gasto"}
+          </button>
+        </div>
+
+        {summary.expenses?.length > 0 && (
+          <>
           <div className="flex justify-between text-red-300">
             <span>Total gastos</span>
             <span>-${formatCurrency(summary.totalExpenses)}</span>
@@ -668,8 +797,9 @@ if (freshSession.status !== "open") {
               </div>
             ))}
           </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       <div className="border-t border-gray-700 pt-2 flex justify-between font-bold text-lg">
         <span>Efectivo esperado</span>
@@ -725,6 +855,21 @@ if (freshSession.status !== "open") {
             className="w-full resize-none bg-gray-800 p-3 rounded border border-gray-700"
           />
         )}
+      </div>
+
+      <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-6 space-y-3">
+        <h3 className="font-bold text-emerald-300">Traspaso a caja central</h3>
+        <div className="flex justify-between text-sm">
+          <span>Efectivo que entra a caja central</span>
+          <span className="font-bold">${formatCurrency(centralCashDeposit)}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span>Transferencias / MercadoPago verificadas</span>
+          <span className="font-bold">${formatCurrency(centralTransferDeposit)}</span>
+        </div>
+        <p className="text-xs text-emerald-200/70">
+          Al confirmar, estos importes quedan registrados en tesoreria central. El efectivo que dejes como fondo de caja queda como arrastre para la proxima apertura.
+        </p>
       </div>
 
       <button

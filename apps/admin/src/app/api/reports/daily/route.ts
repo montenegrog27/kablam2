@@ -118,10 +118,61 @@ function roundMoney(value: number) {
   return Math.round(value);
 }
 
+function getMonthlyEquivalentFromRecurringItem(item: any) {
+  const amount = Number(item?.amount || 0);
+  const frequency = item?.frequency || "MONTHLY";
+  if (frequency === "WEEKLY") return amount * 52 / 12;
+  if (frequency === "BIWEEKLY") return amount * 26 / 12;
+  if (frequency === "EVERY_X_DAYS") {
+    const days = Math.max(1, Number(item?.everyDays || 1));
+    return amount * 30 / days;
+  }
+  if (frequency === "MANUAL") return 0;
+  return amount;
+}
+
+function getFrequencyDays(item: any) {
+  const frequency = item?.frequency || "MONTHLY";
+  if (frequency === "WEEKLY") return 7;
+  if (frequency === "BIWEEKLY") return 15;
+  if (frequency === "EVERY_X_DAYS") return Math.max(1, Number(item?.everyDays || 1));
+  if (frequency === "MONTHLY") return 30;
+  return null;
+}
+
+function addCalendarDays(dateStr: string, days: number) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().split("T")[0];
+}
+
+function getDaysBetween(startDate: string, endDate: string) {
+  const startMs = new Date(`${startDate}T00:00:00Z`).getTime();
+  const endMs = new Date(`${endDate}T00:00:00Z`).getTime();
+  return Math.ceil((endMs - startMs) / 86400000);
+}
+
+function getRecurringItems(value: any) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => ({
+      id: item?.id || "",
+      name: String(item?.name || "").trim(),
+      amount: Number(item?.amount || 0),
+      frequency: item?.frequency || "MONTHLY",
+      everyDays: Number(item?.everyDays || 0),
+      lastPaidAt: item?.lastPaidAt || null,
+      monthlyEquivalent: getMonthlyEquivalentFromRecurringItem(item),
+      notes: String(item?.notes || "").trim(),
+    }))
+    .filter((item) => item.name || item.amount > 0);
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const dateStr = url.searchParams.get("date") || new Date(Date.now() - 86400000).toISOString().split("T")[0];
   const tenantId = url.searchParams.get("tenantId");
+  const branchId = url.searchParams.get("branchId");
 
   if (!tenantId) {
     return NextResponse.json({ error: "tenantId required" }, { status: 400 });
@@ -132,10 +183,12 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
-  const { data: branches } = await supabase
+  let branchesQuery = supabase
     .from("branches")
     .select("id")
     .eq("tenant_id", tenantId);
+  if (branchId) branchesQuery = branchesQuery.eq("id", branchId);
+  const { data: branches } = await branchesQuery;
   const branchIds = (branches || []).map((branch) => branch.id);
   const { data: branchHourRows } = branchIds.length > 0
     ? await supabase
@@ -157,13 +210,14 @@ export async function GET(req: NextRequest) {
   // ──────────────────────────────────────────────
   // 1. ORDERS (current day)
   // ──────────────────────────────────────────────
-  const { data: orders } = await supabase
+  let ordersQuery = supabase
     .from("orders")
     .select("*, order_items(*, products(id, name, categories(name)), combos(name)), order_payments(*), riders(name)")
     .eq("tenant_id", tenantId)
     .gte("created_at", start)
-    .lt("created_at", end)
-    .in("status", ["delivered", "sent", "ready", "confirmed", "preparing"]);
+    .lt("created_at", end);
+  if (branchId) ordersQuery = ordersQuery.eq("branch_id", branchId);
+  const { data: orders } = await ordersQuery.in("status", ["delivered", "sent", "ready", "confirmed", "preparing"]);
 
   const totalOrders = orders?.length || 0;
   const netSalesRevenue = orders?.reduce((s, o) => s + Math.max(0, Number(o.total || 0) - Number(o.shipping_cost || 0)), 0) || 0;
@@ -178,23 +232,25 @@ export async function GET(req: NextRequest) {
   // ──────────────────────────────────────────────
   // 2. PREVIOUS DAY & WEEK (for comparisons)
   // ──────────────────────────────────────────────
-  const { data: prevOrders } = await supabase
+  let prevOrdersQuery = supabase
     .from("orders")
     .select("total, shipping_cost, discount")
     .eq("tenant_id", tenantId)
     .gte("created_at", prevWindow.start)
-    .lt("created_at", prevWindow.end)
-    .in("status", ["delivered", "sent", "ready", "confirmed", "preparing"]);
+    .lt("created_at", prevWindow.end);
+  if (branchId) prevOrdersQuery = prevOrdersQuery.eq("branch_id", branchId);
+  const { data: prevOrders } = await prevOrdersQuery.in("status", ["delivered", "sent", "ready", "confirmed", "preparing"]);
 
   const prevRevenue = prevOrders?.reduce((s, o) => s + Math.max(0, Number(o.total || 0) - Number(o.shipping_cost || 0)), 0) || 0;
 
-  const { data: weekOrders } = await supabase
+  let weekOrdersQuery = supabase
     .from("orders")
     .select("total, shipping_cost, created_at")
     .eq("tenant_id", tenantId)
     .gte("created_at", weekStart)
-    .lt("created_at", end)
-    .in("status", ["delivered", "sent", "ready", "confirmed", "preparing"]);
+    .lt("created_at", end);
+  if (branchId) weekOrdersQuery = weekOrdersQuery.eq("branch_id", branchId);
+  const { data: weekOrders } = await weekOrdersQuery.in("status", ["delivered", "sent", "ready", "confirmed", "preparing"]);
 
   // Daily averages over last 7 days
   const weekWindows = Array.from({ length: 8 }, (_, index) => {
@@ -261,12 +317,14 @@ export async function GET(req: NextRequest) {
   // ──────────────────────────────────────────────
   // 6. EXPENSES (current day)
   // ──────────────────────────────────────────────
-  const { data: expenses } = await supabase
+  let expensesQuery = supabase
     .from("expenses")
     .select("*, expense_categories(name)")
     .eq("tenant_id", tenantId)
     .gte("expense_date", dateStr)
     .lte("expense_date", dateStr);
+  if (branchId) expensesQuery = expensesQuery.eq("branch_id", branchId);
+  const { data: expenses } = await expensesQuery;
 
   const totalExpenses = expenses?.reduce((s, e) => s + Number(e.total), 0) || 0;
 
@@ -471,14 +529,20 @@ export async function GET(req: NextRequest) {
 
   const orderPackagingCost = packagingUsage.reduce((sum, item) => sum + item.cost, 0);
   const operatingDays = Math.max(1, Number(financialSettings?.operating_days_per_month || 26));
-  const dailyFixedCosts =
-    (
-      Number(financialSettings?.monthly_rent || 0) +
-      Number(financialSettings?.monthly_gas || 0) +
-      Number(financialSettings?.monthly_electricity || 0) +
-      Number(financialSettings?.monthly_internet || 0)
-    ) / operatingDays;
-  const dailyPayrollCost = Number(financialSettings?.monthly_payroll || 0) / operatingDays;
+  const fixedCostItems = getRecurringItems(financialSettings?.fixed_cost_items);
+  const payrollItems = getRecurringItems(financialSettings?.payroll_items);
+  const baseMonthlyFixedCosts =
+    Number(financialSettings?.monthly_rent || 0) +
+    Number(financialSettings?.monthly_gas || 0) +
+    Number(financialSettings?.monthly_electricity || 0) +
+    Number(financialSettings?.monthly_internet || 0);
+  const customMonthlyFixedCosts = fixedCostItems.reduce((sum, item) => sum + item.monthlyEquivalent, 0);
+  const monthlyFixedCosts = baseMonthlyFixedCosts + customMonthlyFixedCosts;
+  const baseMonthlyPayroll = Number(financialSettings?.monthly_payroll || 0);
+  const itemizedMonthlyPayroll = payrollItems.reduce((sum, item) => sum + item.monthlyEquivalent, 0);
+  const monthlyPayrollCost = baseMonthlyPayroll + itemizedMonthlyPayroll;
+  const dailyFixedCosts = monthlyFixedCosts / operatingDays;
+  const dailyPayrollCost = monthlyPayrollCost / operatingDays;
 
   const netRevenue = netSalesRevenue;
   const grossProfit = netRevenue - cmv;
@@ -578,6 +642,12 @@ export async function GET(req: NextRequest) {
   const financialInsights = [
     `CMV representa ${foodCostPct.toFixed(1)}% de las ventas`,
     `Costo laboral representa ${laborCostPct.toFixed(1)}% de las ventas`,
+    customMonthlyFixedCosts > 0
+      ? `Otros costos fijos prorrateados: $${roundMoney(customMonthlyFixedCosts / operatingDays).toLocaleString("es-AR")} diarios`
+      : null,
+    itemizedMonthlyPayroll > 0
+      ? `Equipo cargado individualmente: $${roundMoney(itemizedMonthlyPayroll / operatingDays).toLocaleString("es-AR")} diarios`
+      : null,
     `Margen de contribucion: ${contributionMarginPct.toFixed(1)}%`,
     `Cada pedido aporta aproximadamente $${roundMoney(contributionPerOrder).toLocaleString("es-AR")} para cubrir costos fijos`,
     `Ganancia operativa por pedido: $${roundMoney(profitPerOrder).toLocaleString("es-AR")}`,
@@ -595,7 +665,7 @@ export async function GET(req: NextRequest) {
     breakEvenOrders > 0
       ? `La sucursal necesita aproximadamente ${breakEvenOrders} pedidos para cubrir costos diarios`
       : "No hay suficiente margen de contribucion para calcular punto de equilibrio",
-  ];
+  ].filter(Boolean);
 
   const report = {
     date: dateStr,
@@ -634,6 +704,52 @@ export async function GET(req: NextRequest) {
       orders_needed_for_break_even: breakEvenOrders,
       operating_margin: Math.round(operatingMargin * 100) / 100,
       break_even_orders: breakEvenOrders,
+      monthly_fixed_costs: roundMoney(monthlyFixedCosts),
+      monthly_labor_cost: roundMoney(monthlyPayrollCost),
+      fixed_cost_breakdown: {
+        base: {
+          rent: roundMoney(Number(financialSettings?.monthly_rent || 0)),
+          gas: roundMoney(Number(financialSettings?.monthly_gas || 0)),
+          electricity: roundMoney(Number(financialSettings?.monthly_electricity || 0)),
+          internet: roundMoney(Number(financialSettings?.monthly_internet || 0)),
+          total: roundMoney(baseMonthlyFixedCosts),
+        },
+        custom: fixedCostItems.map((item) => ({
+          name: item.name,
+          amount_per_payment: roundMoney(item.amount),
+          frequency: item.frequency,
+          every_days: item.everyDays || null,
+          last_paid_at: item.lastPaidAt,
+          next_due_at: item.lastPaidAt && getFrequencyDays(item)
+            ? addCalendarDays(item.lastPaidAt, getFrequencyDays(item)!)
+            : null,
+          days_until_due: item.lastPaidAt && getFrequencyDays(item)
+            ? getDaysBetween(dateStr, addCalendarDays(item.lastPaidAt, getFrequencyDays(item)!))
+            : null,
+          monthly_amount: roundMoney(item.monthlyEquivalent),
+          daily_amount: roundMoney(item.monthlyEquivalent / operatingDays),
+          notes: item.notes,
+        })),
+      },
+      labor_breakdown: {
+        general_payroll: roundMoney(baseMonthlyPayroll),
+        employees: payrollItems.map((item) => ({
+          name: item.name,
+          amount_per_payment: roundMoney(item.amount),
+          frequency: item.frequency,
+          every_days: item.everyDays || null,
+          last_paid_at: item.lastPaidAt,
+          next_due_at: item.lastPaidAt && getFrequencyDays(item)
+            ? addCalendarDays(item.lastPaidAt, getFrequencyDays(item)!)
+            : null,
+          days_until_due: item.lastPaidAt && getFrequencyDays(item)
+            ? getDaysBetween(dateStr, addCalendarDays(item.lastPaidAt, getFrequencyDays(item)!))
+            : null,
+          monthly_amount: roundMoney(item.monthlyEquivalent),
+          daily_amount: roundMoney(item.monthlyEquivalent / operatingDays),
+          notes: item.notes,
+        })),
+      },
       burger_units: Math.round(burgerUnits),
       packaging_usage: packagingUsage.map((item) => ({
         name: item.name,
@@ -701,6 +817,8 @@ export async function GET(req: NextRequest) {
       marketing_costs: Math.round(marketingCosts),
       salary_costs: Math.round(salaryCosts),
       fixed_costs: Math.round(fixedCosts + dailyFixedCosts),
+      configured_fixed_costs: roundMoney(dailyFixedCosts),
+      configured_labor_costs: roundMoney(dailyPayrollCost),
       other_costs: Math.round(otherCosts),
       net_profit_real: Math.round(netProfitReal),
       net_margin_real: Math.round(netMarginReal * 100) / 100,
