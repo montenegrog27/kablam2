@@ -598,7 +598,7 @@ export async function POST(req: Request) {
       if (!cashierUrl) {
         console.error("WhatsApp URL not configured (NEXT_PUBLIC_CASHIER_APP_URL)");
       } else {
-        // First contact after checkout: ask the customer to confirm/reject.
+        // First contact after checkout: ask the customer to confirm/reject.kkkk
         // The confirmation/alias message is sent later from the cashier webhook
         // when the customer taps the WhatsApp template button.
         await fetch(`${cashierUrl}/api/whatsapp/send`, {
