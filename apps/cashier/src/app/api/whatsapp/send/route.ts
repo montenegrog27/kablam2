@@ -240,7 +240,7 @@ const {
   if (type === "template") {
 
     const hasParams = params && params.length > 0;
-    const hasButtons = templateName === "confirmacion_pedido";
+    const hasButtons = ["confirmacion_pedido", "confirmacion_pedido_detallado"].includes(templateName);
 
     const components: any[] = [];
 
@@ -262,7 +262,7 @@ const {
         parameters: [
           {
             type: "payload",
-            payload: "confirmar_pedido",
+            payload: "confirmacion_pedido",
           },
         ],
       });

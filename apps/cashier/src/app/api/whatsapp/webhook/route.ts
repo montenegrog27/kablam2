@@ -139,6 +139,26 @@ async function downloadMedia(
   }
 }
 
+function getButtonAction(payload?: string | null, title?: string | null) {
+  const value = `${payload || ""} ${title || ""}`.toLowerCase();
+  if (
+    value.includes("confirmacion_pedido") ||
+    value.includes("confirmar_pedido") ||
+    value.includes("confirmar") ||
+    value.includes("aceptar")
+  ) {
+    return "confirm";
+  }
+  if (
+    value.includes("cancelar_pedido") ||
+    value.includes("rechazar") ||
+    value.includes("cancelar")
+  ) {
+    return "cancel";
+  }
+  return null;
+}
+
 // ===============================
 // VERIFY WEBHOOK
 // ===============================
@@ -244,20 +264,24 @@ export async function POST(req: Request) {
     message.type === "button"
   ) {
     const payload = (message as any).interactive?.button_reply?.id || message.button?.payload;
+    const buttonTitle = (message as any).interactive?.button_reply?.title || message.button?.text;
+    const buttonAction = getButtonAction(payload, buttonTitle);
     const originalMessageId = message.context?.id;
 
-    debugLog("BUTTON CLICK DETECTED", { payload, originalMessageId, messageType: message.type });
+    debugLog("BUTTON CLICK DETECTED", { payload, buttonTitle, buttonAction, originalMessageId, messageType: message.type });
 
-    if (!originalMessageId) {
-      debugLog("No context.id in button click - cannot match order");
+    if (!buttonAction) {
+      debugLog("Unknown button payload, ignoring");
       return NextResponse.json({ ok: true });
     }
 
-    const { data: order } = await supabase
-      .from("orders")
-      .select("*, order_payments(payment_methods(name))")
-      .eq("whatsapp_message_id", originalMessageId)
-      .maybeSingle();
+    const { data: order } = originalMessageId
+      ? await supabase
+          .from("orders")
+          .select("*, order_payments(payment_methods(name))")
+          .eq("whatsapp_message_id", originalMessageId)
+          .maybeSingle()
+      : { data: null };
 
     // Fallback: buscar por teléfono y estado unconfirmed
     const orderByPhone = !order ? await supabase
@@ -296,7 +320,7 @@ export async function POST(req: Request) {
 
     // CONFIRM ORDER
 
-    if (payload === "confirmacion_pedido") {
+    if (buttonAction === "confirm") {
       debugLog("CONFIRMING ORDER:", matchedOrder.id);
       const { error: updateError } = await supabase
         .from("orders")
@@ -352,7 +376,7 @@ export async function POST(req: Request) {
 
     // CANCEL ORDER
 
-    if (payload === "cancelar_pedido") {
+    if (buttonAction === "cancel") {
       debugLog("CANCELLING ORDER:", matchedOrder.id);
       const { error: cancelError } = await supabase
         .from("orders")
@@ -592,7 +616,7 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (!conversation) {
-    const { data } = await supabase
+    const { data, error: conversationError } = await supabase
       .from("conversations")
       .insert({
         tenant_id: tenantId,
@@ -601,6 +625,11 @@ export async function POST(req: Request) {
       })
       .select()
       .single();
+
+    if (conversationError || !data) {
+      console.error("Error creating customer conversation:", conversationError || "no data returned");
+      return NextResponse.json({ ok: true });
+    }
 
     conversation = data;
   }
@@ -674,7 +703,7 @@ export async function POST(req: Request) {
         .maybeSingle()
     : { data: null };
 
-  const { data: inserted } = await supabase
+  const { data: inserted, error: messageInsertError } = await supabase
     .from("messages")
     .insert({
       tenant_id: tenantId,
@@ -691,6 +720,11 @@ export async function POST(req: Request) {
     })
     .select()
     .single();
+
+  if (messageInsertError || !inserted) {
+    console.error("Error saving customer message:", messageInsertError || "no data returned");
+    return NextResponse.json({ ok: true });
+  }
 
   // ===============================
   // REALTIME BROADCAST
