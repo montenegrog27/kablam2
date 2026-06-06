@@ -326,6 +326,8 @@ export default function OrderSidePanel({
     setCustomerPhone(selectedOrder.customer_phone || "");
     setOrderType(selectedOrder.type || "takeaway");
     setAddress(selectedOrder.address || "");
+    setCustomerLat(selectedOrder.customer_lat ? Number(selectedOrder.customer_lat) : null);
+    setCustomerLng(selectedOrder.customer_lng ? Number(selectedOrder.customer_lng) : null);
     setManualDiscount(selectedOrder.discount?.toString() || "");
 
     // cargar pagos si es edición
@@ -656,6 +658,8 @@ export default function OrderSidePanel({
           customer_name: customerName,
           customer_phone: phone,
           address: orderType === "delivery" ? address : null,
+          customer_lat: orderType === "delivery" ? customerLat : null,
+          customer_lng: orderType === "delivery" ? customerLng : null,
 
           subtotal,
           discount,
@@ -675,6 +679,23 @@ export default function OrderSidePanel({
       }
 
       orderId = data.id;
+    } else {
+      await supabase
+        .from("orders")
+        .update({
+          type: orderType,
+          customer_name: customerName,
+          customer_phone: phone,
+          address: orderType === "delivery" ? address : null,
+          customer_lat: orderType === "delivery" ? customerLat : null,
+          customer_lng: orderType === "delivery" ? customerLng : null,
+          subtotal,
+          discount,
+          total,
+          shipping_cost: finalShipping,
+          original_shipping_cost: calculateShipping(),
+        })
+        .eq("id", orderId);
     }
 
     if (!orderId) {

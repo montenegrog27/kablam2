@@ -17,6 +17,20 @@ function getPaymentLabel(order: any) {
     .join(" + ");
 }
 
+function getGoogleMapsUrl(order: any) {
+  const lat = Number(order.customer_lat ?? order.lat);
+  const lng = Number(order.customer_lng ?? order.lng);
+
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  }
+
+  const address = String(order.address || "").trim();
+  if (!address) return "";
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
 export default function OrderCard({
   order,
   selected,
@@ -46,6 +60,7 @@ export default function OrderCard({
     ? order.promotion_names.filter(Boolean)
     : [];
   const promotionDiscount = Number(order.discount_amount || order.discount || 0);
+  const mapsUrl = isDelivery ? getGoogleMapsUrl(order) : "";
 
   useEffect(() => {
     if (order.rider_id) {
@@ -298,6 +313,23 @@ export default function OrderCard({
         {/* RIDER BUTTONS */}
         {isDelivery && (
           <>
+            {mapsUrl && (
+              <button
+                onClick={() => window.open(mapsUrl, "_blank", "noopener,noreferrer")}
+                className="
+                  px-3 py-1.5
+                  text-sm font-medium
+                  rounded-lg
+                  bg-indigo-500
+                  text-white
+                  hover:bg-indigo-600
+                  transition
+                "
+              >
+                Ver ubicación
+              </button>
+            )}
+
             {!rider && !showRiderSelect && canChange && (
               <button
                 onClick={() => setShowRiderSelect(true)}
