@@ -20,7 +20,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Truck,
-  X,
+  X, Pencil,
 } from "lucide-react";
 
 type TabKey = "promotions" | "rules" | "analytics";
@@ -192,6 +192,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
   const [branches, setBranches] = useState<CatalogItem[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<CatalogItem[]>([]);
   const [showPromotionForm, setShowPromotionForm] = useState(false);
+  const [editingPromotionId, setEditingPromotionId] = useState<string | null>(null);
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm);
   const [ruleForm, setRuleForm] = useState(emptyRuleForm);
@@ -358,7 +359,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
     event.preventDefault();
     if (!tenantId || !promotionForm.name.trim()) return;
 
-    const { data, error } = await supabase.from("promotions").insert({
+    const promotionData = {
       tenant_id: tenantId,
       name: promotionForm.name.trim(),
       description: promotionForm.description || null,
@@ -378,19 +379,28 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
         discountType: promotionForm.additionalDiscountType,
         discountValue: numberOrNull(promotionForm.additionalDiscountValue),
       },
-    }).select("id").single();
+    };
 
-    if (error || !data?.id) {
-      setNotice(error?.message || "No se pudo crear la promocion");
-      return;
+    if (editingPromotionId) {
+      const { error } = await supabase.from("promotions").update(promotionData).eq("id", editingPromotionId);
+      if (error) { setNotice(error.message); return; }
+      await supabase.from("promotion_targets").delete().eq("promotion_id", editingPromotionId);
+      const targets = [
+        ...promotionForm.products.map((id) => ({ tenant_id: tenantId, promotion_id: editingPromotionId, target_type: "product", target_id: id })),
+        ...promotionForm.combos.map((id) => ({ tenant_id: tenantId, promotion_id: editingPromotionId, target_type: "combo", target_id: id })),
+        ...promotionForm.categories.map((id) => ({ tenant_id: tenantId, promotion_id: editingPromotionId, target_type: "category", target_id: id })),
+      ];
+      if (targets.length > 0) await supabase.from("promotion_targets").insert(targets);
+    } else {
+      const { data, error } = await supabase.from("promotions").insert(promotionData).select("id").single();
+      if (error || !data?.id) { setNotice(error?.message || "No se pudo crear la promocion"); return; }
+      const targets = [
+        ...promotionForm.products.map((id) => ({ tenant_id: tenantId, promotion_id: data.id, target_type: "product", target_id: id })),
+        ...promotionForm.combos.map((id) => ({ tenant_id: tenantId, promotion_id: data.id, target_type: "combo", target_id: id })),
+        ...promotionForm.categories.map((id) => ({ tenant_id: tenantId, promotion_id: data.id, target_type: "category", target_id: id })),
+      ];
+      if (targets.length > 0) await supabase.from("promotion_targets").insert(targets);
     }
-
-    const targets = [
-      ...promotionForm.products.map((id) => ({ tenant_id: tenantId, promotion_id: data.id, target_type: "product", target_id: id })),
-      ...promotionForm.combos.map((id) => ({ tenant_id: tenantId, promotion_id: data.id, target_type: "combo", target_id: id })),
-      ...promotionForm.categories.map((id) => ({ tenant_id: tenantId, promotion_id: data.id, target_type: "category", target_id: id })),
-    ];
-    if (targets.length > 0) await supabase.from("promotion_targets").insert(targets);
 
     setPromotionForm(emptyPromotionForm);
     setShowPromotionForm(false);
@@ -443,6 +453,32 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
   async function togglePromotion(promo: Promotion) {
     await supabase.from("promotions").update({ active: !promo.active }).eq("id", promo.id);
     loadData();
+  }
+
+  function editPromotion(promo: Promotion) {
+    setPromotionForm({
+      name: promo.name || "",
+      description: promo.description || "",
+      active: promo.active,
+      startDate: promo.start_date ? promo.start_date.slice(0, 16) : "",
+      endDate: promo.end_date ? promo.end_date.slice(0, 16) : "",
+      showInHome: promo.show_in_home || false,
+      badge: promo.badge || "",
+      promotionType: promo.promotion_type || "visual",
+      imageType: promo.image_type || "product",
+      imageUrl: promo.image_url || "",
+      products: [],
+      combos: [],
+      categories: [],
+      additionalTriggerType: "none",
+      additionalTriggerId: "",
+      additionalRewardType: "none",
+      additionalRewardId: "",
+      additionalDiscountType: "percentage",
+      additionalDiscountValue: "",
+    });
+    setEditingPromotionId(promo.id);
+    setShowPromotionForm(true);
   }
 
   async function toggleRule(rule: PromotionRule) {
@@ -548,6 +584,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
                         <th className="px-5 py-3">Usos</th>
                         <th className="px-5 py-3">Ventas</th>
                         <th className="px-5 py-3">Descuento</th>
+                        <th className="px-5 py-3"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800">
@@ -574,6 +611,9 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
                           <td className="px-5 py-4 font-semibold">{Math.max(Number(promo.usage_count || 0), Number(promotionStatsMap.get(promo.id)?.uses || 0))}</td>
                           <td className="px-5 py-4">{currency.format(Math.max(Number(promo.generated_sales || 0), Number(promotionStatsMap.get(promo.id)?.sales || 0)))}</td>
                           <td className="px-5 py-4 text-rose-300">{currency.format(Math.max(Number(promo.discount_granted || 0), Number(promotionStatsMap.get(promo.id)?.discount || 0)))}</td>
+                          <td className="px-5 py-4">
+                            <button onClick={() => editPromotion(promo)} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-800 hover:text-gray-200 transition"><Pencil size={14} /></button>
+                          </td>
                         </tr>
                       ))}
                       {promotions.length === 0 && <EmptyRow colSpan={9} label="No hay promociones creadas." />}
@@ -696,7 +736,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
       )}
 
       {showPromotionForm && (
-        <Modal title="Nueva Promocion" subtitle="Promocion visual para cliente" onClose={() => setShowPromotionForm(false)}>
+        <Modal title={editingPromotionId ? "Editar Promocion" : "Nueva Promocion"} subtitle={editingPromotionId ? "Modificá la promocion existente" : "Promocion visual para cliente"} onClose={() => { setShowPromotionForm(false); setEditingPromotionId(null); }}>
           <form onSubmit={createPromotion} className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Nombre"><input className="input" value={promotionForm.name} onChange={(e) => setPromotionForm({ ...promotionForm, name: e.target.value })} /></Field>
@@ -743,7 +783,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
               </div>
             </div>
 
-            <FormActions onCancel={() => setShowPromotionForm(false)} submit="Crear promocion" />
+            <FormActions onCancel={() => { setShowPromotionForm(false); setEditingPromotionId(null); }} submit={editingPromotionId ? "Guardar cambios" : "Crear promocion"} />
           </form>
         </Modal>
       )}
