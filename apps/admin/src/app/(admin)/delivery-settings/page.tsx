@@ -48,16 +48,25 @@ export default function DeliverySettingsPage() {
   const save = async () => {
     if (!tenantId) return;
 
-    await supabase
+    // Try update first, then insert if doesn't exist
+    const { data: existing } = await supabase
       .from("delivery_settings")
-      .upsert({
-        tenant_id: tenantId,
-        enabled,
-        base_delivery_cost: baseCost,
-        price_per_km: pricePerKm,
-        free_shipping_radius: freeRadius,
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from("delivery_settings").update({
+        enabled, base_delivery_cost: baseCost, price_per_km: pricePerKm,
+        free_shipping_radius: freeRadius, max_distance_km: maxDistance,
+      }).eq("id", existing.id);
+    } else {
+      await supabase.from("delivery_settings").insert({
+        tenant_id: tenantId, enabled, base_delivery_cost: baseCost,
+        price_per_km: pricePerKm, free_shipping_radius: freeRadius,
         max_distance_km: maxDistance,
       });
+    }
 
     alert("Configuración guardada");
   };
