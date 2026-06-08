@@ -46,6 +46,7 @@ export default function OrderCard({
 }: any) {
   const [rider, setRider] = useState<any>(null);
   const [riders, setRiders] = useState<any[]>([]);
+  const [zoneName, setZoneName] = useState<string | null>(null);
   const [showRiderSelect, setShowRiderSelect] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -66,6 +67,9 @@ export default function OrderCard({
     if (order.rider_id) {
       loadRider(order.rider_id);
     }
+    if (order.delivery_zone_id) {
+      loadZone(order.delivery_zone_id);
+    }
     if (isDelivery) {
       loadRiders();
     }
@@ -78,6 +82,15 @@ export default function OrderCard({
       .eq("id", riderId)
       .single();
     setRider(data);
+  };
+
+  const loadZone = async (zoneId: string) => {
+    const { data } = await supabase
+      .from("delivery_zones")
+      .select("name")
+      .eq("id", zoneId)
+      .single();
+    if (data) setZoneName(data.name);
   };
 
   const loadRiders = async () => {
@@ -106,14 +119,40 @@ export default function OrderCard({
     if (onAssignRider) onAssignRider(order.id, selectedRider);
   };
 
-  const handleNotifyRider = async () => {
-    if (!rider) return;
-    setLoading(true);
+const handleNotifyRider = () => {
+  if (!rider) return;
 
-    if (onNotifyRider) await onNotifyRider(order, rider);
+  const riderPhone = rider.phone.replace(/\D/g, "");
+  const customerPhone = (order.customer_phone || "").replace(/\D/g, "");
 
-    setLoading(false);
-  };
+  if (!customerPhone) {
+    alert("El cliente no tiene teléfono cargado");
+    return;
+  }
+
+  const customerMessage =
+    `Hola 👋
+
+Soy el repartidor de ${order.tenant_name || "Mordisco Burgers"} y estoy yendo a su domicilio.
+
+Le aviso cuando estoy afuera.`;
+
+  const customerWhatsappUrl =
+    `https://wa.me/${customerPhone}?text=${encodeURIComponent(customerMessage)}`;
+
+  const riderMessage =
+    `🚴 Pedido #${order.id.slice(0, 4)}
+
+Cliente: ${order.customer_name}
+
+📲 Contactar cliente:
+${customerWhatsappUrl}`;
+
+  const url =
+    `https://wa.me/${riderPhone}?text=${encodeURIComponent(riderMessage)}`;
+
+  window.open(url, "_blank");
+};
 
   const canCancel = ["unconfirmed", "confirmed", "preparing"].includes(order.status);
 
@@ -189,6 +228,12 @@ export default function OrderCard({
             >
               {order.type}
             </span>
+
+            {zoneName && (
+              <span className="text-sm px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                📍 {zoneName}
+              </span>
+            )}
 
             <span className="text-sm px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
               {paymentLabel}
