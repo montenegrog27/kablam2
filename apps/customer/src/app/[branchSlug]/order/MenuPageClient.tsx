@@ -83,7 +83,7 @@ export default function MenuPageClient({
         customer={customer}
         branchSlug={branchSlug}
       />
-      <CumpleMordiscoEntry branchSlug={branchSlug} />
+      {/* <CumpleMordiscoEntry branchSlug={branchSlug} /> */}
 
       <div className="pb-24">
         {!branchIsOpen && (
