@@ -12,14 +12,30 @@ const ESPN_LEAGUES = [
   "conmebol.copa_america",
 ];
 
-const ESPN_WORLD_CUP_SCOREBOARD_DATES = [
-  "20260611", "20260612", "20260613", "20260614", "20260615", "20260616", "20260617",
-  "20260618", "20260619", "20260620", "20260621", "20260622", "20260623", "20260624",
-  "20260625", "20260626", "20260627", "20260628", "20260629",
-];
-
 function createSupabaseService() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+function formatEspnDate(date: Date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function getScoreboardDates() {
+  const dates = new Set<string>();
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  start.setUTCDate(start.getUTCDate() - 3);
+
+  for (let offset = 0; offset <= 75; offset += 1) {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + offset);
+    dates.add(formatEspnDate(date));
+  }
+
+  return Array.from(dates);
 }
 
 async function getAuthorizedUser(req: NextRequest) {
@@ -41,6 +57,26 @@ async function getAuthorizedUser(req: NextRequest) {
   if (!["owner", "admin"].includes(userRecord.role)) return { error: "forbidden" as const };
 
   return { supabase, user: userRecord };
+}
+
+async function ensureProdeSchema(supabase: ReturnType<typeof createSupabaseService>) {
+  const { error } = await supabase.from("prode_matches").select("id").limit(1);
+  if (!error) return null;
+
+  if (error.code === "PGRST205" || error.message?.includes("prode_matches")) {
+    return {
+      error: "prode_schema_missing",
+      message: "Faltan crear las tablas del Prode. Ejecuta add_prode_mordisco.sql en Supabase y vuelve a sincronizar.",
+      setupFile: "add_prode_mordisco.sql",
+      details: error.message,
+    };
+  }
+
+  return {
+    error: "prode_schema_error",
+    message: error.message,
+    details: error.message,
+  };
 }
 
 function statusFromEspn(event: any) {
@@ -109,7 +145,7 @@ async function fetchArgentinaMatches() {
   );
 
   await Promise.all(
-    ESPN_WORLD_CUP_SCOREBOARD_DATES.map(async (date) => {
+    getScoreboardDates().map(async (date) => {
       const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${date}`;
       try {
         const response = await fetch(url, { next: { revalidate: 60 * 30 } });
@@ -138,6 +174,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status });
   }
 
+  const schemaError = await ensureProdeSchema(auth.supabase);
+  if (schemaError) {
+    return NextResponse.json(schemaError, { status: 500 });
+  }
+
   const allMatches = await fetchArgentinaMatches();
   const now = Date.now();
   const relevantMatches = allMatches.filter((match) => {
@@ -147,6 +188,7 @@ export async function POST(req: NextRequest) {
 
   let inserted = 0;
   let updated = 0;
+  const failed: Array<{ match: string; error: string }> = [];
 
   for (const match of relevantMatches) {
     const from = new Date(new Date(match.match_date).getTime() - 1000 * 60 * 5).toISOString();
@@ -176,9 +218,11 @@ export async function POST(req: NextRequest) {
     if (existing?.id) {
       const { error } = await auth.supabase.from("prode_matches").update(payload).eq("id", existing.id);
       if (!error) updated += 1;
+      else failed.push({ match: `${match.home_team} vs ${match.away_team}`, error: error.message });
     } else {
       const { error } = await auth.supabase.from("prode_matches").insert(payload);
       if (!error) inserted += 1;
+      else failed.push({ match: `${match.home_team} vs ${match.away_team}`, error: error.message });
     }
   }
 
@@ -188,9 +232,11 @@ export async function POST(req: NextRequest) {
     ok: true,
     source: "espn",
     fetched: allMatches.length,
+    relevant: relevantMatches.length,
     imported: inserted + updated,
     inserted,
     updated,
+    failed,
     nextMatch: nextMatch || null,
   });
 }

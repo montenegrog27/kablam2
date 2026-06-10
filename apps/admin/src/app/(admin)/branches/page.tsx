@@ -183,6 +183,7 @@ export default function BranchesPage() {
         {
           branch_id: branchId,
           logo_url: branchSettings.logo_url,
+          loading_icon_url: branchSettings.loading_icon_url,
           primary_color: branchSettings.primary_color,
           secondary_color: branchSettings.secondary_color,
           background_color: branchSettings.background_color,
@@ -217,6 +218,7 @@ export default function BranchesPage() {
           "Error: Falta agregar columnas a la tabla branch_settings.\n\n" +
             "Ejecuta el SQL en add_meta_fields_to_branch_settings.sql:\n\n" +
             "ALTER TABLE branch_settings\n" +
+            "ADD COLUMN IF NOT EXISTS loading_icon_url TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS favicon_url TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS meta_title TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS meta_pixel_id TEXT,\n" +
@@ -486,6 +488,31 @@ export default function BranchesPage() {
                   updateLocalSettings(branch.id, "logo_url", e.target.value)
                 }
               />
+
+              <input
+                placeholder="URL del icono de carga (gira al iniciar la app)"
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
+                value={branchSettings.loading_icon_url || ""}
+                onChange={(e) =>
+                  updateLocalSettings(branch.id, "loading_icon_url", e.target.value)
+                }
+              />
+              <div className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-800 px-3 py-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-950">
+                  {branchSettings.loading_icon_url || branchSettings.logo_url ? (
+                    <img
+                      src={branchSettings.loading_icon_url || branchSettings.logo_url}
+                      alt="Preview loader"
+                      className="h-8 w-8 animate-spin object-contain"
+                    />
+                  ) : (
+                    <div className="h-7 w-7 animate-spin rounded-full border-2 border-gray-700 border-t-white" />
+                  )}
+                </div>
+                <div className="text-xs text-gray-400">
+                  Si queda vacio, customer usa el logo de la sucursal. Recomendado: PNG/SVG cuadrado con fondo transparente.
+                </div>
+              </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <input

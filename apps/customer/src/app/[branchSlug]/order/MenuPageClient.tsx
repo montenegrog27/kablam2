@@ -16,6 +16,7 @@ import CartBottomBar from "../../components/CartBottomBar";
 import FontLoader from "../../components/FontLoader";
 import MetaTags from "../../components/MetaTags";
 import CumpleMordiscoEntry from "../../components/CumpleMordiscoEntry";
+import CustomerInitialLoader from "../../components/CustomerInitialLoader";
 
 export default function MenuPageClient({
   initialMenu,
@@ -74,6 +75,7 @@ export default function MenuPageClient({
 
   return (
     <>
+      <CustomerInitialLoader branding={branding} branchSlug={branchSlug} />
       <FontLoader branding={branding} />
       <MetaTags branding={branding} />
       <NavbarDelivery

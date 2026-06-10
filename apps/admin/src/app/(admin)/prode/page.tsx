@@ -155,12 +155,17 @@ export default function ProdeAdminPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo sincronizar");
-      setSyncMessage(
-        data.imported > 0
-          ? `Sincronizado: ${data.imported} partido(s). Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`
-          : "Sin partidos nuevos disponibles desde la API.",
-      );
+      if (!response.ok) throw new Error(data.message || data.error || "No se pudo sincronizar");
+      if (data.failed?.length) {
+        const firstError = data.failed[0];
+        setSyncMessage(`ESPN encontro ${data.fetched || 0} partido(s), pero no pude guardar ${data.failed.length}. Primero: ${firstError.match} - ${firstError.error}`);
+      } else if (data.imported > 0) {
+        setSyncMessage(`Sincronizado: ${data.imported} partido(s). Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`);
+      } else if ((data.fetched || 0) > 0) {
+        setSyncMessage(`ESPN encontro ${data.fetched} partido(s), pero no habia nuevos para guardar. Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`);
+      } else {
+        setSyncMessage("ESPN no devolvio partidos de Argentina para el rango consultado.");
+      }
       await load();
     } catch (error) {
       setSyncMessage(error instanceof Error ? error.message : "No se pudo sincronizar");

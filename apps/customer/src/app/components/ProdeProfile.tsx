@@ -159,7 +159,7 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-4">
         <button onClick={() => setTab("predictions")}
           className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${tab === "predictions" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
-          Mis apuestas
+          Mis pronosticos
         </button>
         <button onClick={() => setTab("ranking")}
           className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${tab === "ranking" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
@@ -217,12 +217,12 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
                                   <div className="bg-gray-50 rounded-xl p-2.5 flex items-center justify-between">
                                     <span className="font-bold text-lg text-gray-900">{match.home_score} - {match.away_score}</span>
                                     {pred.isSaved && <span className="text-xs font-bold text-emerald-600">+{getPrediction(match.id)?.points_earned || 0} pts</span>}
-                                    {!pred.isSaved && <span className="text-xs text-gray-400">Sin apuesta</span>}
+                                    {!pred.isSaved && <span className="text-xs text-gray-400">Sin pronostico</span>}
                                   </div>
                                 ) : closed ? (
                                   <div className="bg-red-50 rounded-xl p-2.5 text-center">
-                                    <p className="text-xs font-medium text-red-600">Apuestas cerradas · El partido comienza pronto</p>
-                                    {pred.isSaved && <p className="text-xs text-gray-500 mt-1">Tu apuesta: {pred.h} - {pred.a} {pred.scorer ? `· ⚽ ${pred.scorer}` : ""}</p>}
+                                    <p className="text-xs font-medium text-red-600">Pronosticos cerrados · El partido comienza pronto</p>
+                                    {pred.isSaved && <p className="text-xs text-gray-500 mt-1">Tu pronostico: {pred.h} - {pred.a} {pred.scorer ? `· ⚽ ${pred.scorer}` : ""}</p>}
                                   </div>
                                 ) : (
                                   <div className="flex items-center gap-2 flex-wrap">
@@ -236,7 +236,7 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
                                     {canPredict_ && (
                                       <button onClick={() => submitPrediction(match.id)} disabled={saving || String(pred.h) === "" || String(pred.a) === ""}
                                         className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-black transition disabled:opacity-40">
-                                        {pred.isSaved ? "Actualizar" : "Apostar"}
+                                        {pred.isSaved ? "Actualizar" : "Guardar"}
                                       </button>
                                     )}
                                   </div>

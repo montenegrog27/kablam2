@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getCustomerSession } from "@/lib/customer-session";
+import { createCustomerSession, getCustomerSession } from "@/lib/customer-session";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -155,6 +155,7 @@ export async function GET() {
       email: customer.email,
       birthDate: customer.birth_date,
       avatar: customer.name?.[0] || "?",
+      avatarUrl: customer.avatar_url,
       created_at: customer.created_at,
     },
     stats: {
@@ -225,15 +226,17 @@ export async function PUT(req: Request) {
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-  const { name, email, birthDate } = await req.json();
+  const { name, email, birthDate, avatarUrl } = await req.json();
   const updates: Record<string, string | boolean | null> = {};
+  const nextName = name !== undefined ? String(name).trim() : undefined;
 
-  if (name !== undefined) updates.name = String(name).trim() || null;
+  if (name !== undefined) updates.name = nextName || null;
   if (email !== undefined) updates.email = String(email).trim() || null;
   if (birthDate !== undefined) updates.birth_date = birthDate || null;
+  if (avatarUrl !== undefined) updates.avatar_url = String(avatarUrl).trim() || null;
 
-  if (name !== undefined || email !== undefined || birthDate !== undefined) {
-    updates.profile_completed = Boolean(updates.name);
+  if (name !== undefined) {
+    updates.profile_completed = Boolean(nextName);
   }
 
   if (Object.keys(updates).length === 0) {
@@ -250,6 +253,16 @@ export async function PUT(req: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (name !== undefined) {
+    await createCustomerSession({
+      customerId: session.customerId,
+      branchId: session.branchId,
+      tenantId: session.tenantId,
+      phone: session.phone,
+      name: nextName || undefined,
+    });
   }
 
   return NextResponse.json({ success: true });

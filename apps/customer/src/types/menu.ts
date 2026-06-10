@@ -110,6 +110,7 @@ export type Product = {
 
 export type Branding = {
   logo_url?: string;
+  loading_icon_url?: string;
   primary_color?: string;
   secondary_color?: string;
   background_color?: string;

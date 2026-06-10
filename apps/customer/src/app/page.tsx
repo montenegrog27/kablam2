@@ -11,6 +11,7 @@ import { createSupabaseServer } from "@kablam/supabase/server";
 import { getBrandFontFamily, getFontCss, getGoogleFontFamily } from "@/lib/fonts";
 import { buildCustomerMetadata } from "@/lib/metadata";
 import { normalizeHost, resolveTenantFromHost } from "../lib/tenant-resolution";
+import CustomerInitialLoader from "./components/CustomerInitialLoader";
 
 type Branch = {
   id: string;
@@ -125,7 +126,7 @@ export default async function Landing() {
   const { data: branchSettings } = brandingBranch
     ? await supabase
         .from("branch_settings")
-        .select("logo_url, primary_color, brand_color, background_color, font_family, font_primary, font_url")
+        .select("logo_url, loading_icon_url, primary_color, brand_color, background_color, font_family, font_primary, font_url")
         .eq("branch_id", brandingBranch.id)
         .maybeSingle()
     : { data: null };
@@ -162,6 +163,10 @@ export default async function Landing() {
       className="min-h-screen px-5 py-8"
       style={{ background: backgroundColor, color: textColor, fontFamily: appliedFontFamily }}
     >
+      <CustomerInitialLoader
+        branding={branchSettings ? JSON.parse(JSON.stringify(branchSettings)) : undefined}
+        branchSlug={brandingBranch?.slug || "home"}
+      />
       {fontUrl?.includes("fonts.googleapis.com") ? (
         <>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
