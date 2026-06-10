@@ -77,14 +77,26 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    const waData = await waRes.json();
-    console.log("📱 WhatsApp response:", waData);
-
-    if (!waRes.ok && waData?.error) {
-      return NextResponse.json({ error: "Error al enviar código" }, { status: 500 });
+    const waText = await waRes.text();
+    let waData: { error?: string } | null = null;
+    try {
+      waData = waText ? JSON.parse(waText) : null;
+    } catch {
+      waData = null;
     }
 
-    return NextResponse.json({ success: true, message: "Código enviado" });
+    if (!waRes.ok) {
+      console.error("WhatsApp login error:", {
+        status: waRes.status,
+        response: waText.slice(0, 180),
+      });
+      return NextResponse.json(
+        { error: waData?.error || "No pudimos enviar el codigo por WhatsApp" },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json({ success: true, message: "Codigo enviado" });
   } catch (err: unknown) {
     console.error("Error en request-login:", err);
     return NextResponse.json(
