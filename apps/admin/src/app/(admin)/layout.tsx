@@ -102,6 +102,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { section: "Configuración", items: [
       { href: "/roles", label: "Roles y Permisos", icon: Shield },
       { href: "/users", label: "Usuarios", icon: UserCog },
+      { href: "/employees", label: "Empleados", icon: Users },
       { href: "/delivery-settings", label: "Delivery", icon: Truck },
       { href: "/delivery-zones", label: "Zonas Delivery", icon: MapPin },
       { href: "/payment-methods", label: "Métodos de Pago", icon: CreditCard },
