@@ -31,7 +31,7 @@ export default async function AccountLayout({
     const branding = branch.branch_settings?.[0];
 
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="customer-account-dark min-h-screen">
         <AccountNavbar
           branchSlug={branchSlug}
           customerName={session.name}

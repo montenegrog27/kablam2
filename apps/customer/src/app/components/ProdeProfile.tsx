@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
-import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { Trophy, Star, Target, Calendar, Medal, TrendingUp, Loader2, Share2, Gift, ChevronDown, ChevronUp, Zap } from "lucide-react";
 
 type Match = { id: string; home_team: string; away_team: string; match_date: string; home_score?: number; away_score?: number; status: string; round: string };
@@ -34,20 +33,18 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
 
   const load = async () => {
     if (!tenantId) return;
-    const [m, p, s] = await Promise.all([
-      supabase.from("prode_matches").select("*").eq("tenant_id", tenantId).order("match_date").limit(64),
-      supabase.from("prode_predictions").select("*, matches!match_id(*)").eq("customer_id", customerId).order("created_at", { ascending: false }),
-      supabase.from("prode_standings").select("*, customers!customer_id(name)").eq("tenant_id", tenantId).order("total_points", { ascending: false }).limit(100),
-    ]);
-    const newStandings = s.data || [];
+    const response = await fetch("/api/prode", { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok) return;
+    const newStandings: Standing[] = data.standings || [];
     // Detect rank change
     const myNewRank = newStandings.findIndex((st) => st.customer_id === customerId) + 1;
     if (prevStanding !== null && myNewRank > 0 && prevStanding > 0 && myNewRank !== prevStanding) {
       // Store the change
     }
     if (prevStanding === null && myNewRank > 0) setPrevStanding(myNewRank);
-    setMatches(m.data || []);
-    setPredictions(p.data || []);
+    setMatches(data.matches || []);
+    setPredictions(data.predictions || []);
     setStandings(newStandings);
   };
 
@@ -57,13 +54,19 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
     const pred = myPredictions[matchId];
     if (!pred || !customerId || !tenantId) return;
     setSaving(true);
-    const total = (pred.h + pred.a);
-    await supabase.from("prode_predictions").upsert({
-      tenant_id: tenantId, customer_id: customerId, match_id: matchId,
-      home_score: pred.h, away_score: pred.a,
-      first_scorer: pred.scorer || null, total_goals: total,
-    }, { onConflict: "customer_id,match_id" });
-    setMyPredictions((prev) => ({ ...prev, [matchId]: { ...prev[matchId], saved: true } }));
+    const response = await fetch("/api/prode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        matchId,
+        homeScore: pred.h,
+        awayScore: pred.a,
+        firstScorer: pred.scorer || "",
+      }),
+    });
+    if (response.ok) {
+      setMyPredictions((prev) => ({ ...prev, [matchId]: { ...prev[matchId], saved: true } }));
+    }
     setSaving(false);
     load();
   };
@@ -92,7 +95,7 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
     return ROUND_ORDER.filter((r) => (grouped[r] || []).length > 0).map((r) => ({ round: r, label: ROUND_LABELS[r], matches: grouped[r] }));
   }, [matches]);
 
-  const isClosed = (match: Match) => new Date(match.match_date).getTime() - Date.now() < 3600000;
+  const isClosed = (match: Match) => new Date(match.match_date).getTime() <= Date.now();
   const getPredictionForMatch = (match: Match) => {
     const pred = getPrediction(match.id);
     const localPred = myPredictions[match.id];

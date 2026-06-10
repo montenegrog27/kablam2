@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Plus, Trash2, Save, Trophy, Users, Target, Medal, Star, TrendingUp, Calendar, Search, X } from "lucide-react";
+import { Plus, Trash2, Save, Trophy, Users, Target, Medal, Star, TrendingUp, Calendar, Search, X, RefreshCw } from "lucide-react";
 
 export default function ProdeAdminPage() {
   const [tenantId, setTenantId] = useState("");
@@ -12,6 +12,8 @@ export default function ProdeAdminPage() {
   const [editing, setEditing] = useState<any>(null);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
 
   // Form state
   const [homeTeam, setHomeTeam] = useState("");
@@ -135,6 +137,38 @@ export default function ProdeAdminPage() {
     load();
   };
 
+  const syncArgentinaMatches = async () => {
+    setSyncing(true);
+    setSyncMessage("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      setSyncMessage("No hay sesion activa para sincronizar.");
+      setSyncing(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/prode/sync-argentina", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo sincronizar");
+      setSyncMessage(
+        data.imported > 0
+          ? `Sincronizado: ${data.imported} partido(s). Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`
+          : "Sin partidos nuevos disponibles desde la API.",
+      );
+      await load();
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : "No se pudo sincronizar");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const totalParticipants = standings.length;
   const totalPredictions = matches.reduce((s, m) => s + (m.status === "finished" ? 1 : 0), 0);
 
@@ -152,11 +186,23 @@ export default function ProdeAdminPage() {
           <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2"><Trophy size={22} className="text-amber-400" /> Prode Mordisco</h1>
           <p className="text-sm text-gray-500 mt-0.5">{matches.length} partidos · {totalParticipants} participantes · {totalPredictions} finalizados</p>
         </div>
-        <button onClick={() => { resetForm(); setShowForm(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold hover:bg-amber-500 transition">
-          <Plus size={16} /> Nuevo partido
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={syncArgentinaMatches} disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-bold hover:bg-sky-500 transition disabled:opacity-50">
+            <RefreshCw size={16} className={syncing ? "animate-spin" : ""} /> Sincronizar Argentina
+          </button>
+          <button onClick={() => { resetForm(); setShowForm(true); }}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold hover:bg-amber-500 transition">
+            <Plus size={16} /> Nuevo partido
+          </button>
+        </div>
       </div>
+
+      {syncMessage && (
+        <div className="rounded-xl border border-sky-800 bg-sky-950/40 px-4 py-3 text-sm text-sky-200">
+          {syncMessage}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-900 border border-gray-700 rounded-xl p-1">
