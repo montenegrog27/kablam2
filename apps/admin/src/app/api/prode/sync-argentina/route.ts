@@ -12,6 +12,12 @@ const ESPN_LEAGUES = [
   "conmebol.copa_america",
 ];
 
+const ESPN_WORLD_CUP_SCOREBOARD_DATES = [
+  "20260611", "20260612", "20260613", "20260614", "20260615", "20260616", "20260617",
+  "20260618", "20260619", "20260620", "20260621", "20260622", "20260623", "20260624",
+  "20260625", "20260626", "20260627", "20260628", "20260629",
+];
+
 function createSupabaseService() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
@@ -70,6 +76,18 @@ function normalizeEspnEvent(event: any) {
   };
 }
 
+function eventHasArgentina(event: any) {
+  const competitors = event?.competitions?.[0]?.competitors || [];
+  return competitors.some((competitor: any) => {
+    const team = competitor?.team || {};
+    return (
+      String(team.id || "") === ESPN_TEAM_ID ||
+      String(team.abbreviation || "").toUpperCase() === "ARG" ||
+      String(team.displayName || "").toLowerCase() === "argentina"
+    );
+  });
+}
+
 async function fetchArgentinaMatches() {
   const results: any[] = [];
 
@@ -86,6 +104,24 @@ async function fetchArgentinaMatches() {
         }
       } catch {
         // ESPN is an external optional source. Manual matches remain available.
+      }
+    }),
+  );
+
+  await Promise.all(
+    ESPN_WORLD_CUP_SCOREBOARD_DATES.map(async (date) => {
+      const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${date}`;
+      try {
+        const response = await fetch(url, { next: { revalidate: 60 * 30 } });
+        if (!response.ok) return;
+        const payload = await response.json();
+        for (const event of payload.events || []) {
+          if (!eventHasArgentina(event)) continue;
+          const normalized = normalizeEspnEvent(event);
+          if (normalized) results.push(normalized);
+        }
+      } catch {
+        // Keep manual admin matches as fallback if ESPN scoreboard is unavailable.
       }
     }),
   );
