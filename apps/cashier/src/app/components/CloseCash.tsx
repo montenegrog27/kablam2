@@ -81,8 +81,12 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
     const { data } = await supabase
       .from("orders")
       .select("id")
-      .eq("cash_session_id", session.id)
-      .not("status", "in", "(delivered,cancelled)");
+      .eq("tenant_id", session.tenant_id)
+      .eq("branch_id", session.branch_id)
+      .gte("created_at", session.opened_at)
+      .lte("created_at", new Date().toISOString())
+      .or(`cash_session_id.eq.${session.id},cash_session_id.is.null`)
+      .not("status", "in", "(delivered,cancelled,canceled)");
 
     return (data?.length ?? 0) > 0;
   };
@@ -98,13 +102,20 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
       return;
     }
 
+    const closeAt = new Date().toISOString();
+
     const { data: ordersData } = await supabase
       .from("orders")
       .select("id,total,subtotal,shipping_cost,type")
-      .eq("cash_session_id", session.id)
+      .eq("tenant_id", session.tenant_id)
+      .eq("branch_id", session.branch_id)
+      .gte("created_at", session.opened_at)
+      .lte("created_at", closeAt)
+      .or(`cash_session_id.eq.${session.id},cash_session_id.is.null`)
       .eq("status", "delivered");
 
     const deliveredOrders = ordersData || [];
+    const deliveredOrderIds = deliveredOrders.map((order: any) => order.id).filter(Boolean);
     const totalRevenue = deliveredOrders.reduce(
       (sum: number, order: any) => sum + Number(order.total || 0),
       0,
@@ -122,17 +133,13 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
     }, 0);
 
     // ================= PAGOS =================
-    const { data: paymentsData } = await supabase
-      .from("order_payments")
-      .select(
-        `
-      amount,
-      orders!inner(id,status,cash_session_id,total),
-      payment_methods!inner(name,affects_cash)
-    `,
-      )
-      .eq("orders.cash_session_id", session.id)
-      .eq("orders.status", "delivered");
+    const { data: paymentsData } =
+      deliveredOrderIds.length > 0
+        ? await supabase
+            .from("order_payments")
+            .select("amount, payment_methods!inner(name,affects_cash)")
+            .in("order_id", deliveredOrderIds)
+        : { data: [] };
 
     const paymentSummary: Record<string, number> = {};
     const paymentDetails: Record<string, { amount: number; affectsCash: boolean }> = {};
@@ -208,24 +215,25 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
     setExpenseCategories(categoriesData || []);
 
     // ================= PRODUCTOS =================
-    const { data: itemsData } = await supabase
-      .from("order_items")
-      .select(
-        `
-      variant_id,
-      quantity,
-      total,
-      product_variants (
-        name,
-        products (
-          name
-        )
-      ),
-      orders!inner(status,cash_session_id)
-    `,
-      )
-      .eq("orders.cash_session_id", session.id)
-      .eq("orders.status", "delivered");
+    const { data: itemsData } =
+      deliveredOrderIds.length > 0
+        ? await supabase
+            .from("order_items")
+            .select(
+              `
+            variant_id,
+            quantity,
+            total,
+            product_variants (
+              name,
+              products (
+                name
+              )
+            )
+          `,
+            )
+            .in("order_id", deliveredOrderIds)
+        : { data: [] };
 
     const productSummary: Record<string, any> = {};
     let totalUnits = 0;
@@ -455,16 +463,21 @@ if (freshSession.status !== "open") {
 
       if (closureId) {
         const token = authData.session?.access_token;
-        fetch("/api/cash-closure-report", {
+        const reportResponse = await fetch("/api/cash-closure-report", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ closureId }),
-        }).catch((reportError) => {
-          console.error("No se pudo enviar reporte por WhatsApp:", reportError);
         });
+        const reportResult = await reportResponse.json().catch(() => null);
+        if (!reportResponse.ok || reportResult?.ok === false) {
+          console.error("No se pudo enviar reporte por WhatsApp:", {
+            status: reportResponse.status,
+            result: reportResult,
+          });
+        }
       }
 
       onClosed();

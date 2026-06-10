@@ -46,12 +46,10 @@ type SupabaseOrder = {
 
 const orderSelect = `
   *,
-  order_items (
+  order_items!left (
     id,
     product_id,
     variant_id,
-    product:products(name),
-    variant:product_variants(id, name, price, is_default),
     quantity,
     unit_price,
     total,
@@ -115,8 +113,8 @@ export async function GET(req: Request) {
         id: item.id,
         product_id: item.product_id,
         variant_id: item.variant_id,
-        product_name: item.product?.name || item.variant?.name || "Producto",
-        variant: item.variant,
+        product_name: "Producto",
+        variant: null,
         quantity: item.quantity,
         unit_price: item.unit_price,
         total: item.total,
@@ -170,7 +168,7 @@ export async function POST(req: Request) {
 
     const { data: originalOrder, error: orderError } = await supabase
       .from("orders")
-      .select(orderSelect)
+      .select("*, order_items!left(*)")
       .eq("id", orderId)
       .eq("customer_id", session.customerId)
       .eq("branch_id", session.branchId)

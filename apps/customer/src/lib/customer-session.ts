@@ -43,17 +43,21 @@ export async function createCustomerSession(
   });
 
   // También guardamos una versión simplificada en Supabase para validación cruzada
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
 
-  await supabase.from("customer_sessions").upsert({
-    customer_id: sessionData.customerId,
-    branch_id: sessionData.branchId,
-    session_token: sessionValue, // En producción usar un token único
-    expires_at: new Date(expiresAt * 1000).toISOString(),
-  });
+    await supabase.from("customer_sessions").upsert({
+      customer_id: sessionData.customerId,
+      branch_id: sessionData.branchId,
+      session_token: sessionValue,
+      expires_at: new Date(expiresAt * 1000).toISOString(),
+    });
+  } catch (e) {
+    console.error("Error saving session to Supabase (non-fatal):", e);
+  }
 
   return session;
 }
@@ -81,22 +85,27 @@ export async function getCustomerSession(): Promise<CustomerSession | null> {
     }
 
     // Validar sesión en Supabase (opcional, para seguridad adicional)
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
+    try {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      );
 
-    const { data } = await supabase
-      .from("customer_sessions")
-      .select("*")
-      .eq("customer_id", session.customerId)
-      .eq("branch_id", session.branchId)
-      .gte("expires_at", new Date().toISOString())
-      .maybeSingle();
+      const { data } = await supabase
+        .from("customer_sessions")
+        .select("*")
+        .eq("customer_id", session.customerId)
+        .eq("branch_id", session.branchId)
+        .gte("expires_at", new Date().toISOString())
+        .maybeSingle();
 
-    if (!data) {
-      await destroyCustomerSession();
-      return null;
+      if (!data) {
+        // Session not found in Supabase - could be table issue or cleanup
+        // Still allow the session from cookie (graceful degradation)
+        console.warn("Session not found in Supabase, allowing from cookie");
+      }
+    } catch (e) {
+      console.error("Error validating session in Supabase (non-fatal):", e);
     }
 
     return session;

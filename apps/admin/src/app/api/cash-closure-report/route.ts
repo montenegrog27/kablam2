@@ -309,7 +309,7 @@ async function sendWhatsapp(phone: string, message: string, branchId: string | n
   const whatsappToken = String(process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_API_TOKEN || "")
     .trim()
     .replace(/^["']|["']$/g, "");
-  if (!whatsappToken) return { skipped: true, reason: "WHATSAPP_TOKEN missing" };
+  if (!whatsappToken) return { ok: false, skipped: true, status: 503, response: "WHATSAPP_TOKEN missing" };
   if (!branchId) return { ok: false, status: 400, response: "branch_slug_missing" };
 
   const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
@@ -452,7 +452,7 @@ export async function POST(req: NextRequest) {
     ),
   );
 
-  const failed = results.filter((result: any) => result.ok === false);
+  const failed = results.filter((result: any) => result.ok !== true);
   return NextResponse.json({
     ok: failed.length === 0,
     sent: results.length - failed.length,

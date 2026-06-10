@@ -105,6 +105,37 @@ function getItemPromotion(order: any, item: any) {
   ) || breakdown[0];
 }
 
+function getOrderItemLabel(order: any, item: any) {
+  if (item.products?.name) return item.products.name;
+  if (item.combos?.name) return item.combos.name;
+
+  if (item.item_type === "promotion") {
+    const promotionExtra = Array.isArray(item.extras)
+      ? item.extras.find((extra: any) => extra?.type === "promotion" && extra?.name)
+      : null;
+    if (promotionExtra?.name) return promotionExtra.name;
+
+    const promotion = getItemPromotion(order, item);
+    if (promotion?.promotionName) return promotion.promotionName;
+  }
+
+  const namedExtra = Array.isArray(item.extras)
+    ? item.extras.find((extra: any) => extra?.name && extra?.type !== "removed")
+    : null;
+  if (namedExtra?.name) return namedExtra.name;
+
+  if (item.combo_id) return `Combo ${String(item.combo_id).slice(0, 8)}`;
+  if (item.product_id) return `Producto ${String(item.product_id).slice(0, 8)}`;
+  return "Item sin nombre";
+}
+
+function getOrderItemKey(item: any, label: string) {
+  if (item.product_id) return `product:${item.product_id}`;
+  if (item.combo_id) return `combo:${item.combo_id}`;
+  if (item.item_type === "promotion") return `promotion:${label}`;
+  return `item:${label}`;
+}
+
 function isBurgerProduct(product: any) {
   const text = `${product?.name || ""} ${product?.categories?.name || ""}`.toLowerCase();
   return /hamburg|burger|cheese|bacon|doble|triple|medallon|medall[oó]n/.test(text);
@@ -296,10 +327,11 @@ export async function GET(req: NextRequest) {
   const productSales: Record<string, { name: string; qty: number; revenue: number }> = {};
   orders?.forEach((o) => {
     (o.order_items || []).forEach((item: any) => {
-      const pid = item.product_id;
-      if (!productSales[pid]) productSales[pid] = { name: item.products?.name || "Producto", qty: 0, revenue: 0 };
-      productSales[pid].qty += item.quantity || 1;
-      productSales[pid].revenue += Number(item.total) || 0;
+      const label = getOrderItemLabel(o, item);
+      const key = getOrderItemKey(item, label);
+      if (!productSales[key]) productSales[key] = { name: label, qty: 0, revenue: 0 };
+      productSales[key].qty += item.quantity || 1;
+      productSales[key].revenue += Number(item.total) || 0;
     });
   });
 
@@ -315,7 +347,7 @@ export async function GET(req: NextRequest) {
   });
 
   // ──────────────────────────────────────────────
-  // 6. EXPENSES (current day)
+  // 6. EXPENSES (current day) — separate by affects_profitability
   // ──────────────────────────────────────────────
   let expensesQuery = supabase
     .from("expenses")
@@ -328,30 +360,32 @@ export async function GET(req: NextRequest) {
 
   const totalExpenses = expenses?.reduce((s, e) => s + Number(e.total), 0) || 0;
 
+  // Expenses that affect profitability (real COGS, direct costs)
+  const profitExpenses = (expenses || []).filter((e) => e.affects_profitability !== false);
+  // Cashflow-only expenses (payments for already-prorated costs like salaries, rent, etc.)
+  const cashflowOnlyExpenses = (expenses || []).filter((e) => e.affects_profitability === false);
+  const totalCashflowOnlyExpenses = cashflowOnlyExpenses.reduce((s, e) => s + Number(e.total), 0);
+  const totalProfitExpenses = totalExpenses - totalCashflowOnlyExpenses;
+
   const expByCat: Record<string, number> = {};
   expenses?.forEach((e) => {
     const cat = e.expense_categories?.name || "Sin categoría";
     expByCat[cat] = (expByCat[cat] || 0) + Number(e.total);
   });
 
-  // Classify expenses into financial categories
-  const catLower = Object.fromEntries(
-    Object.entries(expByCat).map(([k, v]) => [k.toLowerCase(), v])
-  );
+  // Cashflow-only expenses by category (for reconciliation)
+  const cashflowOnlyExpByCat: Record<string, number> = {};
+  cashflowOnlyExpenses.forEach((e) => {
+    const cat = e.expense_categories?.name || "Sin categoría";
+    cashflowOnlyExpByCat[cat] = (cashflowOnlyExpByCat[cat] || 0) + Number(e.total);
+  });
 
-  const deliveryCosts = Object.entries(catLower)
-    .filter(([k]) => /delivery|envío|transporte|combustible|envio|flete|logística/i.test(k))
-    .reduce((s, [, v]) => s + v, 0);
-  const marketingCosts = Object.entries(catLower)
-    .filter(([k]) => /marketing|publicidad|ads|facebook|instagram|google|promoción/i.test(k))
-    .reduce((s, [, v]) => s + v, 0);
-  const salaryCosts = Object.entries(catLower)
-    .filter(([k]) => /sueldo|salario|personal|empleado|honorario|sueldos/i.test(k))
-    .reduce((s, [, v]) => s + v, 0);
-  const fixedCosts = Object.entries(catLower)
-    .filter(([k]) => /alquiler|servicio|electricidad|agua|gas|internet|seguro|impuesto|municipal/i.test(k))
-    .reduce((s, [, v]) => s + v, 0);
-  const otherCosts = totalExpenses - deliveryCosts - marketingCosts - salaryCosts - fixedCosts;
+  // Classify expenses into financial categories (only profit-affecting)
+  const profitExpByCat: Record<string, number> = {};
+  profitExpenses.forEach((e) => {
+    const cat = e.expense_categories?.name || "Sin categoría";
+    profitExpByCat[cat] = (profitExpByCat[cat] || 0) + Number(e.total);
+  });
 
   const [{ data: financialSettings }, { data: orderPackagingItems }] = await Promise.all([
     supabase
@@ -547,27 +581,44 @@ export async function GET(req: NextRequest) {
   const netRevenue = netSalesRevenue;
   const grossProfit = netRevenue - cmv;
   const operatingProfit = grossProfit - dailyPayrollCost - orderPackagingCost - dailyFixedCosts;
-  const netProfit = operatingProfit - totalExpenses;
+  // P&L uses ONLY prorated costs — NO manually loaded expenses
+  const netProfit = operatingProfit;
   const grossMargin = netRevenue > 0 ? (grossProfit / netRevenue) * 100 : 0;
   const netMargin = netRevenue > 0 ? (netProfit / netRevenue) * 100 : 0;
   const operatingMargin = getPct(operatingProfit, netRevenue);
-  const profitPerOrder = totalOrders > 0 ? operatingProfit / totalOrders : 0;
-  const contributionMargin = netRevenue - cmv - dailyPayrollCost - orderPackagingCost;
+  // Contribution Margin = sales - cmv - packaging (NO labor, NO fixed costs)
+  const contributionMargin = netRevenue - cmv - orderPackagingCost;
   const contributionMarginPct = getPct(contributionMargin, netRevenue);
   const foodCostPct = getPct(cmv, netRevenue);
   const laborCostPct = getPct(dailyPayrollCost, netRevenue);
   const packagingCostPct = getPct(orderPackagingCost, netRevenue);
   const fixedCostPct = getPct(dailyFixedCosts, netRevenue);
+  // Contribution per order: how much each order contributes to cover fixed structure
   const contributionPerOrder = totalOrders > 0 ? contributionMargin / totalOrders : 0;
-  const ordersNeededFor100kProfit = profitPerOrder > 0 ? Math.ceil(100000 / profitPerOrder) : 0;
+  // Daily fixed structure = labor + fixed costs
+  const dailyFixedStructure = dailyPayrollCost + dailyFixedCosts;
+  // Break even orders = how many orders needed to cover daily fixed structure
   const breakEvenOrders = contributionPerOrder > 0
-    ? Math.ceil((dailyPayrollCost + dailyFixedCosts) / contributionPerOrder)
+    ? Math.ceil(dailyFixedStructure / contributionPerOrder)
     : 0;
+  // Orders needed for target profit
+  const ordersNeededFor100kProfit = contributionPerOrder > 0
+    ? Math.ceil((dailyFixedStructure + 100000) / contributionPerOrder)
+    : 0;
+  // Break even sales = break_even_orders * avg_ticket
+  const breakEvenSales = breakEvenOrders * avgTicket;
+  // Sales above/below break even
+  const salesAboveBreakEven = netRevenue - breakEvenSales;
+  // Profit per order (operating)
+  const profitPerOrder = totalOrders > 0 ? operatingProfit / totalOrders : 0;
 
   const netProfitReal = netProfit;
   const netMarginReal = netRevenue > 0 ? (netProfitReal / netRevenue) * 100 : 0;
 
-  const deliveryCostPct = netSalesRevenue > 0 ? (deliveryCosts / netSalesRevenue) * 100 : 0;
+  // ── Cashflow-only expenses by raw category (no auto-classification) ──
+  const cashflowByCategory = Object.entries(cashflowOnlyExpByCat)
+    .filter(([, amt]) => amt > 0)
+    .map(([cat, amt]) => ({ category: cat, amount: Math.round(amt) }));
 
   // ──────────────────────────────────────────────
   // 9. CASHFLOW
@@ -590,13 +641,19 @@ export async function GET(req: NextRequest) {
   if (operatingMargin < 10 && netRevenue > 0) alerts.push(`Operating margin below 10% (${operatingMargin.toFixed(1)}%)`);
   if (operatingMargin > 20) alerts.push(`Operating margin above 20% (${operatingMargin.toFixed(1)}%)`);
 
-  if (deliveryCostPct > 18) {
-    alerts.push(`🔴 Delivery cost exceeded 18% of sales (${deliveryCostPct.toFixed(1)}%)`);
-  }
+  // Alerts based on P&L (operating profit), NOT cashflow
   if (netMarginReal < 10 && netMarginReal >= 0) {
-    alerts.push(`🟡 Profit margin below 10% (${netMarginReal.toFixed(1)}%)`);
+    alerts.push(`🟡 Net margin below 10% (${netMarginReal.toFixed(1)}%)`);
   } else if (netMarginReal < 0) {
-    alerts.push(`🔴 Negative profit margin (${netMarginReal.toFixed(1)}%) — urgent review needed`);
+    alerts.push(`🔴 Negative net margin (${netMarginReal.toFixed(1)}%) — review prorated costs`);
+  }
+  if (operatingMargin < 0) {
+    alerts.push(`🔴 Negative operating margin (${operatingMargin.toFixed(1)}%) — operating at a loss`);
+  }
+  if (totalOrders < breakEvenOrders && breakEvenOrders > 0) {
+    alerts.push(`🔴 Ventas por debajo del punto de equilibrio (${breakEvenOrders} pedidos necesarios, ${totalOrders} realizados)`);
+  } else if (totalOrders >= breakEvenOrders && breakEvenOrders > 0) {
+    alerts.push(`🟢 Ventas por encima del punto de equilibrio (+${totalOrders - breakEvenOrders} pedidos)`);
   }
   if (prevRevenue > 0) {
     const vsPrevDay = ((netSalesRevenue - prevRevenue) / prevRevenue) * 100;
@@ -649,8 +706,15 @@ export async function GET(req: NextRequest) {
       ? `Equipo cargado individualmente: $${roundMoney(itemizedMonthlyPayroll / operatingDays).toLocaleString("es-AR")} diarios`
       : null,
     `Margen de contribucion: ${contributionMarginPct.toFixed(1)}%`,
-    `Cada pedido aporta aproximadamente $${roundMoney(contributionPerOrder).toLocaleString("es-AR")} para cubrir costos fijos`,
-    `Ganancia operativa por pedido: $${roundMoney(profitPerOrder).toLocaleString("es-AR")}`,
+    contributionPerOrder > 0
+      ? `Cada pedido aporta $${roundMoney(contributionPerOrder).toLocaleString("es-AR")} para cubrir estructura fija`
+      : null,
+    breakEvenOrders > 0
+      ? `La sucursal necesita aproximadamente ${breakEvenOrders} pedidos para alcanzar el punto de equilibrio`
+      : "No hay suficiente margen de contribucion para calcular punto de equilibrio",
+    salesAboveBreakEven > 0
+      ? `Las ventas superaron el punto de equilibrio en $${roundMoney(salesAboveBreakEven).toLocaleString("es-AR")}`
+      : `Las ventas estuvieron $${roundMoney(Math.abs(salesAboveBreakEven)).toLocaleString("es-AR")} por debajo del punto de equilibrio`,
     ordersNeededFor100kProfit > 0
       ? `Se requieren ${ordersNeededFor100kProfit} pedidos para generar $100.000 de utilidad operativa`
       : "No hay ganancia operativa por pedido suficiente para proyectar $100.000",
@@ -658,13 +722,10 @@ export async function GET(req: NextRequest) {
       ? "La sucursal alcanzo el punto de equilibrio durante la jornada"
       : breakEvenOrders > 0
         ? `Faltaron ${Math.max(0, breakEvenOrders - totalOrders)} pedidos para alcanzar el punto de equilibrio`
-        : "No hay suficiente margen de contribucion para calcular punto de equilibrio",
+        : null,
     bagUsage
       ? `Se utilizaron ${bagUsage.units} bolsas durante la jornada`
       : `Packaging por pedido calculado: $${roundMoney(orderPackagingCost).toLocaleString("es-AR")}`,
-    breakEvenOrders > 0
-      ? `La sucursal necesita aproximadamente ${breakEvenOrders} pedidos para cubrir costos diarios`
-      : "No hay suficiente margen de contribucion para calcular punto de equilibrio",
   ].filter(Boolean);
 
   const report = {
@@ -807,19 +868,41 @@ export async function GET(req: NextRequest) {
         categoria: cat,
         monto: Math.round(amt),
       })),
+      cashflow_only_total: Math.round(totalCashflowOnlyExpenses),
+      cashflow_only_por_categoria: Object.entries(cashflowOnlyExpByCat).map(([cat, amt]) => ({
+        categoria: cat,
+        monto: Math.round(amt),
+      })),
+    },
+
+    // ── SECCION 1: RENTABILIDAD (P&L) ──
+    profit_and_loss: {
+      sales: Math.round(netRevenue),
+      cmv: Math.round(cmv),
+      packaging: Math.round(orderPackagingCost),
+      labor_allocated: Math.round(dailyPayrollCost),
+      fixed_costs_allocated: Math.round(dailyFixedCosts),
+      operating_profit: Math.round(operatingProfit),
+      operating_margin: Math.round(operatingMargin * 100) / 100,
+      net_profit: Math.round(netProfit),
+      contribution_margin_pct: Math.round(contributionMarginPct * 100) / 100,
+      contribution_margin: Math.round(contributionMargin),
+      contribution_per_order: Math.round(contributionPerOrder),
+      daily_fixed_structure: Math.round(dailyFixedStructure),
+      break_even_orders: breakEvenOrders,
+      break_even_sales: Math.round(breakEvenSales),
+      sales_above_break_even: Math.round(salesAboveBreakEven),
+      orders_needed_for_100k_profit: ordersNeededFor100kProfit,
+      food_cost_pct: Math.round(foodCostPct * 100) / 100,
+      labor_cost_pct: Math.round(laborCostPct * 100) / 100,
+      fixed_cost_pct: Math.round(fixedCostPct * 100) / 100,
     },
 
     finanzas: {
       cmv_total: Math.round(cmv),
-      delivery_costs: Math.round(deliveryCosts),
-      labor_costs: roundMoney(dailyPayrollCost),
       packaging_costs: roundMoney(orderPackagingCost),
-      marketing_costs: Math.round(marketingCosts),
-      salary_costs: Math.round(salaryCosts),
-      fixed_costs: Math.round(fixedCosts + dailyFixedCosts),
       configured_fixed_costs: roundMoney(dailyFixedCosts),
       configured_labor_costs: roundMoney(dailyPayrollCost),
-      other_costs: Math.round(otherCosts),
       net_profit_real: Math.round(netProfitReal),
       net_margin_real: Math.round(netMarginReal * 100) / 100,
     },
@@ -827,9 +910,20 @@ export async function GET(req: NextRequest) {
     cashflow: {
       cash_in: Math.round(cashIn),
       cash_out: Math.round(cashOut),
+      cashflow_only_out: Math.round(totalCashflowOnlyExpenses),
+      net_cashflow: Math.round(cashIn - cashOut),
+      movements: cashflowByCategory,
       current_cash: Math.round(currentCash),
       projected_7d: Math.round(projected7d),
       avg_daily_sales: Math.round(avgDailySales),
+    },
+
+    // ── CONCILIACION ──
+    reconciliation: {
+      operating_profit: Math.round(operatingProfit),
+      cashflow_result: Math.round(cashIn - cashOut),
+      difference: Math.round(operatingProfit - (cashIn - cashOut)),
+      difference_explained_by: cashflowByCategory,
     },
 
     comparativas: {

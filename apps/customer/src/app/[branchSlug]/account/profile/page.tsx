@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import ProdeProfile from "@/app/components/ProdeProfile";
 import {
   Award,
   CheckCircle,
@@ -318,6 +319,8 @@ export default function ProfilePage() {
           />
         </div>
       </section>
+
+      <ProdeProfile branchSlug={branchSlug} customerId={session?.customerId} tenantId={session?.tenantId} />
 
       <section className="grid gap-4 md:grid-cols-2">
         <SummaryCard

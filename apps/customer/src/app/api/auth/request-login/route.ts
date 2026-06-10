@@ -1,47 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "kablam-secret-change-in-production";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-function getSafeReturnTo(value: unknown, branchSlug: string) {
-  if (typeof value !== "string" || !value.startsWith("/")) {
-    return `/${branchSlug}/account/profile`;
-  }
-
-  if (value.startsWith("//") || !value.startsWith(`/${branchSlug}/`)) {
-    return `/${branchSlug}/account/profile`;
-  }
-
-  return value;
-}
 
 export async function POST(req: NextRequest) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
     const { phone, branchSlug, returnTo } = await req.json();
-
     if (!phone || !branchSlug) {
       return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
     }
 
-    const phoneNormalized = phone.replace(/\D/g, "").replace(/^549/, "").replace(/^54/, "");
+    const phoneNormalized = phone.replace(/\D/g, "").replace(/^549/, "").replace(/^54/, "").replace(/^9(\d{10})$/, "$1");
 
-    // Buscar branch
+    // Find branch
     const { data: branch } = await supabase
       .from("branches")
-      .select("id, tenant_id")
+      .select("id, tenant_id, slug")
       .eq("slug", branchSlug)
       .single();
+    if (!branch) return NextResponse.json({ error: "Sucursal no encontrada" }, { status: 404 });
 
-    if (!branch) {
-      return NextResponse.json({ error: "Sucursal no encontrada" }, { status: 404 });
-    }
-
-    // Buscar o crear customer
+    // Find or create customer
     let { data: customer } = await supabase
       .from("customers")
       .select("*")
@@ -57,80 +39,52 @@ export async function POST(req: NextRequest) {
         .single();
       customer = newCustomer;
     }
+    if (!customer) return NextResponse.json({ error: "Error al crear usuario" }, { status: 500 });
 
-    if (!customer) {
-      return NextResponse.json({ error: "Error al crear usuario" }, { status: 500 });
+    // Generate 4-digit code
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+    // Save code to DB
+    const { error: insertError } = await supabase.from("login_codes").insert({
+      tenant_id: branch.tenant_id,
+      phone: phoneNormalized,
+      code,
+      customer_id: customer.id,
+      branch_slug: branchSlug,
+      return_to: returnTo || null,
+      expires_at: expiresAt,
+    });
+
+    if (insertError) {
+      console.error("Error saving login code:", insertError);
+      return NextResponse.json({ error: "Error al generar código" }, { status: 500 });
     }
 
-    // Generar token mágico (5 min de expiración)
-    const safeReturnTo = getSafeReturnTo(returnTo, branchSlug);
-    const magicToken = jwt.sign(
-      {
-        phone: phoneNormalized,
-        customerId: customer.id,
-        branchId: branch.id,
-        tenantId: branch.tenant_id,
-        branchSlug,
-        returnTo: safeReturnTo,
-        type: "magic_link",
-      },
-      JWT_SECRET,
-      { expiresIn: "5m" }
-    );
+    // Send via WhatsApp server
+    const whatsappToken = String(process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_API_TOKEN || "")
+      .trim().replace(/^["']|["']$/g, "");
+    if (!whatsappToken) return NextResponse.json({ error: "WhatsApp no configurado" }, { status: 500 });
 
-    // Buscar número de WhatsApp de la sucursal
-    const { data: whatsappNumber } = await supabase
-      .from("whatsapp_numbers")
-      .select("phone_number_id, access_token")
-      .eq("branch_id", branch.id)
-      .single();
+    const waRes = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${whatsappToken}` },
+      body: JSON.stringify({
+        slug: "mordiscoburgers",
+        branchId: branch.slug,
+        phone: `549${phoneNormalized}`,
+        message: `Tu código de acceso a Mordisco es: ${code}. Nunca lo compartas.`,
+      }),
+    });
 
-    if (!whatsappNumber) {
-      return NextResponse.json({ error: "WhatsApp no configurado" }, { status: 500 });
+    const waData = await waRes.json();
+    console.log("📱 WhatsApp response:", waData);
+
+    if (!waRes.ok && waData?.error) {
+      return NextResponse.json({ error: "Error al enviar código" }, { status: 500 });
     }
 
-    // Enviar template por WhatsApp con botón CTA
-    const waRes = await fetch(
-      `https://graph.facebook.com/v18.0/${whatsappNumber.phone_number_id}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${whatsappNumber.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: `54${phoneNormalized}`,
-          type: "template",
-          template: {
-            name: "login",
-            language: { code: "es_AR" },
-            components: [
-              {
-                type: "body",
-                parameters: [{ type: "text", text: customer.name || "cliente" }],
-              },
-              {
-                type: "button",
-                sub_type: "url",
-                index: "0",
-                parameters: [{ type: "text", text: magicToken }],
-              },
-            ],
-          },
-        }),
-      }
-    );
-
-    const waResult = await waRes.json();
-    console.log("📱 WhatsApp response:", waResult);
-
-    if (waResult.error) {
-      console.error("WhatsApp error:", waResult.error);
-      return NextResponse.json({ error: "Error al enviar WhatsApp", details: waResult.error }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, message: "Mensaje enviado" });
+    return NextResponse.json({ success: true, message: "Código enviado" });
   } catch (err: unknown) {
     console.error("Error en request-login:", err);
     return NextResponse.json(

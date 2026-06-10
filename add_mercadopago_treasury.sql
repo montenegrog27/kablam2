@@ -12,6 +12,21 @@ create table if not exists public.mercadopago_treasury_settings (
   unique (tenant_id)
 );
 
+create table if not exists public.tenant_integrations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  provider text not null,
+  access_token text,
+  public_key text,
+  client_id text,
+  client_secret text,
+  status text not null default 'active',
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id, provider)
+);
+
 create table if not exists public.mercadopago_account_movements (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
@@ -43,6 +58,27 @@ on public.mercadopago_account_movements(tenant_id, status);
 
 alter table public.mercadopago_treasury_settings enable row level security;
 alter table public.mercadopago_account_movements enable row level security;
+alter table public.tenant_integrations enable row level security;
+
+drop policy if exists "tenant_integrations_owner_admin_select" on public.tenant_integrations;
+create policy "tenant_integrations_owner_admin_select"
+on public.tenant_integrations for select
+using (
+  tenant_id = (select tenant_id from public.users where id = auth.uid())
+  and (select role from public.users where id = auth.uid()) in ('owner', 'admin')
+);
+
+drop policy if exists "tenant_integrations_owner_admin_all" on public.tenant_integrations;
+create policy "tenant_integrations_owner_admin_all"
+on public.tenant_integrations for all
+using (
+  tenant_id = (select tenant_id from public.users where id = auth.uid())
+  and (select role from public.users where id = auth.uid()) in ('owner', 'admin')
+)
+with check (
+  tenant_id = (select tenant_id from public.users where id = auth.uid())
+  and (select role from public.users where id = auth.uid()) in ('owner', 'admin')
+);
 
 drop policy if exists "mercadopago_treasury_settings_tenant_select" on public.mercadopago_treasury_settings;
 create policy "mercadopago_treasury_settings_tenant_select"

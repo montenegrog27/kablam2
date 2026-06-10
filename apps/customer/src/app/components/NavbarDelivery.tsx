@@ -1,6 +1,6 @@
 "use client";
 
-import { Cake, ShoppingCart } from "lucide-react";
+import { Cake, ShoppingCart, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Branding } from "@/types/menu";
@@ -51,7 +51,7 @@ export default function NavbarDelivery({
       {/* Botones derecha */}
       <div className="flex items-center gap-2">
         {/* Botón de login/perfil */}
-        {/* {branchSlug && !isAuthPage && (
+        {branchSlug && !isAuthPage && (
           <>
             {customer ? (
               <Link
@@ -81,7 +81,7 @@ export default function NavbarDelivery({
               </Link>
             )}
           </>
-        )} */}
+        )}
 
         {/* Carrito */}
         <button

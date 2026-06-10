@@ -496,53 +496,35 @@ export default function ReporteDiarioPage() {
             </div>
           </Section>
 
-          {/* === FINANZAS === */}
-          <Section title="Finanzas" icon={DollarSign}>
+          {/* === RENTABILIDAD (P&L) === */}
+          <Section title="Estado de Resultados" icon={DollarSign}>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <KPICard label="CMV Total" value={`$${r.finanzas.cmv_total.toLocaleString("es-AR")}`} icon={BarChart3} color="text-orange-400" />
-              <KPICard label="Delivery" value={`$${r.finanzas.delivery_costs.toLocaleString("es-AR")}`} icon={Truck} color="text-purple-400" />
-              <KPICard label="Marketing" value={`$${r.finanzas.marketing_costs.toLocaleString("es-AR")}`} icon={TrendingUp} color="text-blue-400" />
-              <KPICard label="Salarios" value={`$${r.finanzas.salary_costs.toLocaleString("es-AR")}`} icon={DollarSign} color="text-amber-400" />
+              <KPICard label="Ventas Netas" value={`$${r.profit_and_loss.sales.toLocaleString("es-AR")}`} icon={TrendingUp} color="text-emerald-400" />
+              <KPICard label="CMV" value={`-$${r.profit_and_loss.cmv.toLocaleString("es-AR")}`} icon={BarChart3} color="text-orange-400" />
+              <KPICard label="Packaging" value={`-$${r.profit_and_loss.packaging.toLocaleString("es-AR")}`} icon={Package} color="text-amber-400" />
+              <KPICard label="Mano de Obra" value={`-$${r.profit_and_loss.labor_allocated.toLocaleString("es-AR")}`} icon={Users} color="text-blue-400" />
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <KPICard label="Costos Fijos" value={`$${r.finanzas.fixed_costs.toLocaleString("es-AR")}`} icon={DollarSign} color="text-gray-400" />
-              <KPICard label="Otros Costos" value={`$${r.finanzas.other_costs.toLocaleString("es-AR")}`} icon={DollarSign} color="text-gray-400" />
-              <KPICard label="Utilidad Neta Real" value={`$${r.finanzas.net_profit_real.toLocaleString("es-AR")}`} icon={Award} color={r.finanzas.net_profit_real >= 0 ? "text-emerald-400" : "text-red-400"} />
-              <KPICard label="Margen Neto Real" value={`${r.finanzas.net_margin_real}%`} icon={Percent} color={r.finanzas.net_margin_real >= 10 ? "text-emerald-400" : "text-red-400"} />
+              <KPICard label="Costos Fijos" value={`-$${r.profit_and_loss.fixed_costs_allocated.toLocaleString("es-AR")}`} icon={DollarSign} color="text-gray-400" />
+              <KPICard label="Resultado Operativo" value={`$${r.profit_and_loss.operating_profit.toLocaleString("es-AR")}`} icon={Award} color={r.profit_and_loss.operating_profit >= 0 ? "text-emerald-400" : "text-red-400"} />
+              <KPICard label="Margen Operativo" value={`${r.profit_and_loss.operating_margin}%`} icon={Percent} color={r.profit_and_loss.operating_margin >= 10 ? "text-emerald-400" : "text-red-400"} />
+              <KPICard label="Margen Contribución" value={`${r.profit_and_loss.contribution_margin_pct}%`} icon={TrendingUp} color="text-purple-400" />
             </div>
 
-            {/* Cost breakdown bar */}
-            <div className="bg-gray-800 rounded-xl p-4">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Distribución de Costos</h3>
-              {(() => {
-                const total = r.finanzas.cmv_total + r.finanzas.delivery_costs + r.finanzas.marketing_costs + r.finanzas.salary_costs + r.finanzas.fixed_costs + r.finanzas.other_costs;
-                if (total === 0) return <p className="text-gray-600 text-xs text-center py-4">Sin datos de costos</p>;
-                const segments = [
-                  { label: "CMV", value: r.finanzas.cmv_total, color: "bg-orange-500" },
-                  { label: "Delivery", value: r.finanzas.delivery_costs, color: "bg-purple-500" },
-                  { label: "Marketing", value: r.finanzas.marketing_costs, color: "bg-blue-500" },
-                  { label: "Salarios", value: r.finanzas.salary_costs, color: "bg-amber-500" },
-                  { label: "Fijos", value: r.finanzas.fixed_costs, color: "bg-gray-500" },
-                  { label: "Otros", value: r.finanzas.other_costs, color: "bg-slate-500" },
-                ].filter((s) => s.value > 0);
-                return (
-                  <div>
-                    <div className="w-full h-4 bg-gray-900 rounded-full overflow-hidden flex">
-                      {segments.map((s) => (
-                        <div key={s.label} className={s.color} style={{ width: `${(s.value / total) * 100}%` }} title={`${s.label}: ${((s.value / total) * 100).toFixed(1)}%`} />
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-3 mt-3">
-                      {segments.map((s) => (
-                        <span key={s.label} className="flex items-center gap-1.5 text-xs text-gray-400">
-                          <span className={`w-2 h-2 rounded-full ${s.color.replace("bg-", "bg-").replace("-500", "-500")}`} />
-                          {s.label} ({((s.value / total) * 100).toFixed(0)}%)
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+            {/* Mini income statement */}
+            <div className="mt-4 space-y-2 text-sm border border-gray-800 rounded-xl p-4">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Estado de Resultados</p>
+              <IncomeRow label="Ventas Netas" value={r.profit_and_loss.sales} />
+              <IncomeRow label="CMV" value={-r.profit_and_loss.cmv} indent />
+              <IncomeRow label="Packaging" value={-r.profit_and_loss.packaging} indent />
+              <div className="border-t border-gray-700 pt-1.5 mt-1.5">
+                <IncomeRow label="Ganancia Bruta" value={r.profit_and_loss.sales - r.profit_and_loss.cmv - r.profit_and_loss.packaging} bold color={(r.profit_and_loss.sales - r.profit_and_loss.cmv - r.profit_and_loss.packaging) >= 0 ? "text-emerald-400" : "text-red-400"} />
+              </div>
+              <IncomeRow label="Mano de Obra (prorrateado)" value={-r.profit_and_loss.labor_allocated} indent />
+              <IncomeRow label="Costos Fijos (prorrateado)" value={-r.profit_and_loss.fixed_costs_allocated} indent />
+              <div className="border-t-2 border-gray-600 pt-1.5 mt-1.5">
+                <IncomeRow label="Resultado Operativo" value={r.profit_and_loss.operating_profit} bold color={r.profit_and_loss.operating_profit >= 0 ? "text-emerald-400" : "text-red-400"} />
+              </div>
             </div>
           </Section>
 
@@ -582,6 +564,44 @@ export default function ReporteDiarioPage() {
               </div>
             </div>
           </Section>
+
+          {/* === CONCILIACION === */}
+          {r.reconciliation && (
+            <Section title="Conciliación" icon={BarChart3}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-gray-800 rounded-xl p-4 text-center">
+                  <p className="text-xs text-gray-500 mb-1">Resultado Operativo (P&L)</p>
+                  <p className={`text-2xl font-bold tabular-nums ${r.reconciliation.operating_profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {r.reconciliation.operating_profit >= 0 ? "+" : ""}${r.reconciliation.operating_profit.toLocaleString("es-AR")}
+                  </p>
+                </div>
+                <div className="bg-gray-800 rounded-xl p-4 text-center">
+                  <p className="text-xs text-gray-500 mb-1">Flujo de Caja Neto</p>
+                  <p className={`text-2xl font-bold tabular-nums ${r.reconciliation.cashflow_result >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {r.reconciliation.cashflow_result >= 0 ? "+" : ""}${r.reconciliation.cashflow_result.toLocaleString("es-AR")}
+                  </p>
+                </div>
+                <div className="bg-gray-800 rounded-xl p-4 text-center">
+                  <p className="text-xs text-gray-500 mb-1">Diferencia</p>
+                  <p className={`text-2xl font-bold tabular-nums ${r.reconciliation.difference >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                    {r.reconciliation.difference >= 0 ? "+" : ""}${r.reconciliation.difference.toLocaleString("es-AR")}
+                  </p>
+                </div>
+              </div>
+              {(r.reconciliation.difference_explained_by || []).length > 0 && (
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Diferencias explicadas por</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(r.reconciliation.difference_explained_by || []).map((item: string, i: number) => (
+                      <span key={i} className="text-xs px-2.5 py-1 bg-gray-700 text-gray-300 rounded-full">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Section>
+          )}
         </>
       )}
     </div>

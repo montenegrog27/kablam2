@@ -89,6 +89,7 @@ export async function POST(req: Request) {
       shippingCost,
       customerLat,
       customerLng,
+      couponCode,
     }: {
       branchSlug: string;
       customer: { name: string; phone: string; address?: string };
@@ -100,6 +101,7 @@ export async function POST(req: Request) {
       shippingCost?: number;
       customerLat?: number;
       customerLng?: number;
+      couponCode?: string | null;
     } = body;
 
     /* =========================
@@ -396,6 +398,48 @@ export async function POST(req: Request) {
     });
 
     const orderTotal = total ?? subtotal;
+    const normalizedCouponCode = String(couponCode || "").trim().toUpperCase();
+    let appliedCoupon: any = null;
+    let couponDiscountAmount = 0;
+
+    if (normalizedCouponCode) {
+      const { data: coupon } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("tenant_id", branch.tenant_id)
+        .eq("code", normalizedCouponCode)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!coupon) {
+        return Response.json({
+          success: false,
+          error: "El cupón ya no está disponible. Quitalo y volvé a confirmar.",
+        });
+      }
+
+      appliedCoupon = coupon;
+      couponDiscountAmount = Math.max(
+        0,
+        subtotal + Number(shippingCost || 0) - orderTotal,
+      );
+    }
+
+    const totalDiscountAmount = promotionDiscountAmount + couponDiscountAmount;
+    const orderDiscountBreakdown =
+      appliedCoupon && couponDiscountAmount > 0
+        ? [
+            ...discountBreakdown,
+            {
+              type: "coupon",
+              couponId: appliedCoupon.id,
+              couponCode: appliedCoupon.code,
+              couponName: appliedCoupon.name,
+              discountType: appliedCoupon.discount_type,
+              discountAmount: couponDiscountAmount,
+            },
+          ]
+        : discountBreakdown;
 
     /* =========================
        4. CUSTOMER
@@ -505,13 +549,14 @@ export async function POST(req: Request) {
         total: orderTotal,
         promotion_ids: promotionIds,
         promotion_names: promotionNames,
-        discount_amount: promotionDiscountAmount,
-        discount_breakdown: discountBreakdown,
-        subtotal_before_discount: subtotal + promotionDiscountAmount,
+        coupon_id: appliedCoupon?.id || null,
+        discount_amount: totalDiscountAmount,
+        discount_breakdown: orderDiscountBreakdown,
+        subtotal_before_discount: subtotal + totalDiscountAmount,
         final_total: orderTotal,
 
         shipping_cost: shippingCost || 0,
-        discount: promotionDiscountAmount,
+        discount: totalDiscountAmount,
         paid_amount: 0,
         is_paid: false,
       })
@@ -530,6 +575,28 @@ export async function POST(req: Request) {
         customer_lat: customerLat,
         customer_lng: customerLng,
       });
+
+      // Detectar zona de delivery
+      const { data: zones } = await supabase
+        .from("delivery_zones")
+        .select("id, coordinates, name")
+        .eq("branch_id", branch.id)
+        .eq("is_active", true);
+      if (zones && zones.length > 0) {
+        for (const zone of zones) {
+          const pts = zone.coordinates || [];
+          let inside = false;
+          for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const xi = pts[i][0], yi = pts[i][1];
+            const xj = pts[j][0], yj = pts[j][1];
+            if ((yi > customerLng) !== (yj > customerLng) && customerLat < ((xj - xi) * (customerLng - yi)) / (yj - yi) + xi) inside = !inside;
+          }
+          if (inside) {
+            await supabase.from("orders").update({ delivery_zone_id: zone.id }).eq("id", order.id);
+            break;
+          }
+        }
+      }
     }
     /* =========================
        7. ORDER ITEMS
@@ -582,6 +649,21 @@ export async function POST(req: Request) {
           error: "Order payment could not be created",
         });
       }
+    }
+
+    if (appliedCoupon) {
+      await supabase.from("coupon_uses").insert({
+        coupon_id: appliedCoupon.id,
+        order_id: order.id,
+        customer_phone: phoneNormalized,
+      });
+
+      await supabase
+        .from("coupons")
+        .update({
+          total_uses: Number(appliedCoupon.total_uses || 0) + 1,
+        })
+        .eq("id", appliedCoupon.id);
     }
 
     if (discountBreakdown.length > 0) {

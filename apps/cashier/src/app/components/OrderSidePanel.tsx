@@ -664,6 +664,7 @@ export default function OrderSidePanel({
           subtotal,
           discount,
           total,
+          coupon_id: appliedCoupon?.id ?? null,
           paid_amount: 0,
           is_paid: false,
 
@@ -692,6 +693,7 @@ export default function OrderSidePanel({
           subtotal,
           discount,
           total,
+          coupon_id: appliedCoupon?.id ?? null,
           shipping_cost: finalShipping,
           original_shipping_cost: calculateShipping(),
         })

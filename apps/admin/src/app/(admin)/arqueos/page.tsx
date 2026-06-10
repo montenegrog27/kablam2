@@ -29,6 +29,7 @@ type UserRecord = {
   id: string;
   name?: string | null;
   full_name?: string | null;
+  email?: string | null;
 };
 
 type CashMovementSnapshot = {
@@ -60,6 +61,8 @@ type CashClosure = {
   carry_over: number | null;
   difference_reason?: string | null;
   total_revenue: number;
+  total_without_shipping?: number;
+  total_shipping?: number;
   total_orders: number;
   total_units: number;
   total_cost: number;
@@ -68,9 +71,28 @@ type CashClosure = {
   products?: Record<string, { total?: number; variants?: Record<string, number> }>;
   cash_movements?: CashMovementSnapshot;
   bills_detail?: Record<string, number>;
+  snapshot_total_revenue?: number;
+  snapshot_total_orders?: number;
+  totals_recalculated?: boolean;
 };
 
 const PAGE_SIZE = 20;
+
+type ClosureOrderRow = {
+  id: string;
+  branch_id: string;
+  cash_session_id: string | null;
+  created_at: string;
+  total: number | null;
+  subtotal: number | null;
+  shipping_cost: number | null;
+};
+
+type CashSessionRow = {
+  id: string;
+  opened_by: string | null;
+  closed_by: string | null;
+};
 
 function formatCurrency(value: number) {
   return `$${new Intl.NumberFormat("es-AR").format(Math.round(value || 0))}`;
@@ -82,7 +104,68 @@ function formatDate(value?: string) {
 }
 
 function userName(user?: UserRecord) {
-  return user?.full_name || user?.name || "Sin usuario";
+  return user?.full_name || user?.name || user?.email || "Sin usuario";
+}
+
+function addDaysToDateInput(value: string, days: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function argentinaDayStart(value: string) {
+  return `${value}T00:00:00-03:00`;
+}
+
+function isInsideClosureWindow(order: ClosureOrderRow, closure: CashClosure) {
+  const createdAt = new Date(order.created_at).getTime();
+  const openedAt = new Date(closure.opened_at).getTime();
+  const closedAt = new Date(closure.closed_at).getTime();
+
+  return (
+    order.branch_id === closure.branch_id &&
+    createdAt >= openedAt &&
+    createdAt <= closedAt &&
+    (order.cash_session_id === closure.cash_session_id || !order.cash_session_id)
+  );
+}
+
+function recalculateClosureWithOrders(closure: CashClosure, orders: ClosureOrderRow[]) {
+  const scopedOrders = orders.filter((order) => isInsideClosureWindow(order, closure));
+  if (scopedOrders.length === 0) return closure;
+
+  const totalRevenue = scopedOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const totalShipping = scopedOrders.reduce(
+    (sum, order) => sum + Number(order.shipping_cost || 0),
+    0,
+  );
+  const totalWithoutShipping = scopedOrders.reduce((sum, order) => {
+    const subtotal =
+      order.subtotal !== null && order.subtotal !== undefined
+        ? Number(order.subtotal)
+        : Number(order.total || 0) - Number(order.shipping_cost || 0);
+    return sum + subtotal;
+  }, 0);
+
+  if (
+    totalRevenue === Number(closure.total_revenue || 0) &&
+    totalShipping === Number(closure.total_shipping || 0) &&
+    totalWithoutShipping === Number(closure.total_without_shipping || 0) &&
+    scopedOrders.length === Number(closure.total_orders || 0)
+  ) {
+    return closure;
+  }
+
+  return {
+    ...closure,
+    snapshot_total_revenue: Number(closure.total_revenue || 0),
+    snapshot_total_orders: Number(closure.total_orders || 0),
+    total_revenue: totalRevenue,
+    total_shipping: totalShipping,
+    total_without_shipping: totalWithoutShipping,
+    total_orders: scopedOrders.length,
+    totals_recalculated: true,
+  };
 }
 
 function toCSVValue(value: string | number | null | undefined) {
@@ -97,6 +180,8 @@ export default function ArqueosPage() {
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [repairing, setRepairing] = useState(false);
+  const [repairMessage, setRepairMessage] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [showFilters, setShowFilters] = useState(true);
@@ -217,7 +302,7 @@ export default function ArqueosPage() {
           .order("name"),
         supabase
           .from("users")
-          .select("id, name, full_name")
+          .select("id, name, full_name, email")
           .eq("tenant_id", currentUser.tenant_id)
           .order("full_name"),
       ]);
@@ -239,16 +324,191 @@ export default function ArqueosPage() {
       .order("closed_at", { ascending: false })
       .limit(1000);
 
-    if (dateFrom) query = query.gte("closed_at", `${dateFrom}T00:00:00`);
-    if (dateTo) query = query.lte("closed_at", `${dateTo}T23:59:59`);
+    if (dateFrom) query = query.gte("opened_at", argentinaDayStart(dateFrom));
+    if (dateTo) query = query.lt("opened_at", argentinaDayStart(addDaysToDateInput(dateTo, 1)));
     if (branchFilter) query = query.eq("branch_id", branchFilter);
     if (registerFilter) query = query.eq("cash_register_id", registerFilter);
     if (userFilter) query = query.or(`opened_by.eq.${userFilter},closed_by.eq.${userFilter}`);
 
     const { data } = await query;
-    setClosures((data as CashClosure[]) || []);
+    let closureRows = (data as CashClosure[]) || [];
+    const sessionIds = Array.from(
+      new Set(closureRows.map((closure) => closure.cash_session_id).filter(Boolean)),
+    );
+
+    if (sessionIds.length > 0) {
+      const { data: sessionRows } = await supabase
+        .from("cash_sessions")
+        .select("id, opened_by, closed_by")
+        .in("id", sessionIds);
+
+      if (sessionRows?.length) {
+        const sessionMap = Object.fromEntries(
+          (sessionRows as CashSessionRow[]).map((cashSession) => [cashSession.id, cashSession]),
+        );
+        closureRows = closureRows.map((closure) => {
+          const cashSession = sessionMap[closure.cash_session_id];
+          if (!cashSession) return closure;
+          return {
+            ...closure,
+            opened_by: closure.opened_by || cashSession.opened_by,
+            closed_by: closure.closed_by || cashSession.closed_by,
+          };
+        });
+      }
+    }
+
+    const userIds = Array.from(
+      new Set(
+        closureRows
+          .flatMap((closure) => [closure.opened_by, closure.closed_by])
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+
+    if (userIds.length > 0) {
+      const { data: closureUsers } = await supabase
+        .from("users")
+        .select("id, name, full_name, email")
+        .in("id", userIds);
+
+      if (closureUsers?.length) {
+        setUsers((previous) => {
+          const merged = new Map(previous.map((user) => [user.id, user]));
+          (closureUsers as UserRecord[]).forEach((user) => merged.set(user.id, user));
+          return Array.from(merged.values());
+        });
+      }
+    }
+
+    const closuresWithSales = [...closureRows];
+    const openedTimes = closureRows.map((closure) => new Date(closure.opened_at).getTime());
+    const closedTimes = closureRows.map((closure) => new Date(closure.closed_at).getTime());
+    const firstOpenedAt = openedTimes.length ? new Date(Math.min(...openedTimes)).toISOString() : null;
+    const lastClosedAt = closedTimes.length ? new Date(Math.max(...closedTimes)).toISOString() : null;
+    const branchIds = Array.from(new Set(closureRows.map((closure) => closure.branch_id).filter(Boolean)));
+
+    if (firstOpenedAt && lastClosedAt && branchIds.length > 0) {
+      const { data: orderRows } = await supabase
+        .from("orders")
+        .select("id, branch_id, cash_session_id, created_at, total, subtotal, shipping_cost")
+        .eq("tenant_id", tenantId)
+        .eq("status", "delivered")
+        .in("branch_id", branchIds)
+        .gte("created_at", firstOpenedAt)
+        .lte("created_at", lastClosedAt);
+
+      if (orderRows?.length) {
+        const typedOrders = orderRows as ClosureOrderRow[];
+        closuresWithSales.splice(
+          0,
+          closuresWithSales.length,
+          ...closuresWithSales.map((closure) => recalculateClosureWithOrders(closure, typedOrders)),
+        );
+      }
+    }
+
+    setClosures(closuresWithSales);
     setLoading(false);
   }, [branchFilter, dateFrom, dateTo, registerFilter, tenantId, userFilter]);
+
+  const repairVisibleClosures = useCallback(async () => {
+    if (!tenantId || filteredClosures.length === 0) return;
+
+    setRepairing(true);
+    setRepairMessage("");
+
+    try {
+      const sessionIds = Array.from(
+        new Set(filteredClosures.map((closure) => closure.cash_session_id).filter(Boolean)),
+      );
+      const [{ data: sessionRows }, orderResponse] = await Promise.all([
+        sessionIds.length > 0
+          ? supabase
+              .from("cash_sessions")
+              .select("id, opened_by, closed_by")
+              .in("id", sessionIds)
+          : Promise.resolve({ data: [] }),
+        (async () => {
+          const openedTimes = filteredClosures.map((closure) =>
+            new Date(closure.opened_at).getTime(),
+          );
+          const closedTimes = filteredClosures.map((closure) =>
+            new Date(closure.closed_at).getTime(),
+          );
+          const firstOpenedAt = openedTimes.length
+            ? new Date(Math.min(...openedTimes)).toISOString()
+            : null;
+          const lastClosedAt = closedTimes.length
+            ? new Date(Math.max(...closedTimes)).toISOString()
+            : null;
+          const branchIds = Array.from(
+            new Set(filteredClosures.map((closure) => closure.branch_id).filter(Boolean)),
+          );
+
+          if (!firstOpenedAt || !lastClosedAt || branchIds.length === 0) {
+            return { data: [] };
+          }
+
+          return supabase
+            .from("orders")
+            .select("id, branch_id, cash_session_id, created_at, total, subtotal, shipping_cost")
+            .eq("tenant_id", tenantId)
+            .eq("status", "delivered")
+            .in("branch_id", branchIds)
+            .gte("created_at", firstOpenedAt)
+            .lte("created_at", lastClosedAt);
+        })(),
+      ]);
+
+      const sessionMap = Object.fromEntries(
+        ((sessionRows || []) as CashSessionRow[]).map((cashSession) => [
+          cashSession.id,
+          cashSession,
+        ]),
+      );
+      const orderRows = ((orderResponse.data || []) as ClosureOrderRow[]);
+      const repairedClosures = filteredClosures.map((closure) => {
+        const cashSession = sessionMap[closure.cash_session_id];
+        const withUsers = cashSession
+          ? {
+              ...closure,
+              opened_by: closure.opened_by || cashSession.opened_by,
+              closed_by: closure.closed_by || cashSession.closed_by,
+            }
+          : closure;
+        return recalculateClosureWithOrders(withUsers, orderRows);
+      });
+
+      const updates = repairedClosures.map((closure) =>
+        supabase
+          .from("cash_closures")
+          .update({
+            opened_by: closure.opened_by,
+            closed_by: closure.closed_by,
+            total_revenue: Number(closure.total_revenue || 0),
+            total_without_shipping: Number(closure.total_without_shipping || 0),
+            total_shipping: Number(closure.total_shipping || 0),
+            total_orders: Number(closure.total_orders || 0),
+          })
+          .eq("tenant_id", tenantId)
+          .eq("id", closure.id),
+      );
+
+      const results = await Promise.all(updates);
+      const failed = results.filter((result) => result.error);
+      if (failed.length > 0) {
+        throw failed[0].error;
+      }
+
+      setRepairMessage(`Se repararon ${repairedClosures.length} arqueos visibles.`);
+      await loadClosures();
+    } catch (error: any) {
+      setRepairMessage(error?.message || "No se pudieron reparar los arqueos.");
+    } finally {
+      setRepairing(false);
+    }
+  }, [filteredClosures, loadClosures, tenantId]);
 
   useEffect(() => {
     void Promise.resolve().then(loadMeta);
@@ -375,6 +635,14 @@ export default function ArqueosPage() {
             Actualizar
           </button>
           <button
+            onClick={repairVisibleClosures}
+            disabled={repairing || filteredClosures.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={repairing ? "animate-spin" : ""} />
+            {repairing ? "Recontando..." : "Recontar y guardar"}
+          </button>
+          <button
             onClick={exportCSV}
             className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-medium text-gray-300 transition hover:bg-gray-800"
           >
@@ -383,6 +651,11 @@ export default function ArqueosPage() {
           </button>
         </div>
       </div>
+      {repairMessage && (
+        <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          {repairMessage}
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
         {[
@@ -612,6 +885,11 @@ export default function ArqueosPage() {
                           <p className="mt-1 text-xs text-gray-500">
                             {closure.total_orders || 0} ordenes
                           </p>
+                          {closure.totals_recalculated && (
+                            <p className="mt-1 text-[11px] text-amber-300">
+                              Recalculado desde ventas
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-4 text-right">
                           {formatCurrency(Number(closure.expected_cash))}

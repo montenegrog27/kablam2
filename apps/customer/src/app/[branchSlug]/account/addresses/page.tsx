@@ -1,560 +1,252 @@
 "use client";
-
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  MapPin,
-  Plus,
-  Edit,
-  Trash2,
-  Check,
-  Home,
-  Briefcase,
-  Loader2,
-  Navigation,
-} from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { ArrowLeft, MapPin, Plus, Star, Trash2, Home, Building, Navigation } from "lucide-react";
 
-interface Address {
+type Address = {
   id: string;
   alias: string;
   address: string;
   apartment?: string;
   floor?: string;
   notes?: string;
-  is_default: boolean;
   latitude?: number;
   longitude?: number;
-}
+  is_default: boolean;
+};
 
 export default function AddressesPage() {
-  const router = useRouter();
+  const { session, loading: authLoading } = useAuth();
   const pathname = usePathname();
-  const branchSlug = pathname.split("/").filter(Boolean)[0];
+  const router = useRouter();
+  const branchSlug = pathname.split("/")[1];
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const addressInputRef = useRef<HTMLInputElement>(null);
 
-  const [formData, setFormData] = useState({
-    alias: "",
-    address: "",
-    apartment: "",
-    floor: "",
-    notes: "",
-    is_default: false,
-  });
+  // Form state
+  const [alias, setAlias] = useState("");
+  const [address, setAddress] = useState("");
+  const [apartment, setApartment] = useState("");
+  const [floor, setFloor] = useState("");
+  const [notes, setNotes] = useState("");
+  const [latitude, setLatitude] = useState<number | undefined>();
+  const [longitude, setLongitude] = useState<number | undefined>();
+  const [isDefault, setIsDefault] = useState(false);
 
-  // Cargar direcciones
   useEffect(() => {
-    loadAddresses();
-  }, []);
+    if (!authLoading && !session) {
+      router.push(`/${branchSlug}/auth/login?returnTo=/${branchSlug}/account/addresses`);
+      return;
+    }
+    if (session) loadAddresses();
+  }, [session, authLoading]);
+
+  // Google Maps autocomplete (only Corrientes Capital)
+  useEffect(() => {
+    if (!showForm || !addressInputRef.current || !(window as any).google) return;
+    const corrientesBounds = new (window as any).google.maps.LatLngBounds(
+      new (window as any).google.maps.LatLng(-27.55, -58.88),
+      new (window as any).google.maps.LatLng(-27.42, -58.75),
+    );
+    const autocomplete = new (window as any).google.maps.places.Autocomplete(addressInputRef.current, {
+      componentRestrictions: { country: "ar" },
+      bounds: corrientesBounds,
+      strictBounds: true,
+    });
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (place.geometry) {
+        setAddress(place.formatted_address || addressInputRef.current?.value || "");
+        setLatitude(place.geometry.location.lat());
+        setLongitude(place.geometry.location.lng());
+      }
+    });
+  }, [showForm]);
 
   const loadAddresses = async () => {
     try {
-      setLoading(true);
-      const response = await fetch("/api/account/addresses");
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Error al cargar direcciones");
-      }
-
+      const res = await fetch("/api/account/addresses");
+      const data = await res.json();
       setAddresses(data.addresses || []);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      console.error("Error loading addresses:", e);
     }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const url = editingId
-        ? `/api/account/addresses/${editingId}`
-        : "/api/account/addresses";
-
-      const method = editingId ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Error al guardar dirección");
-      }
-
-      setSuccess(editingId ? "Dirección actualizada" : "Dirección agregada");
-      setShowForm(false);
-      setEditingId(null);
-      resetForm();
-
-      // Recargar lista
-      await loadAddresses();
-
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message || "Error desconocido");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleEdit = (address: Address) => {
-    setEditingId(address.id);
-    setFormData({
-      alias: address.alias,
-      address: address.address,
-      apartment: address.apartment || "",
-      floor: address.floor || "",
-      notes: address.notes || "",
-      is_default: address.is_default,
-    });
-    setShowForm(true);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Seguro que quieres eliminar esta dirección?")) return;
-
-    try {
-      const response = await fetch(`/api/account/addresses/${id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Error al eliminar dirección");
-      }
-
-      setSuccess("Dirección eliminada");
-      await loadAddresses();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message || "Error desconocido");
-    }
-  };
-
-  const handleSetDefault = async (id: string) => {
-    try {
-      const response = await fetch(`/api/account/addresses/${id}/default`, {
-        method: "PUT",
-      });
-
-      if (!response.ok) {
-        throw new Error("Error al establecer dirección predeterminada");
-      }
-
-      setSuccess("Dirección predeterminada actualizada");
-      await loadAddresses();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message || "Error desconocido");
-    }
+    setLoading(false);
   };
 
   const resetForm = () => {
-    setFormData({
-      alias: "",
-      address: "",
-      apartment: "",
-      floor: "",
-      notes: "",
-      is_default: false,
-    });
-    setEditingId(null);
+    setAlias(""); setAddress(""); setApartment(""); setFloor(""); setNotes("");
+    setLatitude(undefined); setLongitude(undefined); setIsDefault(false);
+    setShowForm(false);
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const { name, value, type } = e.target as HTMLInputElement;
-    setFormData((prev) => ({
-      ...prev,
-      [name]:
-        type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
-    }));
+  const saveAddress = async () => {
+    if (!alias || !address) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/account/addresses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alias, address, apartment, floor, notes, latitude, longitude, is_default: isDefault }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        resetForm();
+        loadAddresses();
+      } else {
+        alert(data.error || "Error al guardar");
+      }
+    } catch { alert("Error de conexión"); }
+    setSaving(false);
   };
 
-  const getAliasIcon = (alias: string) => {
-    switch (alias.toLowerCase()) {
-      case "casa":
-      case "hogar":
-      case "home":
-        return Home;
-      case "trabajo":
-      case "oficina":
-      case "work":
-        return Briefcase;
-      default:
-        return MapPin;
-    }
+  const deleteAddress = async (id: string) => {
+    if (!confirm("¿Eliminar esta dirección?")) return;
+    try {
+      await fetch(`/api/account/addresses/${id}`, { method: "DELETE" });
+      loadAddresses();
+    } catch { alert("Error al eliminar"); }
   };
 
-  const handleUseAddress = (address: Address) => {
-    sessionStorage.setItem(
-      `checkout_address_${branchSlug}`,
-      JSON.stringify(address),
-    );
-    router.push(`/${branchSlug}/checkout`);
+  const setAsDefault = async (id: string) => {
+    try {
+      await fetch(`/api/account/addresses/${id}/default`, { method: "POST" });
+      loadAddresses();
+    } catch { alert("Error al actualizar"); }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-      </div>
-    );
-  }
+  const navigateTo = (lat?: number, lng?: number) => {
+    if (lat && lng) window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+  };
+
+  if (authLoading || loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>;
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-2xl mx-auto p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mis direcciones</h1>
-          <p className="text-gray-600 mt-1">
-            Gestiona tus direcciones de entrega favoritas
-          </p>
-        </div>
-
-        {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
-          >
-            <Plus size={18} />
-            Agregar dirección
-          </button>
-        )}
+      <div className="flex items-center gap-3 mb-2">
+        <button onClick={() => router.push(`/${branchSlug}/account/profile`)} className="p-2 rounded-full hover:bg-gray-100 transition">
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">Mis direcciones</h1>
       </div>
 
-      {/* Mensajes de estado */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
+      {/* List */}
+      {addresses.length === 0 && !showForm ? (
+        <div className="text-center py-12 bg-white rounded-2xl border shadow-sm">
+          <MapPin size={40} className="mx-auto text-gray-300 mb-3" />
+          <p className="font-semibold text-gray-700">Sin direcciones guardadas</p>
+          <p className="text-sm text-gray-500 mt-1 mb-4">Agregá una dirección para agilizar tus pedidos</p>
+          <button onClick={() => setShowForm(true)} className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition">
+            <Plus size={16} className="inline mr-1" /> Agregar dirección
+          </button>
         </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-          {success}
-        </div>
-      )}
-
-      {/* Formulario (condicional) */}
-      {showForm && (
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {editingId ? "Editar dirección" : "Nueva dirección"}
-            </h2>
-            <button
-              onClick={() => {
-                setShowForm(false);
-                setEditingId(null);
-                resetForm();
-              }}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              ✕
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Alias */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre (alias)
-              </label>
-              <input
-                type="text"
-                name="alias"
-                value={formData.alias}
-                onChange={handleChange}
-                placeholder="Ej: Casa, Trabajo, Depto"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Un nombre para identificar fácilmente esta dirección
-              </p>
-            </div>
-
-            {/* Dirección completa */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Dirección completa
-              </label>
-              <textarea
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                placeholder="Calle, número, barrio, ciudad"
-                rows={3}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none"
-                required
-              />
-            </div>
-
-            {/* Apartamento y piso */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Piso (opcional)
-                </label>
-                <input
-                  type="text"
-                  name="floor"
-                  value={formData.floor}
-                  onChange={handleChange}
-                  placeholder="Ej: 4"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Departamento (opcional)
-                </label>
-                <input
-                  type="text"
-                  name="apartment"
-                  value={formData.apartment}
-                  onChange={handleChange}
-                  placeholder="Ej: A, 4B"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                />
-              </div>
-            </div>
-
-            {/* Notas adicionales */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notas adicionales (opcional)
-              </label>
-              <textarea
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                placeholder="Ej: Timbre roto, dejar con portero, etc."
-                rows={2}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none"
-              />
-            </div>
-
-            {/* Predeterminada */}
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="is_default"
-                name="is_default"
-                checked={formData.is_default}
-                onChange={handleChange}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label
-                htmlFor="is_default"
-                className="ml-2 text-sm text-gray-700"
-              >
-                Establecer como dirección predeterminada
-              </label>
-            </div>
-
-            {/* Botones del formulario */}
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  <>
-                    <Check size={18} />
-                    {editingId ? "Actualizar" : "Agregar"}
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingId(null);
-                  resetForm();
-                }}
-                className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition"
-                disabled={saving}
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Lista de direcciones */}
-      <div className="space-y-4">
-        {addresses.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MapPin className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              No hay direcciones guardadas
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Agrega direcciones para agilizar tus pedidos a domicilio.
-            </p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
-            >
-              <Plus size={18} />
-              Agregar mi primera dirección
-            </button>
-          </div>
-        ) : (
-          addresses.map((address) => {
-            const AliasIcon = getAliasIcon(address.alias);
-
-            return (
-              <div
-                key={address.id}
-                className={`bg-white rounded-xl shadow-sm border p-6 ${
-                  address.is_default ? "ring-2 ring-blue-500" : ""
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <div
-                      className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                        address.is_default ? "bg-blue-100" : "bg-gray-100"
-                      }`}
-                    >
-                      <AliasIcon
-                        className={`w-6 h-6 ${
-                          address.is_default ? "text-blue-600" : "text-gray-600"
-                        }`}
-                      />
-                    </div>
-
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {address.alias}
-                        </h3>
-                        {address.is_default && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            <Check size={10} />
-                            Predeterminada
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-gray-700 mb-2">{address.address}</p>
-
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                        {address.floor && <span>Piso: {address.floor}</span>}
-                        {address.apartment && (
-                          <span>Depto: {address.apartment}</span>
-                        )}
-                      </div>
-
-                      {address.notes && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">Nota:</span>{" "}
-                            {address.notes}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+      ) : (
+        <div className="space-y-3">
+          {addresses.map((addr) => (
+            <div key={addr.id} className="bg-white rounded-2xl border shadow-sm p-4 space-y-2">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {addr.alias.toLowerCase().includes("casa") || addr.alias.toLowerCase().includes("hogar") ? <Home size={16} className="text-gray-600" /> : <Building size={16} className="text-gray-600" />}
                   </div>
-
-                  {/* Acciones */}
-                  <div className="flex items-center gap-2">
-                    {!address.is_default && (
-                      <button
-                        onClick={() => handleSetDefault(address.id)}
-                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        title="Establecer como predeterminada"
-                      >
-                        <Check size={18} />
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => handleEdit(address)}
-                      className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                      title="Editar"
-                    >
-                      <Edit size={18} />
-                    </button>
-
-                    <button
-                      onClick={() => handleDelete(address.id)}
-                      className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                      title="Eliminar"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-gray-900">{addr.alias}</p>
+                      {addr.is_default && <Star size={14} className="text-amber-500 fill-amber-500" />}
+                    </div>
+                    <p className="text-sm text-gray-500">{addr.address}</p>
+                    {(addr.apartment || addr.floor) && <p className="text-xs text-gray-400">{addr.floor && `Piso ${addr.floor}`}{addr.floor && addr.apartment && " · "}{addr.apartment && `Dto ${addr.apartment}`}</p>}
                   </div>
                 </div>
-
-                {/* Botón usar en pedido */}
-                <div className="mt-6 pt-6 border-t">
-                  <button
-                    onClick={() => handleUseAddress(address)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
-                  >
-                    <Navigation size={14} />
-                    Usar en mi próximo pedido
+                <div className="flex gap-1">
+                  {!addr.is_default && (
+                    <button onClick={() => setAsDefault(addr.id)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-amber-500" title="Predeterminada">
+                      <Star size={15} />
+                    </button>
+                  )}
+                  {(addr.latitude && addr.longitude) ? (
+                    <button onClick={() => navigateTo(addr.latitude, addr.longitude)} className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Navegar">
+                      <Navigation size={15} />
+                    </button>
+                  ) : null}
+                  <button onClick={() => deleteAddress(addr.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500" title="Eliminar">
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
-            );
-          })
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Nota sobre geolocalización */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-        <div className="flex items-start gap-3">
-          <MapPin className="w-6 h-6 text-blue-600 mt-1" />
+      {/* Add button (when list exists) */}
+      {!showForm && addresses.length > 0 && (
+        <button onClick={() => setShowForm(true)} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-2xl text-sm font-semibold text-gray-500 hover:border-gray-900 hover:text-gray-900 transition flex items-center justify-center gap-2 bg-white">
+          <Plus size={18} /> Agregar dirección
+        </button>
+      )}
+
+      {/* Form */}
+      {showForm && (
+        <div className="bg-white rounded-2xl border shadow-sm p-5 space-y-4">
+          <h3 className="font-bold text-gray-900">Nueva dirección</h3>
+
           <div>
-            <h4 className="font-medium text-blue-900 mb-2">
-              ¿Por qué guardar direcciones?
-            </h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Agiliza el checkout de tus pedidos a domicilio</li>
-              <li>• Evita errores al escribir la dirección cada vez</li>
-              <li>• Podemos guardar tus preferencias de entrega</li>
-              <li>• Acceso rápido desde cualquier dispositivo</li>
-            </ul>
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Identificación</label>
+            <input value={alias} onChange={(e) => setAlias(e.target.value)}
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-gray-900 outline-none transition"
+              placeholder="Ej: Casa, Trabajo, Casa de mamá..." />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Dirección *</label>
+            <input ref={addressInputRef} value={address} onChange={(e) => setAddress(e.target.value)}
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-gray-900 outline-none transition"
+              placeholder="Calle, número, ciudad..." />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Piso</label>
+              <input value={floor} onChange={(e) => setFloor(e.target.value)}
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-gray-900 outline-none transition"
+                placeholder="Opcional" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Departamento</label>
+              <input value={apartment} onChange={(e) => setApartment(e.target.value)}
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-gray-900 outline-none transition"
+                placeholder="Opcional" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Notas (opcional)</label>
+            <input value={notes} onChange={(e) => setNotes(e.target.value)}
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-gray-900 outline-none transition"
+              placeholder="Referencias, puntos de referencia..." />
+          </div>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900" />
+            <span className="text-sm text-gray-700">Establecer como dirección predeterminada</span>
+          </label>
+
+          <div className="flex gap-2">
+            <button onClick={resetForm} className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition">Cancelar</button>
+            <button onClick={saveAddress} disabled={!alias || !address || saving}
+              className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition disabled:opacity-40">
+              {saving ? "Guardando..." : "Guardar dirección"}
+            </button>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
