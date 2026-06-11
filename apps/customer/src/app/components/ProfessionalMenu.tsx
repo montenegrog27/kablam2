@@ -9,6 +9,7 @@ import type {
   ProductVariant,
 } from "../../types/menu";
 import { getBrandFontFamily } from "@/lib/fonts";
+import { getProductLoyaltyEstimate, type LoyaltyProgram } from "@/lib/loyalty";
 
 type Props = {
   productos: Product[];
@@ -55,6 +56,7 @@ export default function ProfessionalMenu({
   const [scrolled, setScrolled] = useState(false);
   const [flashSales, setFlashSales] = useState<any[]>([]);
   const [promotions, setPromotions] = useState<CustomerPromotion[]>([]);
+  const [loyalty, setLoyalty] = useState<LoyaltyProgram>({ authenticated: false, rules: [], levels: [] });
   const [allCategoriesFromApi, setAllCategoriesFromApi] = useState<any[]>([]);
   const [now, setNow] = useState(Date.now());
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -175,6 +177,19 @@ export default function ProfessionalMenu({
       .then((r) => r.json())
       .then((data) => setPromotions(Array.isArray(data) ? data : []))
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const slug = window.location.pathname.split("/")[1];
+    if (!slug) return;
+    fetch(`/api/loyalty?branchSlug=${encodeURIComponent(slug)}`)
+      .then((response) => response.json())
+      .then((data) => setLoyalty({
+        authenticated: Boolean(data.authenticated),
+        rules: Array.isArray(data.rules) ? data.rules : [],
+        levels: Array.isArray(data.levels) ? data.levels : [],
+      }))
+      .catch(() => setLoyalty({ authenticated: false, rules: [], levels: [] }));
   }, []);
 
   // Fetch categories in the correct order from admin
@@ -712,11 +727,11 @@ export default function ProfessionalMenu({
                       return (
                         <div key={sub.id} id={`sub-${sub.id}`} className="mb-4 ml-4">
                           <h5 className="text-sm font-semibold text-gray-500 mb-2">{sub.name}</h5>
-                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} disabled={disabled} />))}</div>
+                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} loyalty={loyalty} disabled={disabled} />))}</div>
                         </div>
                       );
                     }) : (
-                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} disabled={disabled} />))}</div>
+                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} loyalty={loyalty} disabled={disabled} />))}</div>
                     )}
                   </div>
                 );
@@ -734,12 +749,12 @@ export default function ProfessionalMenu({
                       <span className="w-1 h-5 rounded-full" style={{ backgroundColor: brandColor }} />
                       {sub.name}
                     </h4>
-                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} disabled={disabled} />))}</div>
+                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} loyalty={loyalty} disabled={disabled} />))}</div>
                   </div>
                 );
               });
             }
-            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} disabled={disabled} />));
+            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} loyalty={loyalty} disabled={disabled} />));
           })()}
         </div>
       </div>
@@ -1110,6 +1125,7 @@ function NormalProductCard({
   getImage,
   formatPrice,
   saleBadge,
+  loyalty,
   disabled = false,
 }: {
   product: Product;
@@ -1120,9 +1136,11 @@ function NormalProductCard({
   getImage: (p: Product) => string | undefined;
   formatPrice: (p: number) => string;
   saleBadge?: string | null;
+  loyalty?: LoyaltyProgram;
   disabled?: boolean;
 }) {
   const image = getImage(product);
+  const loyaltyEstimate = loyalty?.authenticated ? getProductLoyaltyEstimate(product, loyalty.rules) : { points: 0, extrasHint: false };
 
   return (
     <div
@@ -1166,6 +1184,20 @@ function NormalProductCard({
         <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
           {product.description || "\u00A0"}
         </p>
+        {loyalty?.authenticated && (loyaltyEstimate.points > 0 || loyaltyEstimate.extrasHint) && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {loyaltyEstimate.points > 0 && (
+              <span className="inline-flex w-fit items-center rounded-full bg-red-50 px-2 py-1 text-[10px] font-black uppercase text-red-600">
+                +{loyaltyEstimate.points} pts
+              </span>
+            )}
+            {loyaltyEstimate.extrasHint && (
+              <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase text-gray-500">
+                extras suman
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Price - 2 cols */}

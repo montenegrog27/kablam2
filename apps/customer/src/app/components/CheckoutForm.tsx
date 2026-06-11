@@ -5,6 +5,7 @@ import type { CartItem, Branding } from "@/types/menu";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import UpsellSuggestions from "./UpsellSuggestions";
 import { getBrandFontFamily } from "@/lib/fonts";
+import { getCartLoyaltyEstimate, type LoyaltyProgram } from "@/lib/loyalty";
 import { Map as MapIcon, Navigation } from "lucide-react";
 import {
   User,
@@ -127,6 +128,7 @@ export default function CheckoutForm({
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [discount, setDiscount] = useState(0);
   const [couponError, setCouponError] = useState("");
+  const [loyalty, setLoyalty] = useState<LoyaltyProgram>({ authenticated: false, rules: [], levels: [] });
 
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
@@ -174,6 +176,17 @@ export default function CheckoutForm({
       setPaymentMethods(methods);
       setSelectedPaymentMethod(methods[0].id);
     }
+  }, [branchSlug]);
+
+  useEffect(() => {
+    fetch(`/api/loyalty?branchSlug=${encodeURIComponent(branchSlug)}`)
+      .then((response) => response.json())
+      .then((data) => setLoyalty({
+        authenticated: Boolean(data.authenticated),
+        rules: Array.isArray(data.rules) ? data.rules : [],
+        levels: Array.isArray(data.levels) ? data.levels : [],
+      }))
+      .catch(() => setLoyalty({ authenticated: false, rules: [], levels: [] }));
   }, [branchSlug]);
 
   async function loadCustomerProfile() {
@@ -386,6 +399,10 @@ export default function CheckoutForm({
   const shipping = orderMode === "delivery" ? shippingCost : 0;
 
   const total = Math.max(subtotal + shipping - discount, 0);
+  const loyaltyEstimate = useMemo(
+    () => getCartLoyaltyEstimate(cart, loyalty.rules),
+    [cart, loyalty.rules],
+  );
 
   const selectedMethod = paymentMethods.find(
     (pm) => pm.id === selectedPaymentMethod,
@@ -980,6 +997,19 @@ export default function CheckoutForm({
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500" style={{ fontFamily }}>Descuento</span>
                   <span className="font-medium text-emerald-600 tabular-nums">- ${discount.toLocaleString("es-AR")}</span>
+                </div>
+              )}
+
+              {loyalty.authenticated && loyaltyEstimate.points > 0 && (
+                <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-bold text-red-700" style={{ fontFamily }}>Puntos Mordisco</span>
+                    <span className="font-black text-red-700 tabular-nums">+{loyaltyEstimate.points} pts</span>
+                  </div>
+                  <p className="mt-1 text-xs text-red-500" style={{ fontFamily }}>
+                    Se acreditan cuando el pedido queda confirmado.
+                    {loyaltyEstimate.extrasPoints > 0 ? ` Extras: +${loyaltyEstimate.extrasPoints} pts.` : ""}
+                  </p>
                 </div>
               )}
 

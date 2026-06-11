@@ -815,6 +815,15 @@ export default function OrderSidePanel({
         .eq("id", appliedCoupon.id);
     }
 
+    if (isBuilder) {
+      const { error: loyaltyError } = await supabase.rpc("process_loyalty_for_order", {
+        p_order_id: orderId,
+      });
+      if (loyaltyError && loyaltyError.code !== "42883") {
+        console.error("Loyalty processing error:", loyaltyError);
+      }
+    }
+
     await reloadOrders();
 
     // ===============================

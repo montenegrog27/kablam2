@@ -19,14 +19,17 @@ type OrderItemExtra = {
 type SupabaseOrderItem = {
   id: string;
   product_id?: string;
+  combo_id?: string;
   variant_id?: string;
-  product?: { name?: string } | null;
+  products?: { name?: string } | null;
+  combos?: { name?: string } | null;
   variant?: { id?: string; name?: string; price?: number; is_default?: boolean } | null;
   quantity: number;
   unit_price: number;
   total: number;
-  notes?: string;
+  note?: string;
   extras?: OrderItemExtra[];
+  order_id?: string;
 };
 
 type SupabaseOrder = {
@@ -43,20 +46,6 @@ type SupabaseOrder = {
   created_at: string;
   order_items?: SupabaseOrderItem[];
 };
-
-const orderSelect = `
-  *,
-  order_items!left (
-    id,
-    product_id,
-    variant_id,
-    quantity,
-    unit_price,
-    total,
-    notes,
-    extras
-  )
-`;
 
 export async function GET(req: Request) {
   const supabase = createClient(
@@ -82,7 +71,7 @@ export async function GET(req: Request) {
       count,
     } = await supabase
       .from("orders")
-      .select(orderSelect, { count: "exact" })
+      .select("*", { count: "exact" })
       .eq("customer_id", session.customerId)
       .eq("branch_id", session.branchId)
       .order("created_at", { ascending: false })
@@ -95,6 +84,26 @@ export async function GET(req: Request) {
         { status: 500 },
       );
     }
+
+    const orderIds = ((orders || []) as SupabaseOrder[]).map((order) => order.id);
+    const { data: orderItems, error: itemsError } = orderIds.length > 0
+      ? await supabase
+          .from("order_items")
+          .select("id, order_id, product_id, combo_id, variant_id, quantity, unit_price, total, note, extras, products(name), combos(name)")
+          .in("order_id", orderIds)
+      : { data: [] as SupabaseOrderItem[], error: null };
+
+    if (itemsError) {
+      console.error("Error fetching order items:", itemsError);
+    }
+
+    const itemsByOrder = new Map<string, SupabaseOrderItem[]>();
+    ((orderItems || []) as SupabaseOrderItem[]).forEach((item) => {
+      if (!item.order_id) return;
+      const current = itemsByOrder.get(item.order_id) || [];
+      current.push(item);
+      itemsByOrder.set(item.order_id, current);
+    });
 
     const formattedOrders = ((orders || []) as SupabaseOrder[]).map((order) => ({
       id: order.id,
@@ -109,16 +118,17 @@ export async function GET(req: Request) {
       address: order.address,
       customer_notes: order.customer_notes,
       created_at: order.created_at,
-      items: (order.order_items || []).map((item) => ({
+      items: (itemsByOrder.get(order.id) || []).map((item) => ({
         id: item.id,
         product_id: item.product_id,
+        combo_id: item.combo_id,
         variant_id: item.variant_id,
-        product_name: "Producto",
+        product_name: item.products?.name || item.combos?.name || getPromotionName(item.extras) || "Producto",
         variant: null,
         quantity: item.quantity,
         unit_price: item.unit_price,
         total: item.total,
-        notes: item.notes,
+        notes: item.note,
         extras: item.extras || [],
       })),
     }));
@@ -142,6 +152,11 @@ export async function GET(req: Request) {
       { status: 500 },
     );
   }
+}
+
+function getPromotionName(extras?: OrderItemExtra[]) {
+  const promotion = (extras || []).find((extra) => extra.type === "promotion");
+  return promotion?.name;
 }
 
 export async function POST(req: Request) {
@@ -195,7 +210,7 @@ export async function POST(req: Request) {
         uid: `reorder-${item.id}-${now}`,
         variantId: item.variant_id || "",
         productId: item.product_id || "",
-        name: item.product?.name || item.variant?.name || "Producto",
+        name: item.products?.name || item.combos?.name || item.variant?.name || getPromotionName(item.extras) || "Producto",
         price: item.unit_price,
         quantity: item.quantity,
         variant: {

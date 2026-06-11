@@ -328,7 +328,15 @@ export async function POST(req: Request) {
         .eq("id", matchedOrder.id);
 
       if (updateError) console.error("❌ Error updating order:", updateError);
-      else debugLog("Order confirmed successfully:", matchedOrder.id);
+      else {
+        debugLog("Order confirmed successfully:", matchedOrder.id);
+        const { error: loyaltyError } = await supabase.rpc("process_loyalty_for_order", {
+          p_order_id: matchedOrder.id,
+        });
+        if (loyaltyError && loyaltyError.code !== "42883") {
+          console.error("Loyalty processing error:", loyaltyError);
+        }
+      }
 
       // Guardar mensaje en el chat: "✅ El cliente confirmó el pedido"
       if (conv) {

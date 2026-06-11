@@ -306,6 +306,7 @@ export type ComboRow = {
     products: {
       id: string;
       name: string;
+      category_id: string | null;
       product_variants: Array<{
         id: string;
         name: string;
@@ -357,6 +358,7 @@ export async function loadCombos(
         products(
           id,
           name,
+          category_id,
           product_variants(
             id,
             name,
@@ -474,6 +476,7 @@ export async function loadCombos(
           ? {
               id: cp.products.id,
               name: cp.products.name,
+              category_id: cp.products.category_id,
               product_variants: (cp.products.product_variants || []).map(
                 (v) => ({
                   id: v.id,

@@ -71,6 +71,12 @@ export type CartItem = {
     productName?: string;
   }>;
   categories?: Category[];
+  loyaltyCategoryIds?: string[];
+  comboProducts?: Array<{
+    productId: string;
+    categoryId?: string | null;
+    quantity: number;
+  }>;
   promotion?: {
     id: string;
     name: string;
@@ -152,6 +158,7 @@ export type Combo = {
     products?: {
       id: string;
       name: string;
+      category_id?: string | null;
       product_variants: Array<{
         id: string;
         name: string;

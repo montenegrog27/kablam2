@@ -11,6 +11,7 @@ import type {
   ProductVariant,
 } from "../../types/menu";
 import { getBrandFontFamily } from "@/lib/fonts";
+import { getProductCategoryIds, getProductComboProducts } from "@/lib/loyalty";
 
 function getDefaultVariant(product: NonNullable<ProductModalProps["product"]>) {
   return (
@@ -199,6 +200,8 @@ export default function ProductModal({
       halves: halves || undefined,
       removedIngredients: removedIngredients.length > 0 ? removedIngredients : undefined,
       categories: product.categories,
+      loyaltyCategoryIds: getProductCategoryIds(product),
+      comboProducts: getProductComboProducts(product),
       promotion: product.promotion,
     });
     onClose();

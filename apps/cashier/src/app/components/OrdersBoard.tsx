@@ -395,6 +395,15 @@ export default function OrdersBoard({
       .update(updates)
       .eq("id", order.id);
 
+    if (nextStatus === "confirmed") {
+      const { error: loyaltyError } = await supabase.rpc("process_loyalty_for_order", {
+        p_order_id: order.id,
+      });
+      if (loyaltyError && loyaltyError.code !== "42883") {
+        console.error("Loyalty processing error:", loyaltyError);
+      }
+    }
+
     await publishOrderRealtimeEvent({
       tenantId: order.tenant_id,
       branchId: order.branch_id,

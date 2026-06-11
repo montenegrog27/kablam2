@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import ProdeProfile from "@/app/components/ProdeProfile";
+import { describeLoyaltyRule, type LoyaltyRule } from "@/lib/loyalty";
 import {
   AlertCircle,
   Camera,
@@ -55,6 +56,7 @@ type UserProfile = {
   points: number;
   level: string;
   nextLevel: string;
+  levels: Array<{ name: string; minPoints: number; maxPoints: number | null }>;
   progress: number;
   recentOrders: RecentOrder[];
   favoriteProducts: Array<{ id: string; name: string; price: number }>;
@@ -108,6 +110,7 @@ export default function ProfilePage() {
   const [message, setMessage] = useState("");
   const [editingDetails, setEditingDetails] = useState(false);
   const [section, setSection] = useState<ProfileSection>("resumen");
+  const [loyaltyRules, setLoyaltyRules] = useState<LoyaltyRule[]>([]);
 
   useEffect(() => {
     if (!authLoading && !session) {
@@ -118,6 +121,10 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!session) return;
     loadProfile();
+    fetch(`/api/loyalty?branchSlug=${encodeURIComponent(branchSlug)}`)
+      .then((response) => response.json())
+      .then((data) => setLoyaltyRules(Array.isArray(data.rules) ? data.rules : []))
+      .catch(() => setLoyaltyRules([]));
   }, [session]);
 
   const loadProfile = async () => {
@@ -145,6 +152,7 @@ export default function ProfilePage() {
       points: s.points || 0,
       level: s.level || "Novato",
       nextLevel: s.nextLevel || "Aprendiz",
+      levels: Array.isArray(s.levels) ? s.levels : [],
       progress: s.progress || 0,
       recentOrders: profileData.orders || [],
       favoriteProducts: profileData.favorites || [],
@@ -218,21 +226,27 @@ export default function ProfilePage() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950">
-        <Loader2 className="animate-spin text-red-500" size={32} />
+      <div className="customer-profile-red flex min-h-screen items-center justify-center">
+        <Loader2 className="animate-spin text-red-400" size={32} />
       </div>
     );
   }
 
   if (!session || !profile) return null;
 
+  const clubLevel = profile.level || "Mordisco";
+  const clubProgress = Math.min(100, Math.max(0, profile.progress || 0));
+  const clubLevels = profile.levels.length > 0
+    ? profile.levels.map((item) => item.name)
+    : ["Mordisco", "Doble Mordisco", "Mordisco XL", "Leyenda Mordisco"];
+
   return (
-    <div className="min-h-screen bg-gray-950 pb-10 text-gray-100">
-      <section className="relative overflow-hidden px-5 pb-7 pt-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.32),transparent_32%),linear-gradient(180deg,#160808,#030712_78%)]" />
+    <div className="customer-profile-red min-h-screen pb-10 text-[var(--profile-text)]">
+      <section className="relative overflow-hidden border-b border-[#FF1A1A] px-5 pb-7 pt-8">
+        <div className="profile-hero-bg absolute inset-0" />
         <div className="relative mx-auto max-w-5xl">
           {profileIsIncomplete && (
-            <div className="mb-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <div className="mb-4 border border-[#FF1A1A] bg-[#0A0A0A] px-4 py-3 text-sm text-white">
               <div className="flex items-center gap-2 font-bold">
                 <AlertCircle size={16} />
                 Completa {incompleteFields.join(" y ")} para agilizar tus pedidos.
@@ -240,80 +254,125 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-5 shadow-2xl backdrop-blur">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] border border-white/15 bg-red-500/15 text-3xl font-black text-white shadow-xl"
-                    aria-label="Cambiar foto"
-                  >
-                    {profile.avatarUrl ? (
-                      <img src={profile.avatarUrl} alt={profile.name || "Cliente"} className="h-full w-full object-cover" />
-                    ) : (
-                      (profile.name || "C").slice(0, 1).toUpperCase()
-                    )}
-                    <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 py-1.5 text-[10px] font-black uppercase tracking-wide opacity-0 transition group-hover:opacity-100">
-                      <Camera size={12} />
-                      Foto
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-950 shadow-lg"
-                    disabled={uploadingAvatar}
-                  >
-                    {uploadingAvatar ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => uploadAvatar(event.target.files?.[0])}
-                  />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-red-200/70">Mi cuenta</p>
-                  <h1 className="mt-1 text-2xl font-black leading-tight text-white sm:text-4xl">
-                    {profile.name || "Hola"}
-                  </h1>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-300">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white/8 px-3 py-1">
-                      <Phone size={13} />
-                      {profile.phone}
-                    </span>
-                    {profile.email && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white/8 px-3 py-1">
-                        <Mail size={13} />
-                        {profile.email}
+          <div className="profile-hero-card border p-5 sm:p-7">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="flex min-w-0 flex-col justify-between gap-6">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="group relative flex h-24 w-24 items-center justify-center overflow-hidden border border-[#FF1A1A] bg-black text-3xl font-black uppercase text-white sm:h-28 sm:w-28"
+                      aria-label="Cambiar foto"
+                    >
+                      {profile.avatarUrl ? (
+                        <img src={profile.avatarUrl} alt={profile.name || "Cliente"} className="h-full w-full object-cover" />
+                      ) : (
+                        (profile.name || "C").slice(0, 1).toUpperCase()
+                      )}
+                      <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-[#FF1A1A] py-1.5 text-[10px] font-black uppercase tracking-wide opacity-0 transition duration-200 group-hover:opacity-100">
+                        <Camera size={12} />
+                        Foto
                       </span>
-                    )}
+                    </button>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center border border-[#FF1A1A] bg-black text-white transition duration-200 hover:bg-[#FF1A1A]"
+                      disabled={uploadingAvatar}
+                    >
+                      {uploadingAvatar ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => uploadAvatar(event.target.files?.[0])}
+                    />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Member / {profile.name || "Sin nombre"}</p>
+                    <h1 className="mt-2 max-w-3xl text-[42px] font-black uppercase leading-[0.84] tracking-[-0.055em] text-white sm:text-[72px]">
+                      MORDISCO BURGER CLUB
+                    </h1>
+                    <p className="mt-4 max-w-xl text-sm font-black uppercase tracking-[0.18em] text-[#FF1A1A] sm:text-base">
+                      Fast food. Slow obsession.
+                    </p>
+
+                    <div className="mt-5 flex flex-wrap items-center gap-2 text-sm font-bold text-[#A0A0A0]">
+                      <span className="inline-flex items-center gap-1 border border-[#FF1A1A] px-3 py-1 uppercase">
+                        <Phone size={13} />
+                        {profile.phone}
+                      </span>
+                      {profile.email && (
+                        <span className="inline-flex items-center gap-1 border border-[#FF1A1A] px-3 py-1 uppercase">
+                          <Mail size={13} />
+                          {profile.email}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 sm:min-w-80">
-                <Metric label="Pedidos" value={profile.totalOrders.toString()} />
-                <Metric label="Gastado" value={formatCurrency(profile.totalSpent)} />
-                <Metric label="Puntos" value={`${profile.points}`} />
-              </div>
+              <aside className="grid gap-5 border border-[#FF1A1A] bg-black p-4">
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Nivel actual</p>
+                      <p className="mt-1 text-3xl font-black uppercase tracking-[-0.04em] text-white">{clubLevel}</p>
+                    </div>
+                    <ShieldCheck className="mt-1 text-[#FF1A1A]" size={28} />
+                  </div>
+
+                  <div className="mt-4 h-2 border border-[#FF1A1A] bg-black">
+                    <div className="h-full bg-[#FF1A1A]" style={{ width: `${clubProgress}%` }} />
+                  </div>
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-[#A0A0A0]">
+                    {clubProgress}% hacia {profile.nextLevel || "el proximo nivel"}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {clubLevels.map((level) => (
+                    <ClubLevel key={level} label={level} active={level === clubLevel} />
+                  ))}
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Club stats</p>
+                  <div className="mt-3 grid gap-2">
+                    <Metric label="Pedidos" value={profile.totalOrders.toString()} />
+                    <Metric label="Gastado" value={formatCurrency(profile.totalSpent)} />
+                    <Metric label="Puntos" value={`${profile.points}`} />
+                  </div>
+                </div>
+              </aside>
             </div>
 
-            <div className="mt-5">
-              <div className="flex items-center justify-between text-xs font-bold text-gray-300">
-                <span>{profile.level}</span>
-                <span>{profile.nextLevel}</span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400"
-                  style={{ width: `${Math.min(100, profile.progress)}%` }}
-                />
-              </div>
+            <div className="mt-5 grid gap-2 border-t border-[#FF1A1A] pt-5 sm:grid-cols-3">
+              <button onClick={() => setSection("resumen")} className="club-cta">
+                Ver actividad
+              </button>
+              <button onClick={() => setSection("datos")} className="club-cta">
+                Mis datos
+              </button>
+              <button onClick={() => setSection("prode")} className="club-cta">
+                Prode club
+              </button>
             </div>
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div className="border border-[#FF1A1A] bg-black p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Private area</p>
+              <h2 className="mt-1 text-3xl font-black uppercase leading-none tracking-[-0.04em] text-white sm:text-5xl">
+                {section === "resumen" ? "Actividad" : section === "datos" ? "Identidad" : "Prode"}
+              </h2>
+            </div>
+            <div className="border border-[#FF1A1A] bg-black p-4 text-xs font-bold uppercase leading-5 text-[#A0A0A0] sm:max-w-xs">
+              Beneficios, historial y datos personales.
+              </div>
           </div>
         </div>
       </section>
@@ -321,12 +380,12 @@ export default function ProfilePage() {
       <nav className="mx-auto mb-4 grid max-w-5xl grid-cols-3 gap-2 px-5">
         <ProfileTab active={section === "resumen"} icon={ShoppingBag} label="Resumen" onClick={() => setSection("resumen")} />
         <ProfileTab active={section === "datos"} icon={User} label="Mis datos" showDot={profileIsIncomplete} onClick={() => setSection("datos")} />
-        <ProfileTab active={section === "prode"} icon={Trophy} label="Prode" gold onClick={() => setSection("prode")} />
+        <ProfileTab active={section === "prode"} icon={Trophy} label="Prode" onClick={() => setSection("prode")} />
       </nav>
 
       <main className="mx-auto max-w-5xl px-5">
         {message && (
-          <div className="mb-4 rounded-2xl border border-emerald-700/40 bg-emerald-900/30 px-4 py-3 text-center text-sm font-medium text-emerald-300">
+          <div className="mb-4 border border-[#FF1A1A] bg-black px-4 py-3 text-center text-sm font-bold uppercase text-white">
             {message}
           </div>
         )}
@@ -343,7 +402,7 @@ export default function ProfilePage() {
                 title="Ultimos pedidos"
                 icon={Package}
                 action={
-                  <button onClick={() => router.push(`/${branchSlug}/account/orders`)} className="text-xs font-bold text-red-300">
+                  <button onClick={() => router.push(`/${branchSlug}/account/orders`)} className="text-xs font-bold uppercase text-[#FF1A1A]">
                     Ver todos
                   </button>
                 }
@@ -356,7 +415,7 @@ export default function ProfilePage() {
                       <button
                         key={order.id}
                         onClick={() => router.push(`/${branchSlug}/account/orders`)}
-                        className="w-full rounded-2xl border border-gray-800 bg-gray-950/70 p-3 text-left transition hover:border-gray-700"
+                        className="profile-info-row w-full border p-3 text-left transition hover:border-[var(--profile-accent)]"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -366,13 +425,31 @@ export default function ProfilePage() {
                               {order.items?.slice(0, 2).map((item) => `${item.quantity}x ${item.name}`).join(" + ") || "Pedido"}
                             </p>
                           </div>
-                          <span className="text-sm font-black text-emerald-300">{formatCurrency(order.total)}</span>
+                          <span className="text-2xl font-black text-white">{formatCurrency(order.total)}</span>
                         </div>
                       </button>
                     ))}
                   </div>
                 )}
               </AccountCard>
+
+              {loyaltyRules.length > 0 && (
+                <AccountCard title="Como sumar puntos" icon={Gift}>
+                  <div className="space-y-2">
+                    {loyaltyRules.slice(0, 6).map((rule) => (
+                      <div key={rule.id} className="profile-info-row flex items-start gap-3 border p-3">
+                        <span className="mt-1 h-2 w-2 shrink-0 bg-[#FF1A1A]" />
+                        <div>
+                          <p className="text-xs font-black uppercase text-white">{rule.name}</p>
+                          <p className="mt-1 text-xs font-bold uppercase leading-5 text-[#A0A0A0]">
+                            {describeLoyaltyRule(rule)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </AccountCard>
+              )}
             </section>
 
             <section className="space-y-4">
@@ -380,7 +457,7 @@ export default function ProfilePage() {
                 title="Direcciones"
                 icon={MapPin}
                 action={
-                  <button onClick={() => router.push(`/${branchSlug}/account/addresses`)} className="text-xs font-bold text-red-300">
+                  <button onClick={() => router.push(`/${branchSlug}/account/addresses`)} className="text-xs font-bold uppercase text-[#FF1A1A]">
                     Gestionar
                   </button>
                 }
@@ -390,8 +467,8 @@ export default function ProfilePage() {
                 ) : (
                   <div className="space-y-2">
                     {defaultAddress && (
-                      <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3">
-                        <div className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-red-200">
+                      <div className="profile-favorite-address border p-3">
+                        <div className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#FF1A1A]">
                           <Star size={13} />
                           Favorita
                         </div>
@@ -403,7 +480,7 @@ export default function ProfilePage() {
                       </div>
                     )}
                     {addresses.filter((address) => address.id !== defaultAddress?.id).slice(0, 2).map((address) => (
-                      <div key={address.id} className="rounded-2xl border border-gray-800 bg-gray-950/70 p-3">
+                      <div key={address.id} className="profile-info-row border p-3">
                         <p className="text-sm font-bold text-gray-100">{address.alias}</p>
                         <p className="mt-1 text-xs text-gray-500">{address.address}</p>
                       </div>
@@ -417,7 +494,7 @@ export default function ProfilePage() {
                   await fetch("/api/auth/logout", { method: "POST" });
                   window.location.href = `/${branchSlug}`;
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-800 bg-gray-900 py-3.5 text-sm font-bold text-gray-400 transition hover:border-red-900/50 hover:text-red-400"
+                className="profile-action-card flex w-full items-center justify-center gap-2 border py-3.5 text-sm font-bold uppercase text-[#A0A0A0] transition duration-200 hover:text-white"
               >
                 <LogOut size={16} />
                 Cerrar sesion
@@ -434,7 +511,7 @@ export default function ProfilePage() {
                 icon={User}
                 action={
                   !profileIsIncomplete ? (
-                    <button onClick={() => setEditingDetails(false)} className="text-xs font-bold text-gray-500">
+                    <button onClick={() => setEditingDetails(false)} className="text-xs font-bold uppercase text-[#A0A0A0]">
                       Cerrar
                     </button>
                   ) : null
@@ -445,7 +522,7 @@ export default function ProfilePage() {
                   <InputField label="Telefono" icon={Phone} value={profile.phone} disabled />
                   <InputField label="Email" icon={Mail} value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} placeholder="tu@email.com" type="email" />
                   <div>
-                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gray-500">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[#A0A0A0]">
                       <Gift size={12} />
                       Cumpleanos
                     </p>
@@ -453,13 +530,13 @@ export default function ProfilePage() {
                       type="date"
                       value={form.birthDate || ""}
                       onChange={(e) => setForm((f) => ({ ...f, birthDate: e.target.value }))}
-                      className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-gray-100 outline-none transition focus:border-red-500/50"
+                      className="profile-input w-full border px-4 py-3 text-sm text-white outline-none transition duration-200"
                     />
                   </div>
                   <button
                     onClick={saveProfile}
                     disabled={saving}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold text-white shadow-lg shadow-red-900/30 transition hover:bg-red-500 disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 bg-[#FF1A1A] py-3 text-sm font-bold uppercase text-white transition duration-200 hover:bg-[#FF3030] disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     Guardar datos
@@ -471,7 +548,7 @@ export default function ProfilePage() {
                 title="Mis datos"
                 icon={ShieldCheck}
                 action={
-                  <button onClick={() => setEditingDetails(true)} className="text-xs font-bold text-red-300">
+                  <button onClick={() => setEditingDetails(true)} className="text-xs font-bold uppercase text-[#FF1A1A]">
                     Editar
                   </button>
                 }
@@ -488,16 +565,16 @@ export default function ProfilePage() {
         )}
 
         {section === "prode" && (
-          <section className="mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-amber-300/35 bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.2),transparent_36%),linear-gradient(135deg,#241403,#09090b_62%)] p-1 shadow-2xl shadow-amber-950/20">
-            <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+          <section className="mx-auto max-w-3xl overflow-hidden border border-[#FF1A1A] bg-black p-1">
+            <div className="border border-[#FF1A1A] bg-black p-4">
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-300 text-black shadow-lg shadow-amber-700/20">
+                  <div className="flex h-11 w-11 items-center justify-center border border-[#FF1A1A] bg-black text-[#FF1A1A]">
                     <Trophy size={20} />
                   </div>
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-200/70">Nueva seccion</p>
-                    <h2 className="text-lg font-black text-amber-100">Prode Mordisco</h2>
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Nueva seccion</p>
+                    <h2 className="text-lg font-black uppercase text-white">Prode Mordisco</h2>
                   </div>
                 </div>
               </div>
@@ -512,9 +589,17 @@ export default function ProfilePage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
+    <div className="profile-metric border p-3 text-center">
       <p className="truncate text-sm font-black text-white sm:text-base">{value}</p>
-      <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-[var(--profile-muted)]">{label}</p>
+    </div>
+  );
+}
+
+function ClubLevel({ label, active }: { label: string; active: boolean }) {
+  return (
+    <div className={`border px-3 py-3 text-center text-xs font-black uppercase tracking-[-0.01em] ${active ? "border-[#FF1A1A] bg-[#FF1A1A] text-white" : "border-[#FF1A1A] bg-black text-[#A0A0A0]"}`}>
+      {label}
     </div>
   );
 }
@@ -531,10 +616,10 @@ function AccountCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[24px] border border-gray-800 bg-gray-900/88 p-5 shadow-xl shadow-black/20">
+    <div className="profile-card border p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-black text-gray-100">
-          <Icon size={17} className="text-red-400" />
+        <h2 className="flex items-center gap-2 text-lg font-black uppercase tracking-[-0.02em] text-white">
+          <Icon size={17} className="text-[var(--profile-accent)]" />
           {title}
         </h2>
         {action}
@@ -549,16 +634,16 @@ function ActionCard({ icon: Icon, label, detail, href }: { icon: any; label: str
   return (
     <button
       onClick={() => router.push(href)}
-      className="group flex min-h-24 items-center gap-3 rounded-[22px] border border-gray-800 bg-gray-900 p-4 text-left transition hover:border-red-900/60 hover:bg-gray-800"
+      className="profile-action-card group flex min-h-24 items-center gap-3 border p-4 text-left transition duration-200"
     >
-      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-red-600/20">
-        <Icon size={18} className="text-red-300" />
+      <div className="profile-icon-box flex h-11 w-11 flex-shrink-0 items-center justify-center border border-[#FF1A1A]">
+        <Icon size={18} className="text-[var(--profile-accent-soft)]" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-black text-gray-100">{label}</p>
-        <p className="mt-1 text-xs text-gray-500">{detail}</p>
+        <p className="text-lg font-black uppercase tracking-[-0.02em] text-white">{label}</p>
+        <p className="mt-1 text-xs text-[var(--profile-muted)]">{detail}</p>
       </div>
-      <ChevronRight size={17} className="text-gray-600 transition group-hover:translate-x-0.5 group-hover:text-gray-300" />
+      <ChevronRight size={17} className="text-[var(--profile-muted)] transition group-hover:translate-x-0.5 group-hover:text-gray-300" />
     </button>
   );
 }
@@ -569,38 +654,34 @@ function ProfileTab({
   label,
   onClick,
   showDot,
-  gold,
 }: {
   active: boolean;
   icon: any;
   label: string;
   onClick: () => void;
   showDot?: boolean;
-  gold?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={[
-        "relative flex min-h-14 items-center justify-center gap-2 rounded-2xl border px-2 text-xs font-black transition sm:text-sm",
+        "relative flex min-h-14 items-center justify-center gap-2 border px-2 text-xs font-black uppercase transition duration-200 sm:text-sm",
         active
-          ? gold
-            ? "border-amber-300/50 bg-amber-300 text-gray-950 shadow-lg shadow-amber-950/20"
-            : "border-red-400/50 bg-red-600 text-white shadow-lg shadow-red-950/25"
-          : "border-gray-800 bg-gray-900 text-gray-400 hover:border-gray-700 hover:text-gray-100",
+          ? "profile-tab-active text-white"
+          : "profile-tab-idle text-[var(--profile-muted)] hover:text-gray-100",
       ].join(" ")}
     >
       <Icon size={16} />
       <span className="truncate">{label}</span>
-      {showDot && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-300 shadow-[0_0_0_3px_rgba(251,191,36,0.18)]" />}
+      {showDot && <span className="absolute right-2 top-2 h-2.5 w-2.5 bg-[#FF1A1A]" />}
     </button>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl bg-gray-950/70 px-3 py-2.5">
-      <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{label}</span>
+    <div className="profile-info-row flex items-center justify-between gap-3 border px-3 py-2.5">
+      <span className="text-xs font-bold uppercase tracking-wide text-[var(--profile-muted)]">{label}</span>
       <span className="truncate text-sm font-semibold text-gray-200">{value}</span>
     </div>
   );
@@ -608,10 +689,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function EmptyState({ icon: Icon, title, text }: { icon: any; title: string; text: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-gray-800 bg-gray-950/45 p-5 text-center">
-      <Icon size={28} className="mx-auto text-gray-700" />
+    <div className="profile-empty border border-dashed p-5 text-center">
+      <Icon size={28} className="mx-auto text-[var(--profile-muted)]" />
       <p className="mt-3 text-sm font-black text-gray-300">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-gray-600">{text}</p>
+      <p className="mt-1 text-xs leading-5 text-[var(--profile-muted)]">{text}</p>
     </div>
   );
 }
@@ -635,7 +716,7 @@ function InputField({
 }) {
   return (
     <div>
-      <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gray-500">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--profile-muted)]">
         <Icon size={12} />
         {label}
       </p>
@@ -644,7 +725,7 @@ function InputField({
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-gray-100 outline-none transition placeholder:text-gray-600 focus:border-red-500/50 disabled:text-gray-500"
+        className="profile-input w-full border px-4 py-3 text-sm text-gray-100 outline-none transition placeholder:text-gray-600 disabled:text-gray-500"
         disabled={disabled || !onChange}
       />
     </div>

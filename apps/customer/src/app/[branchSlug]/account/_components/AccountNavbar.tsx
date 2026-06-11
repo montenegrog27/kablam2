@@ -51,67 +51,50 @@ export default function AccountNavbar({
 
   const handleLogout = async () => {
     try {
-      const response = await fetch("/api/auth/logout", {
+      await fetch("/api/auth/logout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (response.ok) {
-        router.push(`/${branchSlug}/order`);
-      } else {
-        console.error("Logout failed:", await response.text());
-        // Fallback: redirect anyway
-        router.push(`/${branchSlug}/order`);
-      }
-    } catch (error) {
-      console.error("Logout error:", error);
-      // Fallback: redirect anyway
+    } finally {
       router.push(`/${branchSlug}/order`);
     }
   };
 
-  const goToMenu = () => {
-    router.push(`/${branchSlug}/order`);
-  };
-
   return (
     <>
-      {/* Navbar principal */}
-      <nav className="bg-white border-b">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          {/* Logo y volver */}
+      <nav className="sticky top-0 z-50 border-b border-[#FF1A1A] bg-black text-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-4">
             <button
-              onClick={goToMenu}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              onClick={() => router.push(`/${branchSlug}/order`)}
+              className="flex items-center gap-2 border border-[#FF1A1A] px-3 py-2 text-sm font-bold uppercase text-[#A0A0A0] transition duration-200 hover:bg-[#FF1A1A] hover:text-white"
             >
-              <ChevronLeft size={20} />
-              <span className="hidden sm:inline">Volver al menú</span>
+              <ChevronLeft size={18} />
+              <span className="hidden sm:inline">Volver al menu</span>
             </button>
 
-            {/* Logo/icono */}
             {branding?.logo_url ? (
-              <img src={branding.logo_url} className="h-8 w-auto" alt="Logo" />
+              <img src={branding.logo_url} className="h-8 w-auto object-contain" alt="Logo" />
             ) : (
-              <div className="text-lg font-bold">Mi cuenta</div>
+              <div className="text-lg font-black">Mi cuenta</div>
             )}
           </div>
 
-          {/* Desktop navigation */}
-          <div className="hidden md:flex items-center gap-6">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="hidden items-center gap-5 md:flex">
+            <div className="flex items-center gap-2 border border-[#FF1A1A] bg-black px-3 py-2 text-sm font-bold uppercase text-[#A0A0A0]">
               <User size={16} />
               <span>{customerName || "Cliente"}</span>
             </div>
 
-            <nav className="flex items-center gap-4">
+            <nav className="flex items-center gap-2">
               {navigation.map((item) => (
                 <a
                   key={item.name}
                   href={item.href}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  className={`border border-[#FF1A1A] px-3 py-2 text-sm font-bold uppercase transition duration-200 ${
                     item.current
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                      ? "bg-[#FF1A1A] text-white"
+                      : "text-[#A0A0A0] hover:bg-[#FF1A1A] hover:text-white"
                   }`}
                 >
                   {item.name}
@@ -121,39 +104,36 @@ export default function AccountNavbar({
 
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+              className="flex items-center gap-2 border border-[#FF1A1A] px-3 py-2 text-sm font-bold uppercase text-[#A0A0A0] transition duration-200 hover:bg-[#FF1A1A] hover:text-white"
             >
               <LogOut size={16} />
-              <span>Cerrar sesión</span>
+              <span>Cerrar sesion</span>
             </button>
           </div>
 
-          {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2"
+            className="border border-[#FF1A1A] p-2 text-white md:hidden"
+            aria-label="Abrir menu"
           >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
       </nav>
 
-      {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-b">
-          <div className="px-4 py-3 space-y-3">
-            {/* Customer info */}
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-blue-600" />
+        <div className="border-b border-[#FF1A1A] bg-black text-white md:hidden">
+          <div className="space-y-3 px-4 py-3">
+            <div className="flex items-center gap-3 border border-[#FF1A1A] bg-black p-3">
+              <div className="flex h-10 w-10 items-center justify-center border border-[#FF1A1A] bg-black">
+                <User className="h-5 w-5 text-[#FF1A1A]" />
               </div>
               <div>
-                <div className="font-medium">{customerName || "Cliente"}</div>
-                <div className="text-xs text-gray-500">Mi cuenta</div>
+                <div className="font-bold">{customerName || "Cliente"}</div>
+                <div className="text-xs uppercase text-[#A0A0A0]">Mi cuenta</div>
               </div>
             </div>
 
-            {/* Navigation */}
             <div className="space-y-1">
               {navigation.map((item) => {
                 const Icon = item.icon;
@@ -161,10 +141,10 @@ export default function AccountNavbar({
                   <a
                     key={item.name}
                     href={item.href}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition ${
+                    className={`flex items-center gap-3 border border-[#FF1A1A] px-3 py-3 text-sm font-bold uppercase transition duration-200 ${
                       item.current
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                        ? "bg-[#FF1A1A] text-white"
+                        : "text-[#A0A0A0] hover:bg-[#FF1A1A] hover:text-white"
                     }`}
                     onClick={() => setMobileMenuOpen(false)}
                   >
@@ -175,13 +155,12 @@ export default function AccountNavbar({
               })}
             </div>
 
-            {/* Logout */}
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-3 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition"
+              className="flex w-full items-center gap-3 border border-[#FF1A1A] px-3 py-3 text-sm font-bold uppercase text-[#A0A0A0] transition duration-200 hover:bg-[#FF1A1A] hover:text-white"
             >
               <LogOut size={18} />
-              Cerrar sesión
+              Cerrar sesion
             </button>
           </div>
         </div>

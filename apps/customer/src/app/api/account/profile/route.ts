@@ -50,6 +50,12 @@ type NotificationRow = {
   created_at?: string;
 };
 
+type LoyaltyLevelRow = {
+  name?: string;
+  min_points?: number;
+  max_points?: number | null;
+};
+
 export async function GET() {
   const session = await getCustomerSession();
 
@@ -79,6 +85,12 @@ export async function GET() {
     .order("created_at", { ascending: false })
     .limit(10);
 
+  const { data: allOrders } = await supabase
+    .from("orders")
+    .select("id, total, status, created_at")
+    .eq("customer_id", session.customerId)
+    .neq("status", "cancelled");
+
   const { data: rewardsProgress } = await supabase
     .from("user_rewards_progress")
     .select("*, loyalty_rules(*)")
@@ -104,25 +116,56 @@ export async function GET() {
     .order("created_at", { ascending: false })
     .limit(5);
 
-  let level = "Novato";
-  let nextLevel = "Aprendiz";
+  const { data: loyaltyLevels } = await supabase
+    .from("loyalty_levels")
+    .select("name, min_points, max_points")
+    .eq("tenant_id", session.tenantId)
+    .eq("is_active", true)
+    .order("min_points", { ascending: true });
+
+  let level = "Mordisco";
+  let nextLevel = "Doble Mordisco";
   let progress = 0;
   const points = customer.loyalty_points || 0;
 
-  if (points >= 1000) {
-    level = "Leyenda";
-    nextLevel = "Maximo";
-    progress = 100;
-  } else if (points >= 500) {
-    level = "Experto";
-    nextLevel = "Leyenda";
-    progress = Math.min(100, (points - 500) / 5);
-  } else if (points >= 200) {
-    level = "Aprendiz";
-    nextLevel = "Experto";
-    progress = Math.min(100, (points - 200) / 3);
+  const levels = ((loyaltyLevels || []) as LoyaltyLevelRow[]);
+  if (levels.length > 0) {
+    const currentIndex = Math.max(
+      0,
+      levels.findIndex(
+        (candidate) =>
+          points >= Number(candidate.min_points || 0) &&
+          (candidate.max_points == null || points <= Number(candidate.max_points)),
+      ),
+    );
+    const current = levels[currentIndex] || levels[0];
+    const next = levels[currentIndex + 1];
+    level = current.name || level;
+    nextLevel = next?.name || "Maximo";
+
+    if (!next) {
+      progress = 100;
+    } else {
+      const min = Number(current.min_points || 0);
+      const nextMin = Number(next.min_points || min + 1);
+      progress = ((points - min) / Math.max(1, nextMin - min)) * 100;
+    }
   } else {
-    progress = (points / 200) * 100;
+    if (points >= 7000) {
+      level = "Leyenda Mordisco";
+      nextLevel = "Maximo";
+      progress = 100;
+    } else if (points >= 3000) {
+      level = "Mordisco XL";
+      nextLevel = "Leyenda Mordisco";
+      progress = ((points - 3000) / 4000) * 100;
+    } else if (points >= 1000) {
+      level = "Doble Mordisco";
+      nextLevel = "Mordisco XL";
+      progress = ((points - 1000) / 2000) * 100;
+    } else {
+      progress = (points / 1000) * 100;
+    }
   }
 
   const stats = { burgers: 0, pizzas: 0, drinks: 0, other: 0 };
@@ -147,6 +190,10 @@ export async function GET() {
     });
   });
 
+  const spendOrders = (allOrders || []) as Array<{ total?: number }>;
+  const calculatedTotalSpent = spendOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const calculatedTotalOrders = spendOrders.length;
+
   return NextResponse.json({
     customer: {
       id: customer.id,
@@ -159,13 +206,18 @@ export async function GET() {
       created_at: customer.created_at,
     },
     stats: {
-      totalOrders: customer.lifetime_orders || orders?.length || 0,
-      totalSpent: customer.lifetime_spent || 0,
+      totalOrders: customer.lifetime_orders || calculatedTotalOrders || orders?.length || 0,
+      totalSpent: Number(customer.lifetime_spent || 0) || calculatedTotalSpent,
       points,
       totalPointsEarned: customer.total_points_earned || 0,
       level,
       nextLevel,
-      progress: Math.round(progress),
+      levels: levels.map((item) => ({
+        name: item.name,
+        minPoints: item.min_points || 0,
+        maxPoints: item.max_points ?? null,
+      })),
+      progress: Math.round(Math.max(0, Math.min(100, progress))),
       products: stats,
     },
     orders: ((orders || []) as OrderRow[]).map((order) => ({
