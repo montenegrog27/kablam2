@@ -30,9 +30,25 @@ type RewardProgressRow = {
 
 type RedemptionRow = {
   id: string;
+  loyalty_rewards?: { name?: string; description?: string | null; points_cost?: number | null } | null;
+  reward_id?: string | null;
   reward_type?: string;
   reward_value?: number;
+  points_cost?: number;
+  code?: string | null;
+  status?: string | null;
   expires_at?: string | null;
+};
+
+type LoyaltyRewardRow = {
+  id: string;
+  name?: string;
+  description?: string | null;
+  points_cost?: number;
+  reward_type?: string;
+  reward_value?: number | null;
+  image_url?: string | null;
+  sort_order?: number | null;
 };
 
 type FavoriteRow = {
@@ -98,7 +114,7 @@ export async function GET() {
 
   const { data: redemptions } = await supabase
     .from("reward_redemptions")
-    .select("*")
+    .select("*, loyalty_rewards(name, description, points_cost)")
     .eq("customer_id", session.customerId)
     .eq("used", false)
     .order("redeemed_at", { ascending: false });
@@ -128,6 +144,14 @@ export async function GET() {
     .eq("tenant_id", session.tenantId)
     .eq("is_active", true)
     .order("min_points", { ascending: true });
+
+  const { data: loyaltyRewards } = await supabase
+    .from("loyalty_rewards")
+    .select("id, name, description, points_cost, reward_type, reward_value, image_url, sort_order")
+    .eq("tenant_id", session.tenantId)
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("points_cost", { ascending: true });
 
   let level = "Mordisco";
   let nextLevel = "Doble Mordisco";
@@ -254,11 +278,28 @@ export async function GET() {
     availableRedemptions: ((redemptions || []) as RedemptionRow[]).map(
       (redemption) => ({
         id: redemption.id,
+        rewardId: redemption.reward_id,
+        name: redemption.loyalty_rewards?.name || "Recompensa",
+        description: redemption.loyalty_rewards?.description || null,
         type: redemption.reward_type,
         value: redemption.reward_value,
+        pointsCost: redemption.points_cost || redemption.loyalty_rewards?.points_cost || 0,
+        code: redemption.code,
+        status: redemption.status || "available",
         expires_at: redemption.expires_at,
       }),
     ),
+    rewardCatalog: ((loyaltyRewards || []) as LoyaltyRewardRow[]).map((reward) => ({
+      id: reward.id,
+      name: reward.name || "Recompensa",
+      description: reward.description || null,
+      pointsCost: reward.points_cost || 0,
+      type: reward.reward_type || "manual",
+      value: reward.reward_value ?? null,
+      imageUrl: reward.image_url || null,
+      sortOrder: reward.sort_order || 100,
+      canRedeem: points >= Number(reward.points_cost || 0),
+    })),
     favorites: ((favorites || []) as FavoriteRow[]).map((favorite) => ({
       id: favorite.id,
       productId: favorite.product_id,

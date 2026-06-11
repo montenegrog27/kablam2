@@ -162,13 +162,13 @@ body {
   --profile-accent-soft: #ffffff;
   --profile-input: #000000;
   min-height: 100vh;
-  background: #000000;
+  background: #e10600;
 }
 
 .customer-profile-red {
-  --profile-card: #000000;
+  --profile-card: #ffffff;
   --profile-card-strong: #000000;
-  background: #000000;
+  background: #e10600;
 }
 
 .profile-hero-bg {
@@ -243,131 +243,6 @@ body {
   background: #e10600;
   border-color: #e10600;
   transform: translateY(-4px);
-}
-
-.customer-profile-black [class*="shadow"],
-.customer-profile-red [class*="shadow"] {
-  box-shadow: none !important;
-}
-
-.customer-profile-black [class*="bg-gradient"],
-.customer-profile-red [class*="bg-gradient"],
-.customer-profile-black [class*="from-"],
-.customer-profile-red [class*="from-"],
-.customer-profile-black [class*="to-"],
-.customer-profile-red [class*="to-"] {
-  background-image: none !important;
-}
-
-.customer-profile-black .bg-white,
-.customer-profile-red .bg-white,
-.customer-profile-black .bg-gray-50,
-.customer-profile-red .bg-gray-50,
-.customer-profile-black .bg-gray-100,
-.customer-profile-red .bg-gray-100,
-.customer-profile-black .bg-gray-900,
-.customer-profile-red .bg-gray-900,
-.customer-profile-black .bg-gray-950,
-.customer-profile-red .bg-gray-950,
-.customer-profile-black [class*="bg-amber"],
-.customer-profile-red [class*="bg-amber"],
-.customer-profile-black [class*="bg-yellow"],
-.customer-profile-red [class*="bg-yellow"],
-.customer-profile-black [class*="bg-orange"],
-.customer-profile-red [class*="bg-orange"],
-.customer-profile-black [class*="bg-emerald"],
-.customer-profile-red [class*="bg-emerald"],
-.customer-profile-black [class*="bg-green"],
-.customer-profile-red [class*="bg-green"],
-.customer-profile-black [class*="bg-blue"],
-.customer-profile-red [class*="bg-blue"],
-.customer-profile-black [class*="bg-purple"],
-.customer-profile-red [class*="bg-purple"],
-.customer-profile-black [class*="bg-red-50"],
-.customer-profile-red [class*="bg-red-50"],
-.customer-profile-black [class*="bg-red-100"],
-.customer-profile-red [class*="bg-red-100"],
-.customer-profile-black [class*="bg-white/"],
-.customer-profile-red [class*="bg-white/"] {
-  background-color: #000000 !important;
-}
-
-.customer-profile-red .bg-white,
-.customer-profile-red .bg-gray-50,
-.customer-profile-red .bg-gray-100,
-.customer-profile-red .bg-gray-900,
-.customer-profile-red .bg-gray-950,
-.customer-profile-red [class*="bg-amber"],
-.customer-profile-red [class*="bg-yellow"],
-.customer-profile-red [class*="bg-orange"],
-.customer-profile-red [class*="bg-emerald"],
-.customer-profile-red [class*="bg-green"],
-.customer-profile-red [class*="bg-blue"],
-.customer-profile-red [class*="bg-purple"],
-.customer-profile-red [class*="bg-red-50"],
-.customer-profile-red [class*="bg-red-100"],
-.customer-profile-red [class*="bg-white/"] {
-  background-color: #0a0a0a !important;
-}
-
-.customer-profile-black [class*="text-amber"],
-.customer-profile-red [class*="text-amber"],
-.customer-profile-black [class*="text-yellow"],
-.customer-profile-red [class*="text-yellow"],
-.customer-profile-black [class*="text-orange"],
-.customer-profile-red [class*="text-orange"],
-.customer-profile-black [class*="text-emerald"],
-.customer-profile-red [class*="text-emerald"],
-.customer-profile-black [class*="text-green"],
-.customer-profile-red [class*="text-green"],
-.customer-profile-black [class*="text-blue"],
-.customer-profile-red [class*="text-blue"],
-.customer-profile-black [class*="text-purple"],
-.customer-profile-red [class*="text-purple"],
-.customer-profile-black [class*="text-red-"],
-.customer-profile-red [class*="text-red-"] {
-  color: #e10600 !important;
-}
-
-.customer-profile-black .text-gray-900,
-.customer-profile-red .text-gray-900,
-.customer-profile-black .text-gray-800,
-.customer-profile-red .text-gray-800,
-.customer-profile-black .text-gray-700,
-.customer-profile-red .text-gray-700,
-.customer-profile-black .text-gray-100,
-.customer-profile-red .text-gray-100 {
-  color: #ffffff !important;
-}
-
-.customer-profile-black .text-gray-600,
-.customer-profile-red .text-gray-600,
-.customer-profile-black .text-gray-500,
-.customer-profile-red .text-gray-500,
-.customer-profile-black .text-gray-400,
-.customer-profile-red .text-gray-400 {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-
-.customer-profile-black .border,
-.customer-profile-red .border,
-.customer-profile-black [class*="border-amber"],
-.customer-profile-red [class*="border-amber"],
-.customer-profile-black [class*="border-yellow"],
-.customer-profile-red [class*="border-yellow"],
-.customer-profile-black [class*="border-orange"],
-.customer-profile-red [class*="border-orange"],
-.customer-profile-black [class*="border-emerald"],
-.customer-profile-red [class*="border-emerald"],
-.customer-profile-black [class*="border-green"],
-.customer-profile-red [class*="border-green"],
-.customer-profile-black [class*="border-blue"],
-.customer-profile-red [class*="border-blue"],
-.customer-profile-black [class*="border-purple"],
-.customer-profile-red [class*="border-purple"],
-.customer-profile-black [class*="border-gray"],
-.customer-profile-red [class*="border-gray"] {
-  border-color: #e10600 !important;
 }
 
 .customer-world-cup-loader::before,

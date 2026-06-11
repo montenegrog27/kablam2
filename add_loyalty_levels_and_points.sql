@@ -63,6 +63,61 @@ create table if not exists public.loyalty_point_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.loyalty_rewards (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null,
+  name text not null,
+  description text,
+  points_cost integer not null default 0,
+  reward_type text not null default 'manual',
+  reward_value numeric,
+  image_url text,
+  sort_order integer not null default 100,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.loyalty_rewards drop constraint if exists loyalty_rewards_type_check;
+alter table public.loyalty_rewards
+  add constraint loyalty_rewards_type_check
+  check (reward_type in ('manual', 'free_product', 'free_combo', 'discount_amount', 'discount_percent', 'free_shipping'));
+
+create index if not exists idx_loyalty_rewards_tenant_active
+  on public.loyalty_rewards (tenant_id, is_active, points_cost, sort_order);
+
+create table if not exists public.reward_redemptions (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid,
+  customer_id uuid not null references public.customers(id) on delete cascade,
+  reward_id uuid references public.loyalty_rewards(id) on delete set null,
+  reward_type text,
+  reward_value numeric,
+  points_cost integer not null default 0,
+  code text,
+  status text not null default 'available',
+  used boolean not null default false,
+  redeemed_at timestamptz not null default now(),
+  used_at timestamptz,
+  expires_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb
+);
+
+alter table public.reward_redemptions add column if not exists tenant_id uuid;
+alter table public.reward_redemptions add column if not exists reward_id uuid references public.loyalty_rewards(id) on delete set null;
+alter table public.reward_redemptions add column if not exists points_cost integer not null default 0;
+alter table public.reward_redemptions add column if not exists code text;
+alter table public.reward_redemptions add column if not exists status text not null default 'available';
+alter table public.reward_redemptions add column if not exists metadata jsonb not null default '{}'::jsonb;
+alter table public.reward_redemptions add column if not exists redeemed_at timestamptz not null default now();
+
+create unique index if not exists idx_reward_redemptions_code
+  on public.reward_redemptions (code)
+  where code is not null;
+
+create index if not exists idx_reward_redemptions_customer
+  on public.reward_redemptions (customer_id, redeemed_at desc);
+
 create unique index if not exists idx_loyalty_point_events_order_rule_source
   on public.loyalty_point_events (order_id, rule_id, source)
   where order_id is not null and rule_id is not null;
@@ -256,12 +311,116 @@ begin
 end;
 $$;
 
+create or replace function public.redeem_loyalty_reward(p_customer_id uuid, p_reward_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_customer record;
+  v_reward record;
+  v_code text;
+  v_redemption_id uuid;
+begin
+  select *
+  into v_customer
+  from public.customers
+  where id = p_customer_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'customer_not_found');
+  end if;
+
+  select *
+  into v_reward
+  from public.loyalty_rewards
+  where id = p_reward_id
+    and tenant_id = v_customer.tenant_id
+    and is_active = true;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'reward_not_found');
+  end if;
+
+  if coalesce(v_customer.loyalty_points, 0) < coalesce(v_reward.points_cost, 0) then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'insufficient_points',
+      'points', coalesce(v_customer.loyalty_points, 0),
+      'required', coalesce(v_reward.points_cost, 0)
+    );
+  end if;
+
+  v_code := upper('MOR-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+
+  update public.customers
+  set loyalty_points = greatest(coalesce(loyalty_points, 0) - coalesce(v_reward.points_cost, 0), 0)
+  where id = p_customer_id;
+
+  insert into public.reward_redemptions (
+    tenant_id,
+    customer_id,
+    reward_id,
+    reward_type,
+    reward_value,
+    points_cost,
+    code,
+    status,
+    used,
+    expires_at,
+    metadata
+  )
+  values (
+    v_reward.tenant_id,
+    p_customer_id,
+    v_reward.id,
+    v_reward.reward_type,
+    v_reward.reward_value,
+    v_reward.points_cost,
+    v_code,
+    'available',
+    false,
+    now() + interval '30 days',
+    jsonb_build_object('rewardName', v_reward.name)
+  )
+  returning id into v_redemption_id;
+
+  insert into public.loyalty_point_events (
+    tenant_id,
+    customer_id,
+    source,
+    points,
+    description,
+    metadata
+  )
+  values (
+    v_reward.tenant_id,
+    p_customer_id,
+    'reward_redemption',
+    -1 * coalesce(v_reward.points_cost, 0),
+    'Canje: ' || v_reward.name,
+    jsonb_build_object('rewardId', v_reward.id, 'redemptionId', v_redemption_id, 'code', v_code)
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'redemptionId', v_redemption_id,
+    'code', v_code,
+    'pointsRemaining', greatest(coalesce(v_customer.loyalty_points, 0) - coalesce(v_reward.points_cost, 0), 0)
+  );
+end;
+$$;
+
 grant execute on function public.seed_default_loyalty_levels(uuid) to authenticated, service_role;
 grant execute on function public.process_loyalty_for_order(uuid) to authenticated, service_role;
+grant execute on function public.redeem_loyalty_reward(uuid, uuid) to authenticated, service_role;
 
 alter table public.loyalty_levels enable row level security;
 alter table public.loyalty_point_events enable row level security;
 alter table public.loyalty_rules enable row level security;
+alter table public.loyalty_rewards enable row level security;
+alter table public.reward_redemptions enable row level security;
 
 drop policy if exists loyalty_levels_tenant_select on public.loyalty_levels;
 create policy loyalty_levels_tenant_select on public.loyalty_levels
@@ -281,4 +440,16 @@ for select using (true);
 
 drop policy if exists loyalty_rules_service_all on public.loyalty_rules;
 create policy loyalty_rules_service_all on public.loyalty_rules
+for all using (true) with check (true);
+
+drop policy if exists loyalty_rewards_public_select on public.loyalty_rewards;
+create policy loyalty_rewards_public_select on public.loyalty_rewards
+for select using (is_active = true);
+
+drop policy if exists loyalty_rewards_service_all on public.loyalty_rewards;
+create policy loyalty_rewards_service_all on public.loyalty_rewards
+for all using (true) with check (true);
+
+drop policy if exists reward_redemptions_service_all on public.reward_redemptions;
+create policy reward_redemptions_service_all on public.reward_redemptions
 for all using (true) with check (true);

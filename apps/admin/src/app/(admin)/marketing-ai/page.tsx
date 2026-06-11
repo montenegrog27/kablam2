@@ -37,7 +37,7 @@ export default function MarketingAIPage() {
       supabase.from("orders").select("customer_id, customer_name, total, type, created_at").eq("tenant_id", r.tenant_id).in("status", ["delivered", "sent", "ready"]).order("created_at", { ascending: false }).limit(5000),
       supabase.from("customers").select("id, name, phone, address, created_at").eq("tenant_id", r.tenant_id),
       supabase.from("marketing_insights").select("*").eq("tenant_id", r.tenant_id).eq("status", "active").order("priority", { ascending: false }).limit(20),
-      supabase.from("campaigns").select("*, campaign_deliveries(customer_id, phone, status, sent_at)").eq("tenant_id", r.tenant_id).order("created_at", { ascending: false }).limit(20),
+      supabase.from("campaigns").select("*, campaign_deliveries(*)").eq("tenant_id", r.tenant_id).order("created_at", { ascending: false }).limit(20),
     ]);
     setOrders(ords.data || []);
     setCustomers(custs.data || []);
@@ -224,13 +224,20 @@ export default function MarketingAIPage() {
     if (sendingCampaign) return;
     setSendingCampaign(true);
 
-    // Get all pending deliveries for this campaign
-    const { data: deliveries } = await supabase
+    // Get all pending deliveries for this campaign. Customer names are loaded separately
+    // because campaign_deliveries may not have a declared FK to customers.
+    const { data: deliveries, error: deliveriesError } = await supabase
       .from("campaign_deliveries")
-      .select("*, customers(name)")
+      .select("*")
       .eq("campaign_id", campaign.id)
       .eq("status", "pending")
       .limit(campaignBatchSize);
+
+    if (deliveriesError) {
+      alert(`No se pudieron cargar los destinatarios: ${deliveriesError.message}`);
+      setSendingCampaign(false);
+      return;
+    }
 
     if (!deliveries || deliveries.length === 0) {
       // Mark campaign as sent
@@ -238,6 +245,12 @@ export default function MarketingAIPage() {
       alert("Campaña completada");
       setSendingCampaign(false); load(); return;
     }
+
+    const customerIds = Array.from(new Set(deliveries.map((delivery: any) => delivery.customer_id).filter(Boolean)));
+    const { data: deliveryCustomers } = customerIds.length
+      ? await supabase.from("customers").select("id, name").in("id", customerIds)
+      : { data: [] as any[] };
+    const customerNameById = new Map((deliveryCustomers || []).map((customer: any) => [customer.id, customer.name]));
 
     // Get branch slug for sending
     const { data: u } = await supabase.auth.getUser();
@@ -249,7 +262,7 @@ export default function MarketingAIPage() {
 
     let sent = 0, failed = 0;
     for (const delivery of deliveries) {
-      const customerName = (delivery as any).customers?.name || "cliente";
+      const customerName = customerNameById.get(delivery.customer_id) || "cliente";
       const personalizedMessage = (campaign.message_template || "").replace(/\{nombre\}/gi, customerName);
       try {
         const res = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {

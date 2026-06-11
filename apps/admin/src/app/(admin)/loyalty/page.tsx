@@ -24,7 +24,7 @@ export const fetchCache = "force-no-store";
 export const runtime = "nodejs";
 
 type RuleType = "points" | "product_points" | "combo_points" | "category_points" | "extra_points" | "product_accumulation";
-type Tab = "levels" | "rules" | "analytics";
+type Tab = "levels" | "rules" | "rewards" | "analytics";
 
 type LoyaltyRule = {
   id: string;
@@ -52,6 +52,18 @@ type LoyaltyLevel = {
   max_points?: number | null;
   sort_order: number;
   color?: string | null;
+  is_active: boolean;
+};
+
+type LoyaltyReward = {
+  id: string;
+  name: string;
+  description?: string | null;
+  points_cost: number;
+  reward_type: string;
+  reward_value?: number | null;
+  image_url?: string | null;
+  sort_order: number;
   is_active: boolean;
 };
 
@@ -89,11 +101,23 @@ const defaultRuleForm = {
   is_active: true,
 };
 
+const defaultRewardForm = {
+  name: "",
+  description: "",
+  points_cost: "500",
+  reward_type: "manual",
+  reward_value: "",
+  image_url: "",
+  sort_order: "100",
+  is_active: true,
+};
+
 export default function LoyaltyRulesPage() {
   const [tab, setTab] = useState<Tab>("levels");
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [rules, setRules] = useState<LoyaltyRule[]>([]);
   const [levels, setLevels] = useState<LoyaltyLevel[]>([]);
+  const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [combos, setCombos] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -110,6 +134,10 @@ export default function LoyaltyRulesPage() {
   const [showLevelForm, setShowLevelForm] = useState(false);
   const [editingLevel, setEditingLevel] = useState<LoyaltyLevel | null>(null);
   const [levelForm, setLevelForm] = useState(defaultLevelForm);
+
+  const [showRewardForm, setShowRewardForm] = useState(false);
+  const [editingReward, setEditingReward] = useState<LoyaltyReward | null>(null);
+  const [rewardForm, setRewardForm] = useState(defaultRewardForm);
 
   useEffect(() => {
     loadData();
@@ -146,16 +174,17 @@ export default function LoyaltyRulesPage() {
 
     setTenantId(userRecord.tenant_id);
 
-    const [rulesRes, levelsRes, productsRes, combosRes, categoriesRes, eventsRes] = await Promise.all([
+    const [rulesRes, levelsRes, rewardsRes, productsRes, combosRes, categoriesRes, eventsRes] = await Promise.all([
       supabase.from("loyalty_rules").select("*").eq("tenant_id", userRecord.tenant_id).order("priority", { ascending: true }),
       supabase.from("loyalty_levels").select("*").eq("tenant_id", userRecord.tenant_id).order("min_points", { ascending: true }),
+      supabase.from("loyalty_rewards").select("*").eq("tenant_id", userRecord.tenant_id).order("sort_order", { ascending: true }).order("points_cost", { ascending: true }),
       supabase.from("products").select("id, name, category_id").eq("tenant_id", userRecord.tenant_id).order("name"),
       supabase.from("combos").select("id, name").eq("tenant_id", userRecord.tenant_id).order("name"),
       supabase.from("categories").select("id, name").eq("tenant_id", userRecord.tenant_id).order("name"),
       supabase.from("loyalty_point_events").select("*").eq("tenant_id", userRecord.tenant_id).order("created_at", { ascending: false }).limit(200),
     ]);
 
-    if (levelsRes.error?.code === "42P01" || eventsRes.error?.code === "42P01") {
+    if (levelsRes.error?.code === "42P01" || eventsRes.error?.code === "42P01" || rewardsRes.error?.code === "42P01") {
       setMessage("Falta ejecutar add_loyalty_levels_and_points.sql en Supabase para activar niveles y analytics.");
     }
 
@@ -174,6 +203,7 @@ export default function LoyaltyRulesPage() {
 
     setRules((rulesRes.data || []) as LoyaltyRule[]);
     setLevels((levelsRes.data || []) as LoyaltyLevel[]);
+    setRewards((rewardsRes.data || []) as LoyaltyReward[]);
     setProducts(productsRes.data || []);
     setCombos(combosRes.data || []);
     setCategories(categoriesRes.data || []);
@@ -204,6 +234,12 @@ export default function LoyaltyRulesPage() {
     setLevelForm(defaultLevelForm);
     setEditingLevel(null);
     setShowLevelForm(false);
+  };
+
+  const resetRewardForm = () => {
+    setRewardForm(defaultRewardForm);
+    setEditingReward(null);
+    setShowRewardForm(false);
   };
 
   const saveRule = async (event: React.FormEvent) => {
@@ -271,6 +307,36 @@ export default function LoyaltyRulesPage() {
     loadData();
   };
 
+  const saveReward = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!tenantId || !rewardForm.name.trim()) return;
+
+    const payload = {
+      tenant_id: tenantId,
+      name: rewardForm.name.trim(),
+      description: rewardForm.description.trim() || null,
+      points_cost: Number(rewardForm.points_cost || 0),
+      reward_type: rewardForm.reward_type,
+      reward_value: rewardForm.reward_value ? Number(rewardForm.reward_value) : null,
+      image_url: rewardForm.image_url.trim() || null,
+      sort_order: Number(rewardForm.sort_order || 100),
+      is_active: rewardForm.is_active,
+      updated_at: new Date().toISOString(),
+    };
+
+    const result = editingReward
+      ? await supabase.from("loyalty_rewards").update(payload).eq("id", editingReward.id)
+      : await supabase.from("loyalty_rewards").insert(payload);
+
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+
+    resetRewardForm();
+    loadData();
+  };
+
   const editRule = (rule: LoyaltyRule) => {
     setEditingRule(rule);
     setRuleForm({
@@ -304,6 +370,21 @@ export default function LoyaltyRulesPage() {
       is_active: level.is_active,
     });
     setShowLevelForm(true);
+  };
+
+  const editReward = (reward: LoyaltyReward) => {
+    setEditingReward(reward);
+    setRewardForm({
+      name: reward.name || "",
+      description: reward.description || "",
+      points_cost: String(reward.points_cost || 0),
+      reward_type: reward.reward_type || "manual",
+      reward_value: reward.reward_value == null ? "" : String(reward.reward_value),
+      image_url: reward.image_url || "",
+      sort_order: String(reward.sort_order || 100),
+      is_active: reward.is_active,
+    });
+    setShowRewardForm(true);
   };
 
   const deleteRow = async (table: string, id: string) => {
@@ -405,6 +486,7 @@ export default function LoyaltyRulesPage() {
       <div className="flex flex-wrap gap-2">
         <TabButton active={tab === "levels"} icon={Trophy} label="Niveles" onClick={() => setTab("levels")} />
         <TabButton active={tab === "rules"} icon={Sparkles} label="Reglas de puntos" onClick={() => setTab("rules")} />
+        <TabButton active={tab === "rewards"} icon={Gift} label="Recompensas" onClick={() => setTab("rewards")} />
         <TabButton active={tab === "analytics"} icon={BarChart3} label="Analytics" onClick={() => setTab("analytics")} />
       </div>
 
@@ -588,6 +670,65 @@ export default function LoyaltyRulesPage() {
         </section>
       )}
 
+      {tab === "rewards" && (
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-gray-100">Recompensas por puntos</h2>
+              <p className="text-sm text-gray-400">Configurá qué puede canjear el cliente desde su perfil según sus puntos disponibles.</p>
+            </div>
+            <button onClick={() => { resetRewardForm(); setShowRewardForm(true); }} className="btn-primary"><Plus size={16} /> Nueva recompensa</button>
+          </div>
+
+          {showRewardForm && (
+            <form onSubmit={saveReward} className="panel space-y-4">
+              <FormHeader title={editingReward ? "Editar recompensa" : "Nueva recompensa"} onClose={resetRewardForm} />
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Nombre"><input className="input" value={rewardForm.name} onChange={(e) => setRewardForm({ ...rewardForm, name: e.target.value })} placeholder="Papas gratis" /></Field>
+                <Field label="Costo en puntos"><input type="number" className="input" value={rewardForm.points_cost} onChange={(e) => setRewardForm({ ...rewardForm, points_cost: e.target.value })} /></Field>
+                <Field label="Tipo">
+                  <select className="input" value={rewardForm.reward_type} onChange={(e) => setRewardForm({ ...rewardForm, reward_type: e.target.value })}>
+                    <option value="manual">Manual / validar en caja</option>
+                    <option value="free_product">Producto gratis</option>
+                    <option value="free_combo">Combo gratis</option>
+                    <option value="discount_amount">$ descuento</option>
+                    <option value="discount_percent">% descuento</option>
+                    <option value="free_shipping">Envío gratis</option>
+                  </select>
+                </Field>
+                <Field label="Valor"><input type="number" className="input" value={rewardForm.reward_value} onChange={(e) => setRewardForm({ ...rewardForm, reward_value: e.target.value })} placeholder="Opcional" /></Field>
+                <Field label="Imagen URL"><input className="input" value={rewardForm.image_url} onChange={(e) => setRewardForm({ ...rewardForm, image_url: e.target.value })} placeholder="https://..." /></Field>
+                <Field label="Orden"><input type="number" className="input" value={rewardForm.sort_order} onChange={(e) => setRewardForm({ ...rewardForm, sort_order: e.target.value })} /></Field>
+              </div>
+              <Field label="Descripción"><textarea className="input min-h-24" value={rewardForm.description} onChange={(e) => setRewardForm({ ...rewardForm, description: e.target.value })} placeholder="Ej: Canjeable en cualquier compra presencial o web." /></Field>
+              <label className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={rewardForm.is_active} onChange={(e) => setRewardForm({ ...rewardForm, is_active: e.target.checked })} /> Activa</label>
+              <button className="btn-primary"><Save size={16} /> Guardar recompensa</button>
+            </form>
+          )}
+
+          <div className="grid gap-3 lg:grid-cols-3">
+            {rewards.map((reward) => (
+              <div key={reward.id} className="panel">
+                {reward.image_url && <img src={reward.image_url} alt={reward.name} className="mb-4 h-36 w-full rounded-xl object-cover" />}
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-black text-gray-100">{reward.name}</h3>
+                      {!reward.is_active && <Badge>Inactiva</Badge>}
+                    </div>
+                    <p className="mt-1 text-sm text-gray-400">{reward.description || "Sin descripción"}</p>
+                    <p className="mt-4 text-3xl font-black text-red-300">{Number(reward.points_cost || 0).toLocaleString("es-AR")} pts</p>
+                    <p className="mt-1 text-xs font-bold uppercase text-gray-500">{rewardTypeLabel(reward.reward_type)}</p>
+                  </div>
+                  <RowActions onEdit={() => editReward(reward)} onDelete={() => deleteRow("loyalty_rewards", reward.id)} />
+                </div>
+              </div>
+            ))}
+            {!loading && rewards.length === 0 && <Empty icon={Gift} text="Todavía no hay recompensas configuradas." />}
+          </div>
+        </section>
+      )}
+
       {tab === "analytics" && (
         <section className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <div className="panel">
@@ -659,6 +800,18 @@ function ruleDescription(rule: LoyaltyRule, products: any[], combos: any[], cate
   if (rule.type === "category_points") return `${Number(rule.points_per_unit || 0)} puntos por unidad en ${findName(categories, rule.category_id) || "categoría"}.`;
   if (rule.type === "extra_points") return `${Number(rule.points_per_unit || 0)} puntos por cada extra agregado.`;
   return `${rule.required_quantity || 0} compras para liberar recompensa.`;
+}
+
+function rewardTypeLabel(type?: string | null) {
+  const labels: Record<string, string> = {
+    manual: "Validación manual",
+    free_product: "Producto gratis",
+    free_combo: "Combo gratis",
+    discount_amount: "Descuento fijo",
+    discount_percent: "Descuento porcentual",
+    free_shipping: "Envío gratis",
+  };
+  return labels[type || "manual"] || type || "Recompensa";
 }
 
 function findName(rows: any[], id?: string | null) {
