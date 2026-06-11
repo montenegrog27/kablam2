@@ -1140,7 +1140,7 @@ function NormalProductCard({
   disabled?: boolean;
 }) {
   const image = getImage(product);
-  const loyaltyEstimate = loyalty?.authenticated ? getProductLoyaltyEstimate(product, loyalty.rules) : { points: 0, extrasHint: false };
+  const loyaltyEstimate = loyalty?.authenticated ? getProductLoyaltyEstimate(product, loyalty.rules) : { points: 0, extrasHint: false, extrasPointsPerExtra: 0 };
 
   return (
     <div
@@ -1184,16 +1184,16 @@ function NormalProductCard({
         <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
           {product.description || "\u00A0"}
         </p>
-        {loyalty?.authenticated && (loyaltyEstimate.points > 0 || loyaltyEstimate.extrasHint) && (
+        {loyalty?.authenticated && (loyaltyEstimate.points > 0 || loyaltyEstimate.extrasPointsPerExtra > 0) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {loyaltyEstimate.points > 0 && (
               <span className="inline-flex w-fit items-center rounded-full bg-red-50 px-2 py-1 text-[10px] font-black uppercase text-red-600">
                 +{loyaltyEstimate.points} pts
               </span>
             )}
-            {loyaltyEstimate.extrasHint && (
+            {loyaltyEstimate.extrasPointsPerExtra > 0 && (
               <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase text-gray-500">
-                extras suman
+                extras +{loyaltyEstimate.extrasPointsPerExtra} pts
               </span>
             )}
           </div>

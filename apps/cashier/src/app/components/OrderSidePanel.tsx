@@ -495,11 +495,8 @@ export default function OrderSidePanel({
 
   const isPhoneMissingForCoupon = couponRequiresPhone && !customerPhone?.trim();
 
-  const isPhoneRequiredForDelivery =
-    orderType === "delivery" && !customerPhone?.trim();
-
   const isCheckoutBlocked =
-    noCashSession || cart.length === 0 || isPhoneMissingForCoupon || isPhoneRequiredForDelivery;
+    noCashSession || cart.length === 0 || isPhoneMissingForCoupon;
 
   const removePaymentLine = (index: number) => {
     setPayments(payments.filter((_, i) => i !== index));
@@ -585,29 +582,41 @@ export default function OrderSidePanel({
       .replace(/^549/, "")
       .replace(/^54/, "")
       .replace(/^9(\d{10})$/, "$1");
+    const hasCustomerPhone = phone.length > 0;
 
     // ===============================
     // CUSTOMER
     // ===============================
 
-    let { data: customer } = await supabase
+    let customer: any = null;
+
+    if (hasCustomerPhone) {
+      const { data: existingCustomer } = await supabase
       .from("customers")
       .select("*")
       .eq("tenant_id", tenantId)
       .eq("phone", phone)
       .maybeSingle();
 
+      customer = existingCustomer;
+
     if (!customer) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("customers")
         .insert({
           tenant_id: tenantId,
-          name: customerName,
-          phone: phone,
+          name: customerName || "Cliente",
+          phone,
           address: orderType === "delivery" ? address : null,
         })
         .select()
         .single();
+
+      if (error) {
+        console.error("Customer creation failed:", error);
+        alert("No se pudo guardar el cliente. El pedido no fue creado.");
+        return;
+      }
 
       customer = data;
     } else {
@@ -619,22 +628,20 @@ export default function OrderSidePanel({
         await supabase.from("customers").update(updates).eq("id", customer.id);
       }
     }
-
-    if (!customer) {
-      console.error("Customer creation failed");
-      return;
     }
 
     // ===============================
     // CUSTOMER TYPE
     // ===============================
 
-    const { count } = await supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true })
-      .eq("customer_id", customer.id);
+    const { count } = customer
+      ? await supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("customer_id", customer.id)
+      : { count: 0 };
 
-    const customerType = count === 0 ? "new" : "returning";
+    const customerType = customer ? (count === 0 ? "new" : "returning") : "anonymous";
 
     // ===============================
     // CREATE ORDER
@@ -650,13 +657,13 @@ export default function OrderSidePanel({
           cash_register_id: session.cash_register_id,
           created_by: session.opened_by,
 
-          customer_id: customer.id,
+          customer_id: customer?.id ?? null,
 
           status: "confirmed",
           type: orderType,
 
-          customer_name: customerName,
-          customer_phone: phone,
+          customer_name: customerName || null,
+          customer_phone: hasCustomerPhone ? phone : null,
           address: orderType === "delivery" ? address : null,
           customer_lat: orderType === "delivery" ? customerLat : null,
           customer_lng: orderType === "delivery" ? customerLng : null,
@@ -685,8 +692,8 @@ export default function OrderSidePanel({
         .from("orders")
         .update({
           type: orderType,
-          customer_name: customerName,
-          customer_phone: phone,
+          customer_name: customerName || null,
+          customer_phone: hasCustomerPhone ? phone : null,
           address: orderType === "delivery" ? address : null,
           customer_lat: orderType === "delivery" ? customerLat : null,
           customer_lng: orderType === "delivery" ? customerLng : null,
@@ -815,7 +822,7 @@ export default function OrderSidePanel({
         .eq("id", appliedCoupon.id);
     }
 
-    if (isBuilder) {
+    if (isBuilder && customer?.id) {
       const { error: loyaltyError } = await supabase.rpc("process_loyalty_for_order", {
         p_order_id: orderId,
       });
@@ -872,7 +879,7 @@ export default function OrderSidePanel({
       shipping: finalShipping,
       total,
 
-      customer_id: customer.id,
+      customer_id: customer?.id ?? null,
       customer_type: customerType,
 
       sales_channel: "cashier",
@@ -897,47 +904,28 @@ export default function OrderSidePanel({
     // CONVERSATION
     // ===============================
 
-    let { data: conversation } = await supabase
-      .from("conversations")
-      .select("*")
-      .eq("customer_id", customer.id)
-      .maybeSingle();
-
-    if (!conversation) {
-      const { data } = await supabase
+    if (customer?.id) {
+      let { data: conversation } = await supabase
         .from("conversations")
-        .insert({
-          tenant_id: tenantId,
-          branch_id: branchId,
-          customer_id: customer.id,
-        })
-        .select()
-        .single();
+        .select("*")
+        .eq("customer_id", customer.id)
+        .maybeSingle();
 
-      conversation = data;
+      if (!conversation) {
+        const { data } = await supabase
+          .from("conversations")
+          .insert({
+            tenant_id: tenantId,
+            branch_id: branchId,
+            customer_id: customer.id,
+          })
+          .select()
+          .single();
+
+        conversation = data;
+      }
     }
 
-    // ===============================
-    // SEND WHATSAPP
-    // ===============================
-
-    const res = await fetch("/api/whatsapp/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        orderId: orderId,
-        type: "template",
-        templateName:
-          orderType === "delivery"
-            ? "startOrderManualDelivery"
-            : "startOrderManualTakeaway",
-      }),
-    });
-
-    await res.json();
     setSelectedOrder(null);
     resetForm();
   };

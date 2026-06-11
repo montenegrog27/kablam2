@@ -43,12 +43,12 @@ export function describeLoyaltyRule(rule: LoyaltyRule) {
     return `Combos seleccionados: +${rule.points_per_unit || 0} pts por combo`;
   }
   if (rule.type === "category_points") {
-    return `Categoría seleccionada: +${rule.points_per_unit || 0} pts por unidad`;
+    return `Categoria seleccionada: +${rule.points_per_unit || 0} pts por unidad`;
   }
   if (rule.type === "extra_points") {
-    return `Extras: 1 punto cada $${formatNumber(rule.points_per_extra_peso || rule.points_per_amount || 1000)}`;
+    return `Extras: +${rule.points_per_unit || 0} pts por extra agregado`;
   }
-  return "Acumulación de compras para recompensas";
+  return "Acumulacion de compras para recompensas";
 }
 
 export function getProductLoyaltyEstimate(product: Product, rules: LoyaltyRule[]) {
@@ -57,6 +57,7 @@ export function getProductLoyaltyEstimate(product: Product, rules: LoyaltyRule[]
   const comboProducts = getProductComboProducts(product);
   let points = 0;
   let extrasHint = false;
+  let extrasPointsPerExtra = 0;
 
   rules.filter((rule) => rule.is_active !== false).forEach((rule) => {
     if (rule.type === "points") {
@@ -95,12 +96,14 @@ export function getProductLoyaltyEstimate(product: Product, rules: LoyaltyRule[]
 
     if (rule.type === "extra_points") {
       extrasHint = true;
+      extrasPointsPerExtra += Number(rule.points_per_unit || 0);
     }
   });
 
   return {
     points: Math.max(0, Math.floor(points)),
     extrasHint,
+    extrasPointsPerExtra: Math.max(0, Math.floor(extrasPointsPerExtra)),
   };
 }
 
@@ -119,7 +122,7 @@ export function getCartLoyaltyEstimate(cart: CartItem[], rules: LoyaltyRule[]) {
     const quantity = Number(item.quantity || 1);
     const categoryIds = item.loyaltyCategoryIds || (item.categories || []).map((category) => category.id);
     const comboProducts = item.comboProducts || [];
-    const extrasTotal = (item.extras || []).reduce((sum, extra) => sum + Number(extra.price || 0), 0) * quantity;
+    const extrasCount = (item.extras || []).length * quantity;
 
     rules.filter((rule) => rule.is_active !== false).forEach((rule) => {
       if (rule.type === "product_points" && item.itemType !== "combo") {
@@ -149,7 +152,7 @@ export function getCartLoyaltyEstimate(cart: CartItem[], rules: LoyaltyRule[]) {
       }
 
       if (rule.type === "extra_points") {
-        const value = Math.floor(extrasTotal / Math.max(Number(rule.points_per_extra_peso || rule.points_per_amount || 1000), 1));
+        const value = extrasCount * Number(rule.points_per_unit || 0);
         extrasPoints += value;
         points += value;
       }

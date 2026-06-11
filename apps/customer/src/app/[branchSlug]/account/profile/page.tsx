@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
-import ProdeProfile from "@/app/components/ProdeProfile";
-import { describeLoyaltyRule, type LoyaltyRule } from "@/lib/loyalty";
+import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
   Camera,
-  ChevronRight,
   Gift,
   Home,
   Loader2,
@@ -20,10 +18,11 @@ import {
   Save,
   ShieldCheck,
   ShoppingBag,
-  Star,
   Trophy,
   User,
 } from "lucide-react";
+import ProdeProfile from "@/app/components/ProdeProfile";
+import { useAuth } from "@/hooks/useAuth";
 
 type Address = {
   id: string;
@@ -54,15 +53,25 @@ type UserProfile = {
   totalOrders: number;
   totalSpent: number;
   points: number;
-  level: string;
-  nextLevel: string;
-  levels: Array<{ name: string; minPoints: number; maxPoints: number | null }>;
-  progress: number;
+  rewardsRedeemed: number;
   recentOrders: RecentOrder[];
-  favoriteProducts: Array<{ id: string; name: string; price: number }>;
 };
 
-type ProfileSection = "resumen" | "datos" | "prode";
+type ProfileSection = "club" | "pedidos" | "datos" | "prode";
+
+const SOCIAL_STATUSES = [
+  { name: "JOINED", minOrders: 0 },
+  { name: "CREW", minOrders: 5 },
+  { name: "SOCIAL CLUB", minOrders: 15 },
+  { name: "BLACKLIST", minOrders: 30 },
+  { name: "FOUNDER", minOrders: 60 },
+] as const;
+
+const REWARDS = [
+  { name: "PAPAS", points: 500 },
+  { name: "BEBIDA", points: 700 },
+  { name: "BURGER", points: 1500 },
+];
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -94,6 +103,27 @@ function statusLabel(status: string) {
   return labels[status] || status || "Pedido";
 }
 
+function getMembershipStatus(totalOrders: number) {
+  const currentIndex = SOCIAL_STATUSES.reduce((best, status, index) => {
+    return totalOrders >= status.minOrders ? index : best;
+  }, 0);
+  const current = SOCIAL_STATUSES[currentIndex];
+  const next = SOCIAL_STATUSES[currentIndex + 1] || null;
+  const previousMin = current.minOrders;
+  const nextMin = next?.minOrders ?? current.minOrders;
+  const range = Math.max(1, nextMin - previousMin);
+  const progress = next ? Math.min(100, Math.max(0, ((totalOrders - previousMin) / range) * 100)) : 100;
+  const missingOrders = next ? Math.max(0, next.minOrders - totalOrders) : 0;
+
+  return {
+    current,
+    currentIndex,
+    next,
+    progress: Math.round(progress),
+    missingOrders,
+  };
+}
+
 export default function ProfilePage() {
   const { session, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -109,8 +139,8 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [message, setMessage] = useState("");
   const [editingDetails, setEditingDetails] = useState(false);
-  const [section, setSection] = useState<ProfileSection>("resumen");
-  const [loyaltyRules, setLoyaltyRules] = useState<LoyaltyRule[]>([]);
+  const [section, setSection] = useState<ProfileSection>("club");
+  const [unlockStatus, setUnlockStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !session) {
@@ -121,11 +151,22 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!session) return;
     loadProfile();
-    fetch(`/api/loyalty?branchSlug=${encodeURIComponent(branchSlug)}`)
-      .then((response) => response.json())
-      .then((data) => setLoyaltyRules(Array.isArray(data.rules) ? data.rules : []))
-      .catch(() => setLoyaltyRules([]));
   }, [session]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const membership = getMembershipStatus(profile.totalOrders);
+    const storageKey = `mordisco-social-status:${profile.id || profile.phone || branchSlug}`;
+    const previous = window.localStorage.getItem(storageKey);
+    const previousIndex = SOCIAL_STATUSES.findIndex((status) => status.name === previous);
+
+    if (previous && previousIndex >= 0 && membership.currentIndex > previousIndex) {
+      setUnlockStatus(membership.current.name);
+      window.setTimeout(() => setUnlockStatus(null), 1700);
+    }
+
+    window.localStorage.setItem(storageKey, membership.current.name);
+  }, [profile?.id, profile?.phone, profile?.totalOrders, branchSlug]);
 
   const loadProfile = async () => {
     setLoading(true);
@@ -136,8 +177,8 @@ export default function ProfilePage() {
 
     const profileData = await profileResponse.json();
     const addressesData = addressesResponse.ok ? await addressesResponse.json() : { addresses: [] };
-    const c = profileData.customer;
-    const s = profileData.stats;
+    const c = profileData.customer || {};
+    const s = profileData.stats || {};
 
     const nextProfile: UserProfile = {
       id: c.id,
@@ -150,12 +191,8 @@ export default function ProfilePage() {
       totalOrders: s.totalOrders || 0,
       totalSpent: s.totalSpent || 0,
       points: s.points || 0,
-      level: s.level || "Novato",
-      nextLevel: s.nextLevel || "Aprendiz",
-      levels: Array.isArray(s.levels) ? s.levels : [],
-      progress: s.progress || 0,
+      rewardsRedeemed: s.rewardsRedeemed || 0,
       recentOrders: profileData.orders || [],
-      favoriteProducts: profileData.favorites || [],
     };
 
     setProfile(nextProfile);
@@ -165,6 +202,7 @@ export default function ProfilePage() {
       email: nextProfile.email,
       birthDate: nextProfile.birthDate,
     });
+
     const isIncomplete = !nextProfile.name || !nextProfile.email;
     setEditingDetails(isIncomplete);
     if (isIncomplete) setSection("datos");
@@ -180,6 +218,7 @@ export default function ProfilePage() {
 
   const profileIsIncomplete = incompleteFields.length > 0;
   const defaultAddress = addresses.find((address) => address.is_default) || addresses[0];
+  const membership = getMembershipStatus(profile?.totalOrders || 0);
 
   const saveProfile = async () => {
     setSaving(true);
@@ -227,428 +266,394 @@ export default function ProfilePage() {
   if (authLoading || loading) {
     return (
       <div className="customer-profile-red flex min-h-screen items-center justify-center">
-        <Loader2 className="animate-spin text-red-400" size={32} />
+        <Loader2 className="animate-spin text-[#E10600]" size={32} />
       </div>
     );
   }
 
   if (!session || !profile) return null;
 
-  const clubLevel = profile.level || "Mordisco";
-  const clubProgress = Math.min(100, Math.max(0, profile.progress || 0));
-  const clubLevels = profile.levels.length > 0
-    ? profile.levels.map((item) => item.name)
-    : ["Mordisco", "Doble Mordisco", "Mordisco XL", "Leyenda Mordisco"];
-
   return (
-    <div className="customer-profile-red min-h-screen pb-10 text-[var(--profile-text)]">
-      <section className="relative overflow-hidden border-b border-[#FF1A1A] px-5 pb-7 pt-8">
-        <div className="profile-hero-bg absolute inset-0" />
-        <div className="relative mx-auto max-w-5xl">
+    <div className="customer-profile-red min-h-screen bg-[#E10600] text-white">
+      {unlockStatus && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#E10600] px-5 text-center text-white">
+          <p className="text-sm font-black uppercase tracking-[0.35em]">Welcome to</p>
+          <p className="mt-4 text-[54px] font-black uppercase leading-[0.82] tracking-[-0.06em] sm:text-[110px]">
+            {unlockStatus}
+          </p>
+          <p className="mt-6 text-xl font-black uppercase tracking-[0.18em]">Unlocked</p>
+        </div>
+      )}
+
+      <header className="sticky top-0 z-30 border-b border-black bg-[#E10600] px-4 py-3 backdrop-blur-none">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+          <button
+            onClick={() => router.push(`/${branchSlug}/order`)}
+            className="flex items-center gap-2 border border-black bg-[#E10600] px-3 py-2 text-left text-[10px] font-black uppercase text-white transition duration-200 hover:bg-black"
+          >
+            <Home size={15} />
+            Menu
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => uploadAvatar(event.target.files?.[0])}
+          />
+
+          <nav className="grid flex-1 grid-cols-4 gap-1 sm:max-w-xl sm:gap-2">
+            <ProfileNavButton active={section === "club"} icon={ShieldCheck} label="Club" onClick={() => setSection("club")} />
+            <ProfileNavButton active={section === "pedidos"} icon={ShoppingBag} label="Pedidos" onClick={() => setSection("pedidos")} />
+            <ProfileNavButton active={section === "datos"} icon={User} label="Datos" showDot={profileIsIncomplete} onClick={() => setSection("datos")} />
+            <ProfileNavButton active={section === "prode"} icon={Trophy} label="Prode" onClick={() => setSection("prode")} />
+          </nav>
+
+          <button
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              window.location.href = `/${branchSlug}`;
+            }}
+            className="hidden items-center justify-center gap-2 border border-black px-3 py-2 text-[10px] font-black uppercase text-white transition duration-200 hover:bg-black sm:flex"
+          >
+            <LogOut size={15} />
+            Salir
+          </button>
+        </div>
+      </header>
+
+      <main className="mx-auto min-h-screen max-w-7xl px-4 pb-12 pt-5 sm:px-7 lg:px-10 lg:pt-8">
           {profileIsIncomplete && (
-            <div className="mb-4 border border-[#FF1A1A] bg-[#0A0A0A] px-4 py-3 text-sm text-white">
-              <div className="flex items-center gap-2 font-bold">
+            <div className="mb-5 border border-black bg-white px-4 py-3 text-sm font-black uppercase text-black">
+              <div className="flex items-center gap-2">
                 <AlertCircle size={16} />
                 Completa {incompleteFields.join(" y ")} para agilizar tus pedidos.
               </div>
             </div>
           )}
 
-          <div className="profile-hero-card border p-5 sm:p-7">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="flex min-w-0 flex-col justify-between gap-6">
-                <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-                  <div className="relative shrink-0">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="group relative flex h-24 w-24 items-center justify-center overflow-hidden border border-[#FF1A1A] bg-black text-3xl font-black uppercase text-white sm:h-28 sm:w-28"
-                      aria-label="Cambiar foto"
-                    >
-                      {profile.avatarUrl ? (
-                        <img src={profile.avatarUrl} alt={profile.name || "Cliente"} className="h-full w-full object-cover" />
-                      ) : (
-                        (profile.name || "C").slice(0, 1).toUpperCase()
-                      )}
-                      <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-[#FF1A1A] py-1.5 text-[10px] font-black uppercase tracking-wide opacity-0 transition duration-200 group-hover:opacity-100">
-                        <Camera size={12} />
-                        Foto
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center border border-[#FF1A1A] bg-black text-white transition duration-200 hover:bg-[#FF1A1A]"
-                      disabled={uploadingAvatar}
-                    >
-                      {uploadingAvatar ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(event) => uploadAvatar(event.target.files?.[0])}
-                    />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Member / {profile.name || "Sin nombre"}</p>
-                    <h1 className="mt-2 max-w-3xl text-[42px] font-black uppercase leading-[0.84] tracking-[-0.055em] text-white sm:text-[72px]">
-                      MORDISCO BURGER CLUB
-                    </h1>
-                    <p className="mt-4 max-w-xl text-sm font-black uppercase tracking-[0.18em] text-[#FF1A1A] sm:text-base">
-                      Fast food. Slow obsession.
-                    </p>
-
-                    <div className="mt-5 flex flex-wrap items-center gap-2 text-sm font-bold text-[#A0A0A0]">
-                      <span className="inline-flex items-center gap-1 border border-[#FF1A1A] px-3 py-1 uppercase">
-                        <Phone size={13} />
-                        {profile.phone}
-                      </span>
-                      {profile.email && (
-                        <span className="inline-flex items-center gap-1 border border-[#FF1A1A] px-3 py-1 uppercase">
-                          <Mail size={13} />
-                          {profile.email}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <aside className="grid gap-5 border border-[#FF1A1A] bg-black p-4">
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Nivel actual</p>
-                      <p className="mt-1 text-3xl font-black uppercase tracking-[-0.04em] text-white">{clubLevel}</p>
-                    </div>
-                    <ShieldCheck className="mt-1 text-[#FF1A1A]" size={28} />
-                  </div>
-
-                  <div className="mt-4 h-2 border border-[#FF1A1A] bg-black">
-                    <div className="h-full bg-[#FF1A1A]" style={{ width: `${clubProgress}%` }} />
-                  </div>
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-[#A0A0A0]">
-                    {clubProgress}% hacia {profile.nextLevel || "el proximo nivel"}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  {clubLevels.map((level) => (
-                    <ClubLevel key={level} label={level} active={level === clubLevel} />
-                  ))}
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Club stats</p>
-                  <div className="mt-3 grid gap-2">
-                    <Metric label="Pedidos" value={profile.totalOrders.toString()} />
-                    <Metric label="Gastado" value={formatCurrency(profile.totalSpent)} />
-                    <Metric label="Puntos" value={`${profile.points}`} />
-                  </div>
-                </div>
-              </aside>
+          {message && (
+            <div className="mb-5 border border-black bg-white px-4 py-3 text-center text-sm font-black uppercase text-black">
+              {message}
             </div>
+          )}
 
-            <div className="mt-5 grid gap-2 border-t border-[#FF1A1A] pt-5 sm:grid-cols-3">
-              <button onClick={() => setSection("resumen")} className="club-cta">
-                Ver actividad
-              </button>
-              <button onClick={() => setSection("datos")} className="club-cta">
-                Mis datos
-              </button>
-              <button onClick={() => setSection("prode")} className="club-cta">
-                Prode club
-              </button>
-            </div>
-          </div>
+          {section === "club" && (
+            <ClubSection
+              profile={profile}
+              membership={membership}
+              uploadingAvatar={uploadingAvatar}
+              onAvatarClick={() => fileInputRef.current?.click()}
+            />
+          )}
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
-            <div className="border border-[#FF1A1A] bg-black p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Private area</p>
-              <h2 className="mt-1 text-3xl font-black uppercase leading-none tracking-[-0.04em] text-white sm:text-5xl">
-                {section === "resumen" ? "Actividad" : section === "datos" ? "Identidad" : "Prode"}
-              </h2>
-            </div>
-            <div className="border border-[#FF1A1A] bg-black p-4 text-xs font-bold uppercase leading-5 text-[#A0A0A0] sm:max-w-xs">
-              Beneficios, historial y datos personales.
+          {section === "pedidos" && <OrdersSection orders={profile.recentOrders} />}
+
+          {section === "datos" && (
+            <DetailsSection
+              profile={profile}
+              addresses={addresses}
+              defaultAddress={defaultAddress}
+              form={form}
+              editingDetails={editingDetails}
+              saving={saving}
+              setEditingDetails={setEditingDetails}
+              setForm={setForm}
+              saveProfile={saveProfile}
+              branchSlug={branchSlug}
+              profileIsIncomplete={profileIsIncomplete}
+            />
+          )}
+
+          {section === "prode" && (
+            <section className="border border-black bg-[#E10600] p-4 sm:p-6">
+              <SectionHeader kicker="Mordisco Games" title="Prode Mordisco" />
+              <div className="mt-5 border border-black bg-white p-3 text-black">
+                <ProdeProfile branchSlug={branchSlug} customerId={session.customerId} tenantId={session.tenantId} />
               </div>
-          </div>
-        </div>
-      </section>
-
-      <nav className="mx-auto mb-4 grid max-w-5xl grid-cols-3 gap-2 px-5">
-        <ProfileTab active={section === "resumen"} icon={ShoppingBag} label="Resumen" onClick={() => setSection("resumen")} />
-        <ProfileTab active={section === "datos"} icon={User} label="Mis datos" showDot={profileIsIncomplete} onClick={() => setSection("datos")} />
-        <ProfileTab active={section === "prode"} icon={Trophy} label="Prode" onClick={() => setSection("prode")} />
-      </nav>
-
-      <main className="mx-auto max-w-5xl px-5">
-        {message && (
-          <div className="mb-4 border border-[#FF1A1A] bg-black px-4 py-3 text-center text-sm font-bold uppercase text-white">
-            {message}
-          </div>
-        )}
-
-        {section === "resumen" && (
-          <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-            <section className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <ActionCard icon={ShoppingBag} label="Ver pedidos" detail={`${profile.totalOrders} pedidos`} href={`/${branchSlug}/account/orders`} />
-                <ActionCard icon={MapPin} label="Direcciones" detail={`${addresses.length} guardadas`} href={`/${branchSlug}/account/addresses`} />
-              </div>
-
-              <AccountCard
-                title="Ultimos pedidos"
-                icon={Package}
-                action={
-                  <button onClick={() => router.push(`/${branchSlug}/account/orders`)} className="text-xs font-bold uppercase text-[#FF1A1A]">
-                    Ver todos
-                  </button>
-                }
-              >
-                {profile.recentOrders.length === 0 ? (
-                  <EmptyState icon={Package} title="Todavia no hiciste pedidos" text="Cuando compres, vas a ver tu historial aca." />
-                ) : (
-                  <div className="space-y-2">
-                    {profile.recentOrders.slice(0, 4).map((order) => (
-                      <button
-                        key={order.id}
-                        onClick={() => router.push(`/${branchSlug}/account/orders`)}
-                        className="profile-info-row w-full border p-3 text-left transition hover:border-[var(--profile-accent)]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-black text-gray-100">Pedido #{order.id.slice(-6).toUpperCase()}</p>
-                            <p className="mt-1 text-xs text-gray-500">{formatDate(order.created_at)} - {statusLabel(order.status)}</p>
-                            <p className="mt-2 line-clamp-1 text-xs text-gray-400">
-                              {order.items?.slice(0, 2).map((item) => `${item.quantity}x ${item.name}`).join(" + ") || "Pedido"}
-                            </p>
-                          </div>
-                          <span className="text-2xl font-black text-white">{formatCurrency(order.total)}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </AccountCard>
-
-              {loyaltyRules.length > 0 && (
-                <AccountCard title="Como sumar puntos" icon={Gift}>
-                  <div className="space-y-2">
-                    {loyaltyRules.slice(0, 6).map((rule) => (
-                      <div key={rule.id} className="profile-info-row flex items-start gap-3 border p-3">
-                        <span className="mt-1 h-2 w-2 shrink-0 bg-[#FF1A1A]" />
-                        <div>
-                          <p className="text-xs font-black uppercase text-white">{rule.name}</p>
-                          <p className="mt-1 text-xs font-bold uppercase leading-5 text-[#A0A0A0]">
-                            {describeLoyaltyRule(rule)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </AccountCard>
-              )}
             </section>
-
-            <section className="space-y-4">
-              <AccountCard
-                title="Direcciones"
-                icon={MapPin}
-                action={
-                  <button onClick={() => router.push(`/${branchSlug}/account/addresses`)} className="text-xs font-bold uppercase text-[#FF1A1A]">
-                    Gestionar
-                  </button>
-                }
-              >
-                {addresses.length === 0 ? (
-                  <EmptyState icon={Home} title="Sin direcciones guardadas" text="Agrega casa, trabajo u otra direccion frecuente." />
-                ) : (
-                  <div className="space-y-2">
-                    {defaultAddress && (
-                      <div className="profile-favorite-address border p-3">
-                        <div className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-[#FF1A1A]">
-                          <Star size={13} />
-                          Favorita
-                        </div>
-                        <p className="text-sm font-black text-white">{defaultAddress.alias}</p>
-                        <p className="mt-1 text-xs leading-5 text-gray-400">
-                          {defaultAddress.address}
-                          {(defaultAddress.floor || defaultAddress.apartment) ? ` - Piso ${defaultAddress.floor || "-"} Dpto ${defaultAddress.apartment || "-"}` : ""}
-                        </p>
-                      </div>
-                    )}
-                    {addresses.filter((address) => address.id !== defaultAddress?.id).slice(0, 2).map((address) => (
-                      <div key={address.id} className="profile-info-row border p-3">
-                        <p className="text-sm font-bold text-gray-100">{address.alias}</p>
-                        <p className="mt-1 text-xs text-gray-500">{address.address}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </AccountCard>
-
-              <button
-                onClick={async () => {
-                  await fetch("/api/auth/logout", { method: "POST" });
-                  window.location.href = `/${branchSlug}`;
-                }}
-                className="profile-action-card flex w-full items-center justify-center gap-2 border py-3.5 text-sm font-bold uppercase text-[#A0A0A0] transition duration-200 hover:text-white"
-              >
-                <LogOut size={16} />
-                Cerrar sesion
-              </button>
-            </section>
-          </div>
-        )}
-
-        {section === "datos" && (
-          <section className="mx-auto max-w-2xl">
-            {(profileIsIncomplete || editingDetails) ? (
-              <AccountCard
-                title={profileIsIncomplete ? "Completar datos" : "Editar datos"}
-                icon={User}
-                action={
-                  !profileIsIncomplete ? (
-                    <button onClick={() => setEditingDetails(false)} className="text-xs font-bold uppercase text-[#A0A0A0]">
-                      Cerrar
-                    </button>
-                  ) : null
-                }
-              >
-                <div className="space-y-3">
-                  <InputField label="Nombre" icon={User} value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Tu nombre" />
-                  <InputField label="Telefono" icon={Phone} value={profile.phone} disabled />
-                  <InputField label="Email" icon={Mail} value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} placeholder="tu@email.com" type="email" />
-                  <div>
-                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[#A0A0A0]">
-                      <Gift size={12} />
-                      Cumpleanos
-                    </p>
-                    <input
-                      type="date"
-                      value={form.birthDate || ""}
-                      onChange={(e) => setForm((f) => ({ ...f, birthDate: e.target.value }))}
-                      className="profile-input w-full border px-4 py-3 text-sm text-white outline-none transition duration-200"
-                    />
-                  </div>
-                  <button
-                    onClick={saveProfile}
-                    disabled={saving}
-                    className="flex w-full items-center justify-center gap-2 bg-[#FF1A1A] py-3 text-sm font-bold uppercase text-white transition duration-200 hover:bg-[#FF3030] disabled:opacity-50"
-                  >
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Guardar datos
-                  </button>
-                </div>
-              </AccountCard>
-            ) : (
-              <AccountCard
-                title="Mis datos"
-                icon={ShieldCheck}
-                action={
-                  <button onClick={() => setEditingDetails(true)} className="text-xs font-bold uppercase text-[#FF1A1A]">
-                    Editar
-                  </button>
-                }
-              >
-                <div className="grid gap-2 text-sm">
-                  <InfoRow label="Nombre" value={profile.name} />
-                  <InfoRow label="Telefono" value={profile.phone} />
-                  <InfoRow label="Email" value={profile.email} />
-                  <InfoRow label="Cumpleanos" value={profile.birthDate || "Sin cargar"} />
-                </div>
-              </AccountCard>
-            )}
-          </section>
-        )}
-
-        {section === "prode" && (
-          <section className="mx-auto max-w-3xl overflow-hidden border border-[#FF1A1A] bg-black p-1">
-            <div className="border border-[#FF1A1A] bg-black p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center border border-[#FF1A1A] bg-black text-[#FF1A1A]">
-                    <Trophy size={20} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Nueva seccion</p>
-                    <h2 className="text-lg font-black uppercase text-white">Prode Mordisco</h2>
-                  </div>
-                </div>
-              </div>
-              <ProdeProfile branchSlug={branchSlug} customerId={session?.customerId} tenantId={session?.tenantId} />
-            </div>
-          </section>
-        )}
+          )}
       </main>
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="profile-metric border p-3 text-center">
-      <p className="truncate text-sm font-black text-white sm:text-base">{value}</p>
-      <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-[var(--profile-muted)]">{label}</p>
-    </div>
-  );
-}
-
-function ClubLevel({ label, active }: { label: string; active: boolean }) {
-  return (
-    <div className={`border px-3 py-3 text-center text-xs font-black uppercase tracking-[-0.01em] ${active ? "border-[#FF1A1A] bg-[#FF1A1A] text-white" : "border-[#FF1A1A] bg-black text-[#A0A0A0]"}`}>
-      {label}
-    </div>
-  );
-}
-
-function AccountCard({
-  title,
-  icon: Icon,
-  action,
-  children,
+function ClubSection({
+  profile,
+  membership,
+  uploadingAvatar,
+  onAvatarClick,
 }: {
-  title: string;
-  icon: any;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  profile: UserProfile;
+  membership: ReturnType<typeof getMembershipStatus>;
+  uploadingAvatar: boolean;
+  onAvatarClick: () => void;
 }) {
+  const nextStatus = membership.next?.name || "MAX STATUS";
+
   return (
-    <div className="profile-card border p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-black uppercase tracking-[-0.02em] text-white">
-          <Icon size={17} className="text-[var(--profile-accent)]" />
-          {title}
-        </h2>
-        {action}
-      </div>
-      {children}
+    <div className="space-y-5">
+      <section className="min-h-[70vh] bg-[#E10600] p-5 text-white sm:p-8 lg:p-10">
+        <div className="grid min-h-[60vh] gap-8 lg:grid-cols-[1fr_320px]">
+          <div className="flex flex-col justify-between gap-12">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-white/75">Mordisco</p>
+              <h1 className="mt-4 max-w-5xl text-[72px] font-black uppercase leading-[0.74] tracking-[-0.08em] text-white sm:text-[132px] lg:text-[176px]">
+                Social<br />Club
+              </h1>
+            </div>
+
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.35em] text-white/75">Estatus</p>
+              <p className="mt-2 text-[58px] font-black uppercase leading-[0.78] tracking-[-0.07em] text-white sm:text-[104px] lg:text-[138px]">
+                {membership.current.name}
+              </p>
+              <p className="mt-5 max-w-2xl text-lg font-black uppercase leading-7 text-white sm:text-2xl">
+                {profile.totalOrders} pedidos historicos.
+                {membership.next
+                  ? ` Te faltan ${membership.missingOrders} para ${membership.next.name}.`
+                  : " Ya estas en el rango maximo."}
+              </p>
+            </div>
+          </div>
+
+          <aside className="flex flex-col justify-between border border-white p-4 sm:p-5">
+            <div className="flex items-start gap-4">
+              <button
+                onClick={onAvatarClick}
+                className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden border border-white bg-[#E10600] text-4xl font-black uppercase"
+              >
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt={profile.name || "Cliente"} className="h-full w-full object-cover" />
+                ) : (
+                  (profile.name || "M").slice(0, 1).toUpperCase()
+                )}
+                <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-white py-1.5 text-[9px] font-black uppercase text-[#E10600]">
+                  {uploadingAvatar ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                  Foto
+                </span>
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/75">Member</p>
+                <p className="mt-2 text-2xl font-black uppercase leading-none tracking-[-0.05em]">{profile.name || "Miembro Mordisco"}</p>
+                <p className="mt-3 border border-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">ID / {membership.current.name}</p>
+              </div>
+            </div>
+
+            <div className="mt-8 grid grid-cols-3 gap-2">
+              <StatBlock value={String(profile.totalOrders)} label="Pedidos" />
+              <StatBlock value={formatCurrency(profile.totalSpent)} label="Consumido" />
+              <StatBlock value={String(profile.rewardsRedeemed)} label="Canjes" />
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
+        <div className="border border-black bg-white p-5 text-black sm:p-6">
+          <SectionHeader kicker="Status map" title="Ruta de estatus" />
+          <div className="mt-7 grid gap-0">
+            {SOCIAL_STATUSES.map((status, index) => (
+              <StatusStep
+                key={status.name}
+                name={status.name}
+                completed={index < membership.currentIndex}
+                active={index === membership.currentIndex}
+              />
+            ))}
+          </div>
+
+          <div className="mt-8 border border-black bg-[#E10600] p-4 text-white sm:p-5">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-white/75">Proximo estatus</p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-4xl font-black uppercase tracking-[-0.05em] text-white">{nextStatus}</p>
+                <p className="mt-2 text-sm font-black uppercase text-white/75">
+                  {membership.next ? `${profile.totalOrders} / ${membership.next.minOrders} pedidos` : "Status maximo"}
+                </p>
+              </div>
+              <p className="text-5xl font-black uppercase tracking-[-0.05em] text-black">{membership.progress}%</p>
+            </div>
+            <div className="mt-5 grid grid-cols-12 gap-1">
+              {Array.from({ length: 12 }).map((_, index) => (
+                <span
+                  key={index}
+                  className={index < Math.round((membership.progress / 100) * 12) ? "h-5 bg-black" : "h-5 border border-black bg-[#E10600]"}
+                />
+              ))}
+            </div>
+            <p className="mt-4 text-sm font-black uppercase leading-6 text-white">
+              {membership.next
+                ? `Te faltan ${membership.missingOrders} pedidos para entrar a ${membership.next.name}.`
+                : "Ya desbloqueaste el estatus mas alto del club."}
+            </p>
+          </div>
+        </div>
+
+        <div className="border border-black bg-black p-5 text-white sm:p-6">
+          <SectionHeader kicker="Puntos" title={`${profile.points} PTS`} />
+          <p className="mt-2 text-sm font-bold uppercase text-white/65">Disponibles para canjear.</p>
+          <button className="mt-5 w-full bg-[#E10600] py-4 text-sm font-black uppercase text-white transition duration-200 hover:bg-white hover:text-black">
+            Ver recompensas -&gt;
+          </button>
+
+          <div className="mt-6 grid gap-3">
+            {REWARDS.map((reward) => (
+              <div key={reward.name} className="flex items-center justify-between border border-white bg-black p-4">
+                <p className="text-xl font-black uppercase tracking-[-0.04em] text-white">{reward.name}</p>
+                <p className="text-sm font-black uppercase text-[#E10600]">{reward.points} pts</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
 
-function ActionCard({ icon: Icon, label, detail, href }: { icon: any; label: string; detail: string; href: string }) {
-  const router = useRouter();
+function OrdersSection({ orders }: { orders: RecentOrder[] }) {
   return (
-    <button
-      onClick={() => router.push(href)}
-      className="profile-action-card group flex min-h-24 items-center gap-3 border p-4 text-left transition duration-200"
-    >
-      <div className="profile-icon-box flex h-11 w-11 flex-shrink-0 items-center justify-center border border-[#FF1A1A]">
-        <Icon size={18} className="text-[var(--profile-accent-soft)]" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-lg font-black uppercase tracking-[-0.02em] text-white">{label}</p>
-        <p className="mt-1 text-xs text-[var(--profile-muted)]">{detail}</p>
-      </div>
-      <ChevronRight size={17} className="text-[var(--profile-muted)] transition group-hover:translate-x-0.5 group-hover:text-gray-300" />
-    </button>
+    <section className="border border-black bg-white p-4 text-black sm:p-6">
+      <SectionHeader kicker="Historial" title="Mis pedidos" />
+      {orders.length === 0 ? (
+        <EmptyState icon={Package} title="Todavia no hiciste pedidos" text="Cuando compres, vas a ver tu actividad aca." />
+      ) : (
+        <div className="mt-5 grid gap-3">
+          {orders.map((order) => (
+            <article key={order.id} className="border border-black bg-[#E10600] p-4 text-white">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-2xl font-black uppercase tracking-[-0.05em]">#{order.id.slice(-6).toUpperCase()}</p>
+                  <p className="mt-1 text-xs font-black uppercase text-white/75">
+                    {formatDate(order.created_at)} / {statusLabel(order.status)}
+                  </p>
+                  <p className="mt-3 text-sm font-bold uppercase leading-6 text-white/80">
+                    {order.items?.map((item) => `${item.quantity}x ${item.name}`).join(" + ") || "Pedido"}
+                  </p>
+                </div>
+                <p className="text-4xl font-black tracking-[-0.06em] text-black">{formatCurrency(order.total)}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
-function ProfileTab({
+function DetailsSection({
+  profile,
+  addresses,
+  defaultAddress,
+  form,
+  editingDetails,
+  saving,
+  setEditingDetails,
+  setForm,
+  saveProfile,
+  branchSlug,
+  profileIsIncomplete,
+}: {
+  profile: UserProfile;
+  addresses: Address[];
+  defaultAddress?: Address;
+  form: { name: string; email: string; birthDate: string };
+  editingDetails: boolean;
+  saving: boolean;
+  setEditingDetails: (editing: boolean) => void;
+  setForm: Dispatch<SetStateAction<{ name: string; email: string; birthDate: string }>>;
+  saveProfile: () => void;
+  branchSlug: string;
+  profileIsIncomplete: boolean;
+}) {
+  const router = useRouter();
+
+  return (
+    <section className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
+      <div className="border border-black bg-white p-4 text-black sm:p-6">
+        <SectionHeader kicker="Identidad" title="Mis datos" />
+
+        {editingDetails || profileIsIncomplete ? (
+          <div className="mt-5 space-y-4">
+            <InputField label="Nombre" icon={User} value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Tu nombre" />
+            <InputField label="Telefono" icon={Phone} value={profile.phone} disabled />
+            <InputField label="Email" icon={Mail} value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} placeholder="tu@email.com" type="email" />
+            <InputField label="Cumpleanos" icon={Gift} value={form.birthDate || ""} onChange={(v) => setForm((f) => ({ ...f, birthDate: v }))} type="date" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                onClick={saveProfile}
+                disabled={saving}
+                className="flex items-center justify-center gap-2 bg-black py-4 text-sm font-black uppercase text-white transition duration-200 hover:bg-[#E10600] disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                Guardar
+              </button>
+              {!profileIsIncomplete && (
+                <button
+                  onClick={() => setEditingDetails(false)}
+                  className="border border-black py-4 text-sm font-black uppercase text-black transition duration-200 hover:bg-black hover:text-white"
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-5 space-y-3">
+            <InfoRow label="Nombre" value={profile.name} />
+            <InfoRow label="Telefono" value={profile.phone} />
+            <InfoRow label="Email" value={profile.email || "Sin cargar"} />
+            <InfoRow label="Cumpleanos" value={profile.birthDate || "Sin cargar"} />
+            <button
+              onClick={() => setEditingDetails(true)}
+              className="mt-2 w-full border border-black bg-black py-4 text-sm font-black uppercase text-white transition duration-200 hover:bg-[#E10600]"
+            >
+              Editar datos
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="border border-black bg-white p-4 text-black sm:p-6">
+        <SectionHeader kicker="Direcciones" title="Mis lugares" />
+        {addresses.length === 0 ? (
+          <div className="mt-5">
+            <EmptyState icon={MapPin} title="Sin direcciones guardadas" text="Agrega casa, trabajo u otra direccion frecuente." />
+          </div>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {defaultAddress && (
+              <AddressCard address={defaultAddress} label="Favorita" />
+            )}
+            {addresses.filter((address) => address.id !== defaultAddress?.id).map((address) => (
+              <AddressCard key={address.id} address={address} />
+            ))}
+          </div>
+        )}
+        <button
+          onClick={() => router.push(`/${branchSlug}/account/addresses`)}
+          className="mt-4 w-full border border-black bg-black py-4 text-sm font-black uppercase text-white transition duration-200 hover:bg-[#E10600]"
+        >
+          Gestionar direcciones
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function SectionHeader({ kicker, title }: { kicker: string; title: string }) {
+  return (
+    <header>
+      <p className="text-xs font-black uppercase tracking-[0.32em] opacity-65">{kicker}</p>
+      <h2 className="mt-2 text-4xl font-black uppercase leading-[0.9] tracking-[-0.055em] sm:text-6xl">
+        {title}
+      </h2>
+    </header>
+  );
+}
+
+function ProfileNavButton({
   active,
   icon: Icon,
   label,
@@ -656,7 +661,7 @@ function ProfileTab({
   showDot,
 }: {
   active: boolean;
-  icon: any;
+  icon: LucideIcon;
   label: string;
   onClick: () => void;
   showDot?: boolean;
@@ -665,34 +670,68 @@ function ProfileTab({
     <button
       onClick={onClick}
       className={[
-        "relative flex min-h-14 items-center justify-center gap-2 border px-2 text-xs font-black uppercase transition duration-200 sm:text-sm",
-        active
-          ? "profile-tab-active text-white"
-          : "profile-tab-idle text-[var(--profile-muted)] hover:text-gray-100",
+        "relative flex min-h-14 flex-col items-center justify-center gap-1 border px-2 text-[10px] font-black uppercase transition duration-200 lg:min-h-12 lg:flex-row lg:justify-start lg:gap-3 lg:px-3 lg:text-xs",
+        active ? "border-black bg-black text-white" : "border-black bg-[#E10600] text-white hover:bg-black",
       ].join(" ")}
     >
-      <Icon size={16} />
+      <Icon size={17} />
       <span className="truncate">{label}</span>
-      {showDot && <span className="absolute right-2 top-2 h-2.5 w-2.5 bg-[#FF1A1A]" />}
+      {showDot && <span className="absolute right-2 top-2 h-2.5 w-2.5 bg-white" />}
     </button>
+  );
+}
+
+function StatusStep({ name, completed, active }: { name: string; completed: boolean; active: boolean }) {
+  return (
+    <div className={["grid grid-cols-[28px_1fr] items-center gap-3 border-b border-black py-4 last:border-b-0", active || completed ? "text-black" : "text-black/35"].join(" ")}>
+      <span className={["flex h-7 w-7 items-center justify-center border text-sm font-black", active || completed ? "border-black bg-black text-white" : "border-black bg-white text-black/35"].join(" ")}>
+        <span className={active || completed ? "h-2.5 w-2.5 bg-white" : "h-2.5 w-2.5 border border-black/35"} />
+      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-lg font-black uppercase tracking-[-0.04em] sm:text-2xl">{name}</span>
+        <span className={["h-px flex-1", active || completed ? "bg-black" : "bg-black/25"].join(" ")} />
+      </div>
+    </div>
+  );
+}
+
+function StatBlock({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="border border-white p-3 text-center">
+      <p className="truncate text-xl font-black uppercase tracking-[-0.05em] text-white">{value}</p>
+      <p className="mt-1 text-[9px] font-black uppercase tracking-[0.12em] text-white/75">{label}</p>
+    </div>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="profile-info-row flex items-center justify-between gap-3 border px-3 py-2.5">
-      <span className="text-xs font-bold uppercase tracking-wide text-[var(--profile-muted)]">{label}</span>
-      <span className="truncate text-sm font-semibold text-gray-200">{value}</span>
+    <div className="flex items-center justify-between gap-3 border border-black bg-[#E10600] px-3 py-3 text-white">
+      <span className="text-xs font-black uppercase tracking-wide text-white/75">{label}</span>
+      <span className="truncate text-sm font-bold text-white">{value}</span>
     </div>
   );
 }
 
-function EmptyState({ icon: Icon, title, text }: { icon: any; title: string; text: string }) {
+function AddressCard({ address, label }: { address: Address; label?: string }) {
   return (
-    <div className="profile-empty border border-dashed p-5 text-center">
-      <Icon size={28} className="mx-auto text-[var(--profile-muted)]" />
-      <p className="mt-3 text-sm font-black text-gray-300">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-[var(--profile-muted)]">{text}</p>
+    <article className="border border-black bg-[#E10600] p-4 text-white">
+      {label && <p className="mb-2 text-[10px] font-black uppercase tracking-[0.22em] text-white/75">{label}</p>}
+      <p className="text-lg font-black uppercase tracking-[-0.04em] text-white">{address.alias}</p>
+      <p className="mt-1 text-sm font-bold uppercase leading-6 text-white/75">
+        {address.address}
+        {(address.floor || address.apartment) ? ` / Piso ${address.floor || "-"} Dpto ${address.apartment || "-"}` : ""}
+      </p>
+    </article>
+  );
+}
+
+function EmptyState({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) {
+  return (
+    <div className="border border-dashed border-black bg-[#E10600] p-6 text-center text-white">
+      <Icon size={30} className="mx-auto text-white/75" />
+      <p className="mt-3 text-lg font-black uppercase tracking-[-0.04em] text-white">{title}</p>
+      <p className="mt-2 text-sm font-bold uppercase leading-6 text-white/75">{text}</p>
     </div>
   );
 }
@@ -707,7 +746,7 @@ function InputField({
   type,
 }: {
   label: string;
-  icon: any;
+  icon: LucideIcon;
   value: string;
   onChange?: (v: string) => void;
   placeholder?: string;
@@ -716,7 +755,7 @@ function InputField({
 }) {
   return (
     <div>
-      <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--profile-muted)]">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] opacity-65">
         <Icon size={12} />
         {label}
       </p>
@@ -725,7 +764,7 @@ function InputField({
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        className="profile-input w-full border px-4 py-3 text-sm text-gray-100 outline-none transition placeholder:text-gray-600 disabled:text-gray-500"
+        className="w-full border border-black bg-white px-4 py-3 text-base text-black outline-none transition duration-200 placeholder:text-black/35 focus:border-[#E10600] disabled:text-black/45"
         disabled={disabled || !onChange}
       />
     </div>

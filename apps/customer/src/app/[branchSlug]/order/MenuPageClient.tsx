@@ -17,6 +17,7 @@ import FontLoader from "../../components/FontLoader";
 import MetaTags from "../../components/MetaTags";
 import CumpleMordiscoEntry from "../../components/CumpleMordiscoEntry";
 import CustomerInitialLoader from "../../components/CustomerInitialLoader";
+import CustomerPopupModal from "../../components/CustomerPopupModal";
 
 export default function MenuPageClient({
   initialMenu,
@@ -76,6 +77,7 @@ export default function MenuPageClient({
   return (
     <>
       <CustomerInitialLoader branding={branding} branchSlug={branchSlug} />
+      <CustomerPopupModal branchSlug={branchSlug} />
       <FontLoader branding={branding} />
       <MetaTags branding={branding} />
       <NavbarDelivery

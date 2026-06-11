@@ -103,6 +103,12 @@ export async function GET() {
     .eq("used", false)
     .order("redeemed_at", { ascending: false });
 
+  const { count: rewardsRedeemedCount } = await supabase
+    .from("reward_redemptions")
+    .select("id", { count: "exact", head: true })
+    .eq("customer_id", session.customerId)
+    .eq("used", true);
+
   const { data: favorites } = await supabase
     .from("user_favorites")
     .select("*, products(*), product_variants(*)")
@@ -209,6 +215,7 @@ export async function GET() {
       totalOrders: customer.lifetime_orders || calculatedTotalOrders || orders?.length || 0,
       totalSpent: Number(customer.lifetime_spent || 0) || calculatedTotalSpent,
       points,
+      rewardsRedeemed: rewardsRedeemedCount || 0,
       totalPointsEarned: customer.total_points_earned || 0,
       level,
       nextLevel,

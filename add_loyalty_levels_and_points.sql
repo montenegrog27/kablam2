@@ -115,7 +115,7 @@ declare
   v_rule record;
   v_points integer;
   v_total_points integer := 0;
-  v_extra_total numeric;
+  v_extra_count integer;
 begin
   select *
   into v_order
@@ -147,8 +147,8 @@ begin
   loop
     v_points := 0;
 
-    if v_rule.type = 'points' and coalesce(v_order.total, 0) >= coalesce(v_rule.minimum_amount, 0) then
-      v_points := floor(coalesce(v_order.total, 0) / greatest(coalesce(v_rule.points_per_amount, 1000), 1));
+    if v_rule.type = 'points' and coalesce(v_order.subtotal, v_order.total, 0) >= coalesce(v_rule.minimum_amount, 0) then
+      v_points := floor(coalesce(v_order.subtotal, v_order.total, 0) / greatest(coalesce(v_rule.points_per_amount, 1000), 1));
 
     elsif v_rule.type = 'product_points' then
       select coalesce(sum(oi.quantity), 0)::integer * greatest(coalesce(v_rule.points_per_unit, 0), 0)
@@ -190,14 +190,14 @@ begin
       ) category_units;
 
     elsif v_rule.type = 'extra_points' then
-      select coalesce(sum((extra->>'price')::numeric), 0)
-      into v_extra_total
+      select coalesce(sum(oi.quantity), 0)::integer
+      into v_extra_count
       from public.order_items oi
       cross join lateral jsonb_array_elements(coalesce(oi.extras, '[]'::jsonb)) extra
       where oi.order_id = p_order_id
         and extra->>'type' = 'extra';
 
-      v_points := floor(v_extra_total / greatest(coalesce(v_rule.points_per_extra_peso, v_rule.points_per_amount, 1000), 1));
+      v_points := coalesce(v_extra_count, 0) * greatest(coalesce(v_rule.points_per_unit, 0), 0);
     end if;
 
     if coalesce(v_points, 0) > 0 then
@@ -221,7 +221,7 @@ begin
         v_rule.type,
         v_points,
         v_rule.name,
-        jsonb_build_object('ruleName', v_rule.name, 'orderTotal', v_order.total)
+        jsonb_build_object('ruleName', v_rule.name, 'orderSubtotal', v_order.subtotal, 'orderTotal', v_order.total)
       )
       on conflict do nothing;
 

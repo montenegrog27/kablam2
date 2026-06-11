@@ -55,6 +55,13 @@ type LoyaltyLevel = {
   is_active: boolean;
 };
 
+const currency = (value: number) =>
+  new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+
 const defaultLevelForm = {
   name: "",
   description: "",
@@ -70,7 +77,7 @@ const defaultRuleForm = {
   type: "points" as RuleType,
   points_per_amount: "1000",
   points_per_unit: "100",
-  points_per_extra_peso: "1000",
+  points_per_extra_peso: "0",
   minimum_amount: "0",
   product_id: "",
   combo_id: "",
@@ -91,6 +98,8 @@ export default function LoyaltyRulesPage() {
   const [combos, setCombos] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
+  const [eventCustomers, setEventCustomers] = useState<Record<string, any>>({});
+  const [eventOrders, setEventOrders] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
@@ -150,12 +159,27 @@ export default function LoyaltyRulesPage() {
       setMessage("Falta ejecutar add_loyalty_levels_and_points.sql en Supabase para activar niveles y analytics.");
     }
 
+    const eventRows = eventsRes.data || [];
+    const customerIds = Array.from(new Set(eventRows.map((event: any) => event.customer_id).filter(Boolean)));
+    const orderIds = Array.from(new Set(eventRows.map((event: any) => event.order_id).filter(Boolean)));
+
+    const [eventCustomersRes, eventOrdersRes] = await Promise.all([
+      customerIds.length > 0
+        ? supabase.from("customers").select("id, name, phone").in("id", customerIds)
+        : Promise.resolve({ data: [] }),
+      orderIds.length > 0
+        ? supabase.from("orders").select("id, total, created_at").in("id", orderIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
     setRules((rulesRes.data || []) as LoyaltyRule[]);
     setLevels((levelsRes.data || []) as LoyaltyLevel[]);
     setProducts(productsRes.data || []);
     setCombos(combosRes.data || []);
     setCategories(categoriesRes.data || []);
-    setEvents(eventsRes.data || []);
+    setEvents(eventRows);
+    setEventCustomers(Object.fromEntries((eventCustomersRes.data || []).map((customer: any) => [customer.id, customer])));
+    setEventOrders(Object.fromEntries((eventOrdersRes.data || []).map((order: any) => [order.id, order])));
     setLoading(false);
   };
 
@@ -194,7 +218,7 @@ export default function LoyaltyRulesPage() {
       priority: Number(ruleForm.priority || 100),
       points_per_amount: Number(ruleForm.points_per_amount || 1000),
       points_per_unit: Number(ruleForm.points_per_unit || 0),
-      points_per_extra_peso: Number(ruleForm.points_per_extra_peso || ruleForm.points_per_amount || 1000),
+      points_per_extra_peso: Number(ruleForm.points_per_extra_peso || 0),
       minimum_amount: Number(ruleForm.minimum_amount || 0),
       product_id: ruleForm.product_id || null,
       combo_id: ruleForm.combo_id || null,
@@ -254,7 +278,7 @@ export default function LoyaltyRulesPage() {
       type: rule.type || "points",
       points_per_amount: String(rule.points_per_amount || 1000),
       points_per_unit: String(rule.points_per_unit || 100),
-      points_per_extra_peso: String(rule.points_per_extra_peso || 1000),
+      points_per_extra_peso: String(rule.points_per_extra_peso || 0),
       minimum_amount: String(rule.minimum_amount || 0),
       product_id: rule.product_id || "",
       combo_id: rule.combo_id || "",
@@ -509,8 +533,8 @@ export default function LoyaltyRulesPage() {
               )}
 
               {ruleForm.type === "extra_points" && (
-                <Field label="Cada $X en extras = 1 punto">
-                  <input type="number" className="input max-w-xs" value={ruleForm.points_per_extra_peso} onChange={(e) => setRuleForm({ ...ruleForm, points_per_extra_peso: e.target.value })} />
+                <Field label="Puntos por extra agregado">
+                  <input type="number" className="input max-w-xs" value={ruleForm.points_per_unit} onChange={(e) => setRuleForm({ ...ruleForm, points_per_unit: e.target.value })} />
                 </Field>
               )}
 
@@ -569,15 +593,26 @@ export default function LoyaltyRulesPage() {
           <div className="panel">
             <h2 className="mb-4 text-xl font-black text-gray-100">Últimos puntos otorgados</h2>
             <div className="divide-y divide-gray-800">
-              {events.map((event) => (
-                <div key={event.id} className="flex items-center justify-between gap-3 py-3">
-                  <div>
-                    <p className="text-sm font-bold text-gray-100">{event.description || event.source}</p>
-                    <p className="text-xs text-gray-500">{new Date(event.created_at).toLocaleString("es-AR")}</p>
+              {events.map((event) => {
+                const customer = eventCustomers[event.customer_id];
+                const order = eventOrders[event.order_id];
+                return (
+                  <div key={event.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-bold text-gray-100">{customer?.name || "Cliente sin nombre"}</p>
+                        {customer?.phone && <Badge>{customer.phone}</Badge>}
+                      </div>
+                      <p className="mt-1 text-xs text-gray-400">{event.description || event.source}</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {new Date(event.created_at).toLocaleString("es-AR")}
+                        {order && ` · Pedido ${formatShortId(order.id)} · ${currency(Number(order.total || 0))}`}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-lg font-black text-red-300">+{event.points}</span>
                   </div>
-                  <span className="text-lg font-black text-red-300">+{event.points}</span>
-                </div>
-              ))}
+                );
+              })}
               {events.length === 0 && <Empty icon={BarChart3} text="Sin eventos de puntos todavía." />}
             </div>
           </div>
@@ -622,12 +657,17 @@ function ruleDescription(rule: LoyaltyRule, products: any[], combos: any[], cate
   if (rule.type === "product_points") return `${Number(rule.points_per_unit || 0)} puntos por ${findName(products, rule.product_id) || "cada producto"}.`;
   if (rule.type === "combo_points") return `${Number(rule.points_per_unit || 0)} puntos por ${findName(combos, rule.combo_id) || "cada combo"}.`;
   if (rule.type === "category_points") return `${Number(rule.points_per_unit || 0)} puntos por unidad en ${findName(categories, rule.category_id) || "categoría"}.`;
-  if (rule.type === "extra_points") return `Cada $${Number(rule.points_per_extra_peso || 1000).toLocaleString("es-AR")} en extras suma 1 punto.`;
+  if (rule.type === "extra_points") return `${Number(rule.points_per_unit || 0)} puntos por cada extra agregado.`;
   return `${rule.required_quantity || 0} compras para liberar recompensa.`;
 }
 
 function findName(rows: any[], id?: string | null) {
   return rows.find((row) => row.id === id)?.name;
+}
+
+function formatShortId(id?: string | null) {
+  if (!id) return "-";
+  return `#${id.slice(0, 8).toUpperCase()}`;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
