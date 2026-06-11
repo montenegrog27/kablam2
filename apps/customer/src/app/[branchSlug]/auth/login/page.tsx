@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,6 +13,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import type { Branding } from "@/types/menu";
 
 type LoginStep = "form" | "code" | "success";
 
@@ -58,6 +60,7 @@ export default function LoginPage() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [timer, setTimer] = useState(0);
+  const [branding, setBranding] = useState<Branding | null>(null);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const inputRefs = [
@@ -70,6 +73,34 @@ export default function LoginPage() {
   useEffect(() => {
     setBranchSlug(pathname.split("/").filter(Boolean)[0] || "");
   }, [pathname]);
+
+  useEffect(() => {
+    if (!branchSlug) return;
+
+    let cancelled = false;
+    async function loadBranding() {
+      const { data: branch } = await supabase
+        .from("branches")
+        .select("id")
+        .eq("slug", branchSlug)
+        .maybeSingle();
+
+      if (!branch?.id) return;
+
+      const { data: settings } = await supabase
+        .from("branch_settings")
+        .select("logo_url, font_family, font_primary, font_url, meta_title")
+        .eq("branch_id", branch.id)
+        .maybeSingle();
+
+      if (!cancelled) setBranding((settings || null) as Branding | null);
+    }
+
+    loadBranding().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [branchSlug]);
 
   useEffect(() => {
     if (timer <= 0) return;
@@ -194,23 +225,29 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#080605] text-white">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(248,113,113,0.22),transparent_34%),linear-gradient(180deg,#1b100b,#080605_58%)]" />
-      <div className="relative mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-5 py-8">
-        <section className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.07] shadow-2xl shadow-black/35 backdrop-blur-xl">
-          <div className="border-b border-white/10 px-6 py-5">
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-5 py-8">
+        <div className="mb-7 flex justify-center">
+          {branding?.logo_url ? (
+            <img src={branding.logo_url} alt={branding.meta_title || "Logo"} className="max-h-20 max-w-[220px] object-contain" />
+          ) : (
+            <div className="border border-[#FF1A1A] px-5 py-4 text-center text-xl font-black uppercase tracking-[-0.03em]">
+              Mordisco
+            </div>
+          )}
+        </div>
+
+        <section className="overflow-hidden border border-[#FF1A1A] bg-[#0A0A0A]">
+          <div className="border-b border-[#FF1A1A] px-6 py-5">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500 text-white shadow-lg shadow-red-950/30">
-                  <MessageCircle size={22} />
-                </div>
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-red-100/60">Acceso seguro</p>
-                  <h1 className="text-xl font-black tracking-tight">Entrar con WhatsApp</h1>
-                </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#A0A0A0]">Ingresar</p>
+                <h1 className="mt-1 text-3xl font-black uppercase leading-none tracking-[-0.045em] text-white">
+                  MORDISCO BURGER CLUB
+                </h1>
               </div>
-              <div className="hidden rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold text-emerald-200 sm:block">
-                Sin contrasena
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-[#FF1A1A] bg-black text-[#FF1A1A]">
+                <MessageCircle size={22} />
               </div>
             </div>
           </div>
@@ -218,16 +255,14 @@ export default function LoginPage() {
           {step === "form" && (
             <form onSubmit={handlePhoneSubmit} className="space-y-5 p-6">
               <div>
-                <h2 className="text-2xl font-black leading-tight">Te enviamos un codigo para ingresar</h2>
-                <p className="mt-2 text-sm leading-6 text-white/55">
-                  Usamos tu WhatsApp para proteger tu cuenta, recuperar tus datos y completar tus pedidos mas rapido.
-                </p>
+                <h2 className="text-2xl font-black uppercase leading-tight tracking-[-0.035em]">Entrar con WhatsApp</h2>
+  
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-[0.18em] text-white/45">WhatsApp</label>
-                <div className="flex items-center gap-3 rounded-2xl border border-white/12 bg-black/30 px-4 py-3 focus-within:border-red-300/50">
-                  <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-black text-white/70">+54</span>
+                <label className="text-xs font-black uppercase tracking-[0.18em] text-[#A0A0A0]">WhatsApp</label>
+                <div className="flex items-center gap-3 border border-[#FF1A1A] bg-black px-4 py-3 focus-within:border-[#FF3030]">
+                  <span className="border border-[#FF1A1A] px-3 py-1 text-sm font-black text-white">+54</span>
                   <input
                     type="tel"
                     inputMode="tel"
@@ -235,10 +270,10 @@ export default function LoginPage() {
                     placeholder="379 409 4455"
                     value={displayPhone(phone)}
                     onChange={(event) => setPhone(normalizePhone(event.target.value))}
-                    className="min-w-0 flex-1 bg-transparent text-lg font-bold text-white outline-none placeholder:text-white/20"
+                    className="min-w-0 flex-1 bg-transparent text-lg font-black text-white outline-none placeholder:text-[#A0A0A0]"
                     autoFocus
                   />
-                  <Phone size={18} className="text-white/30" />
+                  <Phone size={18} className="text-[#FF1A1A]" />
                 </div>
               </div>
 
@@ -247,27 +282,24 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={!canSubmitPhone}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-red-950/35 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-45"
+                className="flex w-full items-center justify-center gap-2 bg-[#FF1A1A] px-5 py-4 text-sm font-black uppercase text-white transition duration-200 hover:bg-[#FF3030] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {loading ? <Loader size={18} className="animate-spin" /> : <>Enviar codigo <ArrowRight size={18} /></>}
               </button>
 
-              <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-xs leading-5 text-white/55">
-                <ShieldCheck size={18} className="mt-0.5 flex-shrink-0 text-emerald-300" />
-                Nunca te vamos a pedir claves. El codigo solo sirve una vez y vence en 5 minutos.
-              </div>
+ 
             </form>
           )}
 
           {step === "code" && (
             <section className="relative space-y-5 p-6">
-              <button onClick={() => setStep("form")} className="inline-flex items-center gap-2 text-sm font-bold text-white/55 transition hover:text-white">
+              <button onClick={() => setStep("form")} className="inline-flex items-center gap-2 text-sm font-black uppercase text-[#A0A0A0] transition hover:text-white">
                 <ArrowLeft size={16} /> Cambiar numero
               </button>
 
               <div>
-                <h2 className="text-2xl font-black leading-tight">Revisa tu WhatsApp</h2>
-                <p className="mt-2 text-sm leading-6 text-white/55">
+                <h2 className="text-2xl font-black uppercase leading-tight tracking-[-0.035em]">Revisa tu WhatsApp</h2>
+                <p className="mt-2 text-sm font-medium leading-6 text-[#A0A0A0]">
                   Enviamos un codigo de 4 digitos a <span className="font-bold text-white">+54 {displayPhone(phone)}</span>.
                 </p>
               </div>
@@ -283,7 +315,7 @@ export default function LoginPage() {
                     value={digit}
                     onChange={(event) => handleCodeChange(idx, event.target.value)}
                     onKeyDown={(event) => handleKeyDown(idx, event)}
-                    className="h-16 rounded-2xl border border-white/12 bg-black/35 text-center text-2xl font-black text-white outline-none transition focus:border-red-300 focus:bg-black/50"
+                    className="h-16 border border-[#FF1A1A] bg-black text-center text-2xl font-black text-white outline-none transition duration-200 focus:border-[#FF3030]"
                     autoComplete="one-time-code"
                   />
                 ))}
@@ -291,14 +323,14 @@ export default function LoginPage() {
 
               {error && <ErrorBox message={error} />}
 
-              <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs text-white/45">
+              <div className="flex flex-col gap-3 border border-[#FF1A1A] bg-black p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs font-bold uppercase text-[#A0A0A0]">
                   {timer > 0 ? `Podes pedir otro codigo en ${timerLabel}` : "Ya podes pedir otro codigo."}
                 </div>
                 <button
                   onClick={resendCode}
                   disabled={timer > 0 || loading}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/12 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/10 disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 border border-[#FF1A1A] px-4 py-2 text-sm font-black uppercase text-white transition duration-200 hover:bg-[#FF1A1A] disabled:opacity-40"
                 >
                   <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
                   Reenviar codigo
@@ -306,8 +338,8 @@ export default function LoginPage() {
               </div>
 
               {verifying && (
-                <div className="absolute inset-0 flex items-center justify-center rounded-[32px] bg-black/55 backdrop-blur-sm">
-                  <Loader size={34} className="animate-spin text-red-300" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                  <Loader size={34} className="animate-spin text-[#FF1A1A]" />
                 </div>
               )}
             </section>
@@ -315,18 +347,16 @@ export default function LoginPage() {
 
           {step === "success" && (
             <section className="p-8 text-center">
-              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[28px] bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-300/25">
+              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center border border-[#FF1A1A] bg-black text-[#FF1A1A]">
                 <CheckCircle size={38} />
               </div>
-              <h2 className="text-2xl font-black">Listo, ya ingresaste</h2>
-              <p className="mt-2 text-sm text-white/55">Estamos abriendo tu cuenta...</p>
+              <h2 className="text-2xl font-black uppercase tracking-[-0.035em]">Listo, ya ingresaste</h2>
+              <p className="mt-2 text-sm text-[#A0A0A0]">Estamos abriendo tu cuenta...</p>
             </section>
           )}
         </section>
 
-        <p className="mt-5 text-center text-xs leading-5 text-white/35">
-          Al ingresar aceptas recibir mensajes operativos de la tienda por WhatsApp.
-        </p>
+   
       </div>
     </main>
   );
@@ -334,7 +364,7 @@ export default function LoginPage() {
 
 function ErrorBox({ message }: { message: string }) {
   return (
-    <div className="rounded-2xl border border-red-400/25 bg-red-500/12 px-4 py-3 text-sm font-semibold leading-5 text-red-100">
+    <div className="border border-[#FF1A1A] bg-black px-4 py-3 text-sm font-bold uppercase leading-5 text-white">
       {message}
     </div>
   );
