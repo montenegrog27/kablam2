@@ -474,7 +474,7 @@ export default function ProfilePage() {
 
         {section === "prode" && (
           <section className="rounded-[32px] bg-white p-4 text-black sm:p-7">
-            <SectionHeader kicker="Mordisco Games" title="Prode Mordisco" />
+            {/* <SectionHeader kicker="Mordisco Games" title="Prode Mordisco" /> */}
             <div className="profile-prode-shell mt-5 overflow-hidden rounded-3xl bg-white text-black">
               <ProdeProfile branchSlug={branchSlug} customerId={session.customerId} tenantId={session.tenantId} />
             </div>

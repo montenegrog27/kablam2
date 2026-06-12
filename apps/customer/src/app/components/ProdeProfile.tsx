@@ -49,8 +49,8 @@ type Standing = {
   perfect_predictions: number;
 };
 
-const GOLD = "#D6A100";
 const RED = "#E10600";
+const PRODE_ACCENT = RED;
 const PREDICTION_LOCK_MINUTES = 5;
 const ROUND_LABELS: Record<string, string> = {
   group: "Fase de grupos",
@@ -64,6 +64,20 @@ const REWARDS = [
   { pos: "Resultado", desc: "Si le pegas al resultado: 1 Cheese Bacon Simple gratis.", icon: Target },
   { pos: "Goleador", desc: "Si tu jugador mete al menos 1 gol: 1 porcion de papas.", icon: Star },
   { pos: "Doble acierto", desc: "Si le pegas a los dos: 1 Cheese Bacon Doble con Papas.", icon: Gift },
+];
+
+const PRODE_TERMS_BROKEN = [
+  "La participación es gratuita para todos los clientes registrados de Mordisco.",
+  "Los pronósticos podrán realizarse o modificarse hasta 5 minutos antes del inicio oficial de cada partido.",
+  "Una vez iniciado el partido, los pronósticos quedarán cerrados y no podrán modificarse.",
+  "Los premios son personales e intransferibles.",
+  "Para canjear el máximo premio (goleador y resultado juntos), el cliente deberá realizar una compra mínima de $5.000.",
+  "El premio deberá utilizarse dentro de los 30 días posteriores a su obtención.",
+  "Los premios no son canjeables por dinero en efectivo.",
+  "En pedidos con delivery, el costo de envío deberá ser abonado por el cliente.",
+  "El cliente podrá optar por retirar su premio en el local sin costo adicional.",
+  "Mordisco se reserva el derecho de modificar, suspender o cancelar el Prode ante circunstancias excepcionales.",
+  "La participación implica la aceptación total de estas bases y condiciones.",
 ];
 
 const PRODE_TERMS = [
@@ -92,7 +106,13 @@ const SCORER_MESSAGES: Record<string, string> = {
 };
 
 function getScorerMessage(scorer?: string) {
-  return scorer ? SCORER_MESSAGES[scorer] || "" : "";
+  const cleanMessages: Record<string, string> = {
+    "Lionel Messi": "EPA! Asegurador! 😆",
+    "Rodrigo De Paul": "Vamos motorcito!",
+    "Julian Alvarez": "Sin dudas, la araña pica siempre! 🕷️",
+    "Lautaro Martinez": "Vamos toro viejo!!",
+  };
+  return scorer ? cleanMessages[scorer] || SCORER_MESSAGES[scorer] || "" : "";
 }
 
 export default function ProdeProfile({ branchSlug, customerId, tenantId }: { branchSlug: string; customerId?: string; tenantId?: string }) {
@@ -275,7 +295,7 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/60">Ranking destacado</p>
             {podium.length === 0 ? (
               <div className="mt-5 rounded-3xl bg-black p-5 text-white">
-                <Medal size={28} style={{ color: GOLD }} />
+                <Medal size={28} style={{ color: PRODE_ACCENT }} />
                 <p className="mt-3 text-lg font-black uppercase">Todavia sin ranking</p>
                 <p className="mt-1 text-sm font-bold text-white/55">Hace tu primer pronostico y aparece aca.</p>
               </div>
@@ -286,7 +306,7 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
                 ))}
               </div>
             )}
-            <button onClick={shareRanking} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-white/15 bg-black py-3 text-xs font-black uppercase text-white transition hover:bg-white hover:text-black">
+            <button onClick={shareRanking} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-white/15 bg-black py-3 text-xs font-black uppercase text-white transition hover:border-[#E10600] hover:bg-[#E10600]">
               <Share2 size={15} /> Compartir posicion
             </button>
           </aside>
@@ -298,7 +318,7 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.22em] text-white/45">Tu posicion actual</p>
-              <p className="mt-1 text-3xl font-black uppercase tracking-[-0.05em]" style={{ color: GOLD }}>#{myRank} / {myStanding.total_points} pts</p>
+              <p className="mt-1 text-3xl font-black uppercase tracking-[-0.05em]" style={{ color: PRODE_ACCENT }}>#{myRank} / {myStanding.total_points} pts</p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <SmallStat label="Exactos" value={myStanding.correct_results} />
@@ -321,7 +341,7 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
         <button onClick={() => setTab("predictions")} className={`rounded-full py-3 text-xs font-black uppercase transition ${tab === "predictions" ? "bg-[#E10600] text-white" : "text-white/60 hover:text-white"}`}>
           Mis pronosticos
         </button>
-        <button onClick={() => setTab("ranking")} className={`rounded-full py-3 text-xs font-black uppercase transition ${tab === "ranking" ? "text-black" : "text-white/60 hover:text-white"}`} style={tab === "ranking" ? { backgroundColor: GOLD } : undefined}>
+        <button onClick={() => setTab("ranking")} className={`rounded-full py-3 text-xs font-black uppercase transition ${tab === "ranking" ? "text-white" : "text-white/60 hover:text-white"}`} style={tab === "ranking" ? { backgroundColor: RED } : undefined}>
           Ranking
         </button>
       </div>
@@ -364,14 +384,14 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
               })}
 
               <div className="rounded-[30px] border border-black bg-black p-5 text-white">
-                <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em]" style={{ color: GOLD }}><Gift size={15} /> Premios del Prode</p>
+                <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em]" style={{ color: PRODE_ACCENT }}><Gift size={15} /> Premios del Prode</p>
                 <p className="mt-2 text-sm font-bold uppercase leading-6 text-white/55">
                   Los premios se habilitan cuando se carga el resultado final del partido.
                 </p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   {REWARDS.map((reward) => (
                     <div key={reward.pos} className="rounded-3xl border border-white/10 bg-white/[0.06] p-4">
-                      <reward.icon size={20} style={{ color: GOLD }} />
+                      <reward.icon size={20} style={{ color: PRODE_ACCENT }} />
                       <p className="mt-3 text-sm font-black uppercase">{reward.pos}</p>
                       <p className="mt-1 text-xs font-bold uppercase leading-5 text-white/55">{reward.desc}</p>
                     </div>
@@ -392,7 +412,7 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
               <p className="text-xs font-black uppercase tracking-[0.22em] text-white/45">Tabla general</p>
               <h3 className="text-4xl font-black uppercase tracking-[-0.06em]">Ranking</h3>
             </div>
-            <button onClick={shareRanking} className="rounded-full px-4 py-2.5 text-xs font-black uppercase text-black" style={{ backgroundColor: GOLD }}>
+            <button onClick={shareRanking} className="rounded-full px-4 py-2.5 text-xs font-black uppercase text-white transition hover:bg-[#b80000]" style={{ backgroundColor: RED }}>
               Compartir
             </button>
           </div>
@@ -424,13 +444,13 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
 function ProdeTerms() {
   return (
     <div className="rounded-[30px] border border-black bg-black p-5 text-white">
-      <p className="text-xs font-black uppercase tracking-[0.22em]" style={{ color: GOLD }}>
+      <p className="text-xs font-black uppercase tracking-[0.22em]" style={{ color: PRODE_ACCENT }}>
         Bases y condiciones - Prode Mordisco
       </p>
       <ol className="mt-4 space-y-3 text-sm font-bold leading-6 text-white/60">
         {PRODE_TERMS.map((term, index) => (
           <li key={term} className="grid grid-cols-[24px_1fr] gap-2">
-            <span className="font-black" style={{ color: GOLD }}>{index + 1}.</span>
+            <span className="font-black" style={{ color: PRODE_ACCENT }}>{index + 1}.</span>
             <span>{term}</span>
           </li>
         ))}
@@ -467,7 +487,7 @@ function MatchPredictionCard({
             {new Date(match.match_date).toLocaleDateString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
           </p>
           <p className="mt-2 text-xl font-black uppercase tracking-[-0.04em]">
-            {match.home_team} <span style={{ color: GOLD }}>vs</span> {match.away_team}
+            {match.home_team} <span style={{ color: PRODE_ACCENT }}>vs</span> {match.away_team}
           </p>
         </div>
         <StatusPill finished={finished} closed={closed} saved={prediction.isSaved} />
@@ -476,7 +496,7 @@ function MatchPredictionCard({
       {finished ? (
         <div className="mt-4 flex items-center justify-between rounded-2xl bg-white/[0.06] p-3 text-white">
           <p className="text-2xl font-black">{match.home_score} - {match.away_score}</p>
-          <p className="text-sm font-black uppercase" style={{ color: GOLD }}>{prediction.isSaved ? `+${prediction.points} pts` : "Sin pronostico"}</p>
+          <p className="text-sm font-black uppercase" style={{ color: PRODE_ACCENT }}>{prediction.isSaved ? `+${prediction.points} pts` : "Sin pronostico"}</p>
         </div>
       ) : closed ? (
         <div className="mt-4 rounded-2xl bg-white/10 p-3 text-sm font-bold uppercase text-white/65">
@@ -493,7 +513,7 @@ function MatchPredictionCard({
             <select
               value={prediction.scorer}
               onChange={(event) => onChange(match.id, "scorer", event.target.value)}
-              className="min-h-12 w-full rounded-full border border-white/10 bg-black px-4 text-sm font-bold text-white outline-none focus:border-[#D6A100]"
+              className="min-h-12 w-full rounded-full border border-white/10 bg-black px-4 text-sm font-bold text-white outline-none focus:border-[#E10600]"
             >
               <option value="" className="bg-black text-white">Goleador argentino (opcional)</option>
               {ARGENTINA_ATTACK_PLAYERS.map((group) => (
@@ -505,7 +525,7 @@ function MatchPredictionCard({
               ))}
             </select>
             {scorerMessage && (
-              <p className="rounded-2xl border border-[#D6A100]/35 bg-[#D6A100]/10 px-4 py-2 text-xs font-black uppercase leading-5 text-white">
+              <p className="rounded-2xl border border-[#E10600]/35 bg-[#E10600]/10 px-4 py-2 text-xs font-black uppercase leading-5 text-white">
                 {scorerMessage}
               </p>
             )}
@@ -532,7 +552,7 @@ function ScoreInput({ value, onChange }: { value: number | ""; onChange: (value:
       max={15}
       value={value}
       onChange={(event) => onChange(event.target.value === "" ? "" : Number(event.target.value))}
-      className="h-12 w-14 rounded-2xl border border-white/10 bg-white/[0.08] text-center text-xl font-black text-white outline-none focus:border-[#D6A100]"
+      className="h-12 w-14 rounded-2xl border border-white/10 bg-white/[0.08] text-center text-xl font-black text-white outline-none focus:border-[#E10600]"
       placeholder="0"
     />
   );
@@ -557,7 +577,7 @@ function ConfirmPredictionModal({
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/80 p-3 sm:items-center">
       <div className="w-full max-w-md overflow-hidden rounded-[34px] border border-[#E10600] bg-black text-white">
         <div className="bg-[#E10600] p-5 text-white">
-          <p className="text-[10px] font-black uppercase tracking-[0.26em]" style={{ color: GOLD }}>Confirmar jugada</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.26em] text-white/70">Confirmar jugada</p>
           <h3 className="mt-2 text-3xl font-black uppercase leading-none tracking-[-0.05em]">Aceptar pronostico</h3>
           <p className="mt-3 text-sm font-bold uppercase leading-6 text-white/60">Despues de aceptar, participas en el Prode Mordisco con esta jugada.</p>
         </div>
@@ -568,20 +588,20 @@ function ConfirmPredictionModal({
               {new Date(match.match_date).toLocaleDateString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
             </p>
             <p className="mt-2 text-xl font-black uppercase tracking-[-0.04em]">
-              {match.home_team} <span style={{ color: GOLD }}>vs</span> {match.away_team}
+              {match.home_team} <span style={{ color: PRODE_ACCENT }}>vs</span> {match.away_team}
             </p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-black p-3 text-white">
                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/45">Resultado</p>
-                <p className="mt-1 text-3xl font-black" style={{ color: GOLD }}>{prediction.h} - {prediction.a}</p>
+                <p className="mt-1 text-3xl font-black" style={{ color: PRODE_ACCENT }}>{prediction.h} - {prediction.a}</p>
               </div>
               <div className="rounded-2xl bg-black p-3 text-white">
                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/45">Goleador</p>
-                <p className="mt-2 text-sm font-black uppercase leading-5" style={{ color: GOLD }}>{prediction.scorer || "Sin elegir"}</p>
+                <p className="mt-2 text-sm font-black uppercase leading-5" style={{ color: PRODE_ACCENT }}>{prediction.scorer || "Sin elegir"}</p>
               </div>
             </div>
             {scorerMessage && (
-              <p className="mt-3 rounded-2xl border border-[#D6A100]/35 bg-[#D6A100]/10 px-4 py-3 text-xs font-black uppercase leading-5 text-white">
+              <p className="mt-3 rounded-2xl border border-[#E10600]/35 bg-[#E10600]/10 px-4 py-3 text-xs font-black uppercase leading-5 text-white">
                 {scorerMessage}
               </p>
             )}
@@ -591,7 +611,7 @@ function ConfirmPredictionModal({
             <button
               onClick={onCancel}
               disabled={saving}
-              className="rounded-full border border-white/15 py-4 text-xs font-black uppercase text-white transition hover:bg-white hover:text-black disabled:opacity-40"
+              className="rounded-full border border-white/15 py-4 text-xs font-black uppercase text-white transition hover:border-[#E10600] hover:bg-[#E10600] disabled:opacity-40"
             >
               Revisar
             </button>
@@ -613,7 +633,7 @@ function ConfirmPredictionModal({
 function StatusPill({ finished, closed, saved }: { finished: boolean; closed: boolean; saved: boolean }) {
   const label = finished ? "Finalizado" : closed ? "Cerrado" : saved ? "Cargado" : "Abierto";
   return (
-    <span className="inline-flex rounded-full px-3 py-1.5 text-[10px] font-black uppercase text-black" style={{ backgroundColor: finished || saved ? GOLD : closed ? "#FFFFFF55" : "#FFFFFF" }}>
+    <span className="inline-flex rounded-full px-3 py-1.5 text-[10px] font-black uppercase text-white" style={{ backgroundColor: finished || saved ? RED : closed ? "#3A3A3A" : "#111111" }}>
       {label}
     </span>
   );
@@ -624,22 +644,22 @@ function RankingRow({ standing, predictions, rank, isMe, compact }: { standing: 
   return (
     <div className={[
       "rounded-3xl border p-3",
-      isMe ? "border-[#E10600] bg-[#E10600] text-white" : compact ? "border-white/10 bg-black text-white" : "border-white/10 bg-white/[0.06] text-white",
+      isMe ? "border-[#E10600] bg-black text-white" : compact ? "border-white/10 bg-black text-white" : "border-white/10 bg-white/[0.06] text-white",
     ].join(" ")}>
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black" style={{ backgroundColor: rank <= 3 ? GOLD : isMe ? "#000000" : "#FFFFFF18", color: rank <= 3 ? "#000" : "#fff" }}>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black text-white" style={{ backgroundColor: rank <= 3 ? RED : isMe ? "#000000" : "#FFFFFF18" }}>
           #{medal}
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-black uppercase">
-            {standing.customers?.name || "Anonimo"} {isMe && <span style={{ color: GOLD }}>(vos)</span>}
+            {standing.customers?.name || "Anonimo"} {isMe && <span className="text-yellow-500">(vos)</span>}
           </p>
           <p className={["mt-1 text-[10px] font-bold uppercase", isMe ? "text-white/70" : "text-white/45"].join(" ")}>
             {standing.correct_results} exactos / {standing.correct_scorers} goleadores / {standing.perfect_predictions} perfectos
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xl font-black" style={{ color: isMe ? GOLD : undefined }}>{standing.total_points}</p>
+          <p className="text-xl font-black" style={{ color: isMe ? "#FFFFFF" : undefined }}>{standing.total_points}</p>
           <p className={["text-[10px] font-black uppercase", isMe ? "text-white/55" : "text-white/35"].join(" ")}>pts</p>
         </div>
       </div>
@@ -669,7 +689,7 @@ function PredictionSummary({ prediction, isMe }: { prediction: Prediction; isMe:
         <p className="min-w-0 truncate font-black uppercase">
           {match ? `${match.home_team} vs ${match.away_team}` : "Partido"}
         </p>
-        <span className="shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase text-black" style={{ backgroundColor: GOLD }}>
+        <span className="shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase text-white" style={{ backgroundColor: RED }}>
           {prediction.points_earned || 0} pts
         </span>
       </div>
@@ -703,7 +723,7 @@ function SmallStat({ label, value }: { label: string; value: number }) {
 function EmptyProde({ icon: Icon, title, text }: { icon: any; title: string; text: string }) {
   return (
     <div className="rounded-[28px] bg-black p-8 text-center text-white">
-      <Icon size={34} className="mx-auto" style={{ color: GOLD }} />
+      <Icon size={34} className="mx-auto" style={{ color: PRODE_ACCENT }} />
       <p className="mt-4 text-xl font-black uppercase tracking-[-0.04em]">{title}</p>
       <p className="mx-auto mt-2 max-w-sm text-sm font-bold uppercase leading-6 text-white/55">{text}</p>
     </div>
