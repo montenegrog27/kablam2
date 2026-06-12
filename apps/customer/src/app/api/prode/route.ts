@@ -37,33 +37,69 @@ export async function GET() {
   const supabase = supabaseService();
   const match = await getNextPlayableMatch(supabase, session.tenantId);
 
-  const [{ data: predictions }, { data: standings }, { data: allPredictions }] = await Promise.all([
+  const [{ data: predictionsRaw }, { data: standingsRaw }, { data: allPredictionsRaw }] = await Promise.all([
     supabase
       .from("prode_predictions")
-      .select("*, matches!match_id(*)")
+      .select("*")
       .eq("tenant_id", session.tenantId)
       .eq("customer_id", session.customerId)
       .order("created_at", { ascending: false }),
     supabase
       .from("prode_standings")
-      .select("*, customers!customer_id(name)")
+      .select("*")
       .eq("tenant_id", session.tenantId)
       .order("total_points", { ascending: false })
       .limit(100),
     supabase
       .from("prode_predictions")
-      .select("*, customers!customer_id(name), matches!match_id(home_team, away_team, match_date, home_score, away_score, status)")
+      .select("*")
       .eq("tenant_id", session.tenantId)
       .order("created_at", { ascending: false })
       .limit(1000),
   ]);
 
+  const predictions = predictionsRaw || [];
+  const standings = standingsRaw || [];
+  const allPredictions = allPredictionsRaw || [];
+  const matchIds = Array.from(new Set([...predictions, ...allPredictions].map((prediction) => prediction.match_id).filter(Boolean)));
+  const customerIds = Array.from(new Set([
+    ...standings.map((standing) => standing.customer_id),
+    ...allPredictions.map((prediction) => prediction.customer_id),
+  ].filter(Boolean)));
+
+  const [{ data: relatedMatches }, { data: relatedCustomers }] = await Promise.all([
+    matchIds.length
+      ? supabase
+          .from("prode_matches")
+          .select("id, home_team, away_team, match_date, home_score, away_score, status, round")
+          .in("id", matchIds)
+      : Promise.resolve({ data: [] }),
+    customerIds.length
+      ? supabase
+          .from("customers")
+          .select("id, name")
+          .in("id", customerIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const matchById = new Map((relatedMatches || []).map((item) => [item.id, item]));
+  const customerById = new Map((relatedCustomers || []).map((item) => [item.id, item]));
+  const withRelations = (prediction: any) => ({
+    ...prediction,
+    matches: matchById.get(prediction.match_id) || null,
+    customers: customerById.get(prediction.customer_id) || null,
+  });
+  const standingsWithCustomers = standings.map((standing: any) => ({
+    ...standing,
+    customers: customerById.get(standing.customer_id) || null,
+  }));
+
   return NextResponse.json({
     match,
     matches: match ? [match] : [],
-    predictions: predictions || [],
-    allPredictions: allPredictions || [],
-    standings: standings || [],
+    predictions: predictions.map(withRelations),
+    allPredictions: allPredictions.map(withRelations),
+    standings: standingsWithCustomers,
     serverTime: new Date().toISOString(),
   });
 }

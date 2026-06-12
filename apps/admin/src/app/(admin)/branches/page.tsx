@@ -724,8 +724,9 @@ export default function BranchesPage() {
                 }
               />
               <div className="text-xs text-gray-400">
-                URL de una imagen .ico, .png o .svg (recomendado: 32x32 o 48x48
-                px)
+                Para iPhone y pantalla de inicio, usa un PNG cuadrado del logo
+                de 180x180 px o 512x512 px. Si queda vacio, Customer intenta
+                usar el icono de carga o el logo.
               </div>
             </div>
 

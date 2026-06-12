@@ -4,7 +4,7 @@ import { createSupabaseServer } from "@kablam/supabase/server";
 import { getCustomerSession } from "@/lib/customer-session";
 import { buildCustomerMetadata } from "@/lib/metadata";
 import { getBranchAvailability } from "@/lib/branchAvailability";
-import type { Product, Combo } from "@/types/menu";
+import type { Product } from "@/types/menu";
 
 export async function generateMetadata({
   params,
@@ -26,14 +26,18 @@ export async function generateMetadata({
 
   const { data: settings } = await supabase
     .from("branch_settings")
-    .select("meta_title, favicon_url")
+    .select("meta_title, favicon_url, loading_icon_url, logo_url")
     .eq("branch_id", branch.id)
     .maybeSingle();
+
+  const appIconUrl = settings?.favicon_url || settings?.loading_icon_url || settings?.logo_url;
 
   return buildCustomerMetadata({
     title: settings?.meta_title,
     fallbackTitle: branch.name,
     faviconUrl: settings?.favicon_url,
+    appIconUrl,
+    manifestUrl: `/${branchSlug}/manifest.webmanifest`,
   });
 }
 
