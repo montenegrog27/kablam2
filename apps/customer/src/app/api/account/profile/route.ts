@@ -8,13 +8,18 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 type OrderItemRow = {
   quantity?: number;
   products?: { name?: string } | null;
+  combos?: { name?: string } | null;
+  extras?: Array<{ type?: string; name?: string }> | null;
 };
 
 type OrderRow = {
   id: string;
+  order_number?: string | null;
   status?: string;
   type?: string;
   total?: number;
+  subtotal?: number;
+  shipping_cost?: number;
   address?: string | null;
   created_at?: string;
   order_items?: OrderItemRow[];
@@ -96,7 +101,7 @@ export async function GET() {
 
   const { data: orders } = await supabase
     .from("orders")
-    .select("*, order_items(*, products(name))")
+    .select("*, order_items(*, products(name), combos(name))")
     .eq("customer_id", session.customerId)
     .order("created_at", { ascending: false })
     .limit(10);
@@ -253,13 +258,16 @@ export async function GET() {
     },
     orders: ((orders || []) as OrderRow[]).map((order) => ({
       id: order.id,
+      order_number: order.order_number,
       status: order.status,
       type: order.type,
       total: order.total,
+      subtotal: order.subtotal,
+      shipping_cost: order.shipping_cost || 0,
       address: order.address,
       created_at: order.created_at,
       items: (order.order_items || []).map((item) => ({
-        name: item.products?.name || "Producto",
+        name: item.products?.name || item.combos?.name || item.extras?.find((extra) => extra.type === "promotion")?.name || "Producto",
         quantity: item.quantity,
       })),
     })),

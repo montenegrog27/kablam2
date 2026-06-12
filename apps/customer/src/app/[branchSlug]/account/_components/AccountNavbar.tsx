@@ -69,11 +69,11 @@ export default function AccountNavbar({
               <span className="hidden sm:inline">Volver al menu</span>
             </button>
 
-            {branding?.logo_url ? (
+            {/* {branding?.logo_url ? (
               <img src={branding.logo_url} className="h-8 w-auto object-contain" alt="Logo" />
             ) : (
               <div className="text-lg font-black">Mi cuenta</div>
-            )}
+            )} */}
           </div>
 
           <div className="hidden items-center gap-5 md:flex">

@@ -32,11 +32,11 @@ export default async function AccountLayout({
 
     return (
       <div className="customer-account-dark min-h-screen">
-        <AccountNavbar
+        {/* <AccountNavbar
           branchSlug={branchSlug}
           customerName={session.name}
           branding={branding}
-        />
+        /> */}
 
         <div>{children}</div>
       </div>

@@ -8,6 +8,7 @@ import {
   AlertCircle,
   ArrowRight,
   Camera,
+  ChevronRight,
   Crown,
   Gift,
   Home,
@@ -39,9 +40,12 @@ type Address = {
 
 type RecentOrder = {
   id: string;
+  order_number?: string;
   status: string;
   type?: string;
   total: number;
+  subtotal?: number;
+  shipping_cost?: number;
   created_at: string;
   items: Array<{ name: string; quantity: number }>;
 };
@@ -450,7 +454,7 @@ export default function ProfilePage() {
             />
           )}
 
-          {section === "pedidos" && <OrdersSection orders={profile.recentOrders} />}
+          {section === "pedidos" && <OrdersSection orders={profile.recentOrders} branchSlug={branchSlug} />}
 
           {section === "datos" && (
             <DetailsSection
@@ -718,9 +722,9 @@ function ClubSection({
       </section>
 
       <section className="grid gap-3 sm:grid-cols-3 text-white">
-        <BenefitCard icon={ShoppingBag} title="Cada pedido suma" text="Volver a comprar te acerca al proximo estatus." />
+        <BenefitCard icon={ShoppingBag} title="Cada pedido suma" text="Volver a comprar te acerca al proximo nivel." />
         <BenefitCard icon={Gift} title="Canjea recompensas" text="Tus puntos tienen valor real dentro del club." />
-        <BenefitCard icon={Crown} title="Beneficios exclusivos" text="Los niveles altos desbloquean acceso preferencial." />
+        <BenefitCard icon={Crown} title="Beneficios exclusivos" text="Si sos nivel Black o Founder, tenés tu propio cupón de descuento 😏" />
       </section>
 
       <section className="rounded-[30px] bg-black p-5 text-white sm:rounded-[32px] sm:p-7">
@@ -790,30 +794,116 @@ function ClubSection({
   );
 }
 
-function OrdersSection({ orders }: { orders: RecentOrder[] }) {
+function OrdersSection({ orders, branchSlug }: { orders: RecentOrder[]; branchSlug: string }) {
+  const router = useRouter();
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const handleReorder = async (orderId: string) => {
+    setReorderingId(orderId);
+    setError("");
+    try {
+      const response = await fetch("/api/account/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No pudimos repetir el pedido");
+      sessionStorage.setItem(`cart_${branchSlug}`, JSON.stringify(data.cartItems || []));
+      router.push(`/${branchSlug}/checkout`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "No pudimos repetir el pedido");
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   return (
-    <section className="rounded-[32px] bg-white p-4 text-black sm:p-7">
-      <SectionHeader kicker="Historial" title="Mis pedidos" />
+    <section className="overflow-hidden rounded-[34px] bg-black text-white">
+      <div className="border-b border-white/10 bg-[#E10600] p-5 sm:p-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-white/60">Historial</p>
+            <h2 className="mt-2 text-[44px] font-black uppercase leading-[0.86] tracking-[-0.07em] sm:text-7xl">Mis pedidos</h2>
+          </div>
+          <div className="rounded-full border border-white/20 bg-black px-4 py-2 text-xs font-black uppercase text-white">
+            {orders.length} {orders.length === 1 ? "pedido" : "pedidos"}
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mx-4 mt-4 rounded-3xl border border-[#E10600] bg-[#E10600]/20 px-4 py-3 text-sm font-black uppercase text-white sm:mx-7">
+          {error}
+        </div>
+      )}
+
       {orders.length === 0 ? (
-        <EmptyState icon={Package} title="Todavia no hiciste pedidos" text="Cuando compres, vas a ver tu actividad aca." />
+        <div className="p-5 sm:p-7">
+          <EmptyState icon={Package} title="Todavia no hiciste pedidos" text="Cuando compres, vas a ver tu actividad aca." />
+        </div>
       ) : (
-        <div className="mt-5 grid gap-3">
+        <div className="grid gap-3 p-4 sm:p-7">
           {orders.map((order) => (
-            <article key={order.id} className="rounded-[28px] bg-black p-5 text-white">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-2xl font-black uppercase tracking-[-0.05em]">#{order.id.slice(-6).toUpperCase()}</p>
-                  <p className="mt-1 text-xs font-black uppercase text-white/75">
-                    {formatDate(order.created_at)} / {statusLabel(order.status)}
-                  </p>
-                  <p className="mt-3 text-sm font-bold uppercase leading-6 text-white/80">
+            <article key={order.id} className="rounded-[30px] border border-white/10 bg-white/[0.06] p-4 text-white sm:p-5">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/45">{formatDate(order.created_at)}</p>
+                    <p className="mt-1 text-3xl font-black uppercase leading-none tracking-[-0.06em]">
+                      #{(order.order_number || order.id.slice(-6)).replace(/^ORD-/i, "").toUpperCase()}
+                    </p>
+                  </div>
+                  <div className="shrink-0 rounded-full bg-[#E10600] px-3 py-1.5 text-[10px] font-black uppercase text-white">
+                    {statusLabel(order.status)}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl bg-black p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Pedido</p>
+                  <p className="mt-2 text-sm font-bold uppercase leading-6 text-white/80">
                     {order.items?.map((item) => `${item.quantity}x ${item.name}`).join(" + ") || "Pedido"}
                   </p>
                 </div>
-                <p className="text-4xl font-black tracking-[-0.06em] text-[#E10600]">{formatCurrency(order.total)}</p>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Total</p>
+                    <p className="text-4xl font-black tracking-[-0.06em] text-[#E10600]">{formatCurrency(order.total)}</p>
+                    {typeof order.shipping_cost === "number" && order.shipping_cost > 0 && (
+                      <p className="mt-1 text-[10px] font-bold uppercase text-white/45">Incluye envio {formatCurrency(order.shipping_cost)}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
+                    <button
+                      onClick={() => router.push(`/${branchSlug}/account/orders`)}
+                      className="flex min-h-12 items-center justify-center gap-1 rounded-full border border-white/15 px-3 text-xs font-black uppercase text-white transition hover:bg-white hover:text-black"
+                    >
+                      Ver detalle <ChevronRight size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleReorder(order.id)}
+                      disabled={reorderingId === order.id}
+                      className="flex min-h-12 items-center justify-center rounded-full bg-[#E10600] px-3 text-xs font-black uppercase text-white transition hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {reorderingId === order.id ? <Loader2 size={16} className="animate-spin" /> : "Repetir pedido"}
+                    </button>
+                  </div>
+                </div>
               </div>
             </article>
           ))}
+
+          {orders.length >= 3 && (
+            <button
+              onClick={() => router.push(`/${branchSlug}/account/orders`)}
+              className="mt-2 flex min-h-14 items-center justify-center gap-2 rounded-full border border-white/15 text-sm font-black uppercase text-white transition hover:bg-white hover:text-black"
+            >
+              Ver historial completo <ChevronRight size={16} />
+            </button>
+          )}
         </div>
       )}
     </section>
