@@ -510,12 +510,15 @@ function MatchPredictionCard({
             <ScoreInput value={prediction.a} onChange={(value) => onChange(match.id, "a", value)} />
           </div>
           <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">
+              Que jugador va a hacer gol primero?
+            </p>
             <select
               value={prediction.scorer}
               onChange={(event) => onChange(match.id, "scorer", event.target.value)}
-              className="min-h-12 w-full rounded-full border border-white/10 bg-black px-4 text-sm font-bold text-white outline-none focus:border-[#E10600]"
+              className="min-h-16 w-full rounded-[22px] border border-white/10 bg-black px-5 text-base font-black uppercase text-white outline-none focus:border-[#E10600]"
             >
-              <option value="" className="bg-black text-white">Goleador argentino (opcional)</option>
+              <option value="" className="bg-black text-white">Elegir jugador (opcional)</option>
               {ARGENTINA_ATTACK_PLAYERS.map((group) => (
                 <optgroup key={group.group} label={group.group} className="bg-black text-white">
                   {group.players.map((player) => (

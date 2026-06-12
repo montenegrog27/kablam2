@@ -9,6 +9,7 @@ type CartItem = {
   name: string;
   price: number;
   qty: number;
+  note?: string;
 };
 
 function money(value: unknown) {
@@ -114,6 +115,7 @@ async function ensureOrder(tableSession: any, table: any, staffSession: any) {
       type: "dine-in",
       sales_channel: "staff",
       customer_name: `Mesa ${table.number}`,
+      notes: `Mesa ${table.number} - Mozo: ${staffSession.name}`,
       subtotal: 0,
       total: 0,
       paid_amount: 0,
@@ -141,6 +143,7 @@ async function insertItems(orderId: string, items: CartItem[]) {
       unit_price: item.price,
       total: item.price * item.qty,
       item_type: "product",
+      notes: item.note || null,
     })),
   );
   if (error) throw new Error(error.message);
@@ -224,6 +227,7 @@ export async function POST(req: NextRequest) {
         table_id: tableId,
         status: "open",
         customer_count: Math.max(1, Math.floor(Number(body.customerCount || 1))),
+        total: 0,
       })
       .select("*")
       .single();
@@ -246,11 +250,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ orderId, total, status: "items_accepted" });
   }
 
-  if (action === "send_to_kds") {
+  if (action === "send_order") {
     const items = normalizeCart(body.items);
+    if (!items.length) return NextResponse.json({ error: "items_required" }, { status: 400 });
     const orderId = await ensureOrder(tableSession, table, staffSession);
-    if (items.length) await insertItems(orderId, items);
-    const total = money(body.total) || money(tableSession.total) + items.reduce((sum, item) => sum + item.price * item.qty, 0);
+    await insertItems(orderId, items);
+    const addedTotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+    const total = money(tableSession.total) + addedTotal;
     await supabase
       .from("orders")
       .update({
@@ -260,8 +266,23 @@ export async function POST(req: NextRequest) {
         confirmed_at: new Date().toISOString(),
       })
       .eq("id", orderId);
-    await supabase.from("table_sessions").update({ status: "paying", order_id: orderId, total }).eq("id", tableSession.id);
-    return NextResponse.json({ orderId, total, status: "sent_to_kds" });
+    await supabase.from("table_sessions").update({ status: "open", order_id: orderId, total }).eq("id", tableSession.id);
+    return NextResponse.json({ orderId, total, status: "sent_to_kitchen" });
+  }
+
+  if (action === "close_table") {
+    if (!tableSession.order_id) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
+    const total = money(tableSession.total);
+    await supabase.from("table_sessions").update({ status: "paying", total }).eq("id", tableSession.id);
+    await supabase
+      .from("orders")
+      .update({
+        status: "confirmed",
+        subtotal: total,
+        total,
+      })
+      .eq("id", tableSession.order_id);
+    return NextResponse.json({ orderId: tableSession.order_id, total, status: "table_closed" });
   }
 
   if (action === "reopen_table") {

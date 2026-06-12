@@ -6,6 +6,7 @@ import {
   Check,
   Clock3,
   CreditCard,
+  FileText,
   LogIn,
   LogOut,
   Minus,
@@ -494,15 +495,24 @@ function WaiterTables() {
   };
 
   const sendToKds = async () => {
-    const data = await runAction("send_to_kds", { items: pendingCart, total: subtotal });
+    if (!selectedTable) return;
+    const data = await runAction("send_order", { items: pendingCart });
     if (!data) return;
-    setPendingCart([]);
-    setShowPayment(true);
+    await openTable(selectedTable);
+    setError("Comanda enviada. La mesa sigue abierta para seguir cargando productos.");
   };
 
   const reopenTable = async () => {
     await runAction("reopen_table");
     setShowPayment(false);
+  };
+
+  const closeTable = async () => {
+    const data = await runAction("close_table");
+    if (!data) return;
+    await loadTables();
+    if (selectedTable) await openTable(selectedTable);
+    setShowPayment(true);
   };
 
   const payTable = async () => {
@@ -521,17 +531,30 @@ function WaiterTables() {
     open: "border-rose-500 bg-rose-500/15",
     paying: "border-sky-500 bg-sky-500/15",
   };
+  const openCount = sessions.filter((item) => item.status === "open").length;
+  const payingCount = sessions.filter((item) => item.status === "paying").length;
+  const occupiedTotal = sessions.reduce((sum, item) => sum + Number(item.total || 0), 0);
 
   return (
     <section className="min-h-[70vh] overflow-hidden rounded-3xl border border-slate-800 bg-slate-900">
-      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+      <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <Utensils size={18} className="text-emerald-300" />
-          <p className="font-black">Mesas</p>
+          <div>
+            <p className="font-black">Salon</p>
+            <p className="text-xs text-slate-500">
+              {openCount} abiertas / {payingCount} cuentas / {money(occupiedTotal)} en salon
+            </p>
+          </div>
         </div>
-        <button onClick={loadTables} className="rounded-xl border border-slate-700 p-2 text-slate-300">
-          <RefreshCcw size={16} />
-        </button>
+        <div className="flex items-center gap-2">
+          <StatusLegend color="bg-slate-700" label="Libre" />
+          <StatusLegend color="bg-rose-500" label="Abierta" />
+          <StatusLegend color="bg-sky-500" label="Cuenta" />
+          <button onClick={loadTables} className="rounded-xl border border-slate-700 p-2 text-slate-300">
+            <RefreshCcw size={16} />
+          </button>
+        </div>
       </div>
 
       {error && <p className="m-4 rounded-xl bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
@@ -578,7 +601,7 @@ function WaiterTables() {
                   >
                     <span className="text-lg font-black text-white">{table.number}</span>
                     <span className="text-[10px] font-bold text-slate-400">
-                      {tableStatus === "free" ? `${table.capacity} pers` : tableStatus === "paying" ? "Pagando" : money(Number(session?.total || 0))}
+                      {tableStatus === "free" ? `${table.capacity} pers` : tableStatus === "paying" ? "Cuenta" : money(Number(session?.total || 0))}
                     </span>
                   </button>
                 );
@@ -598,7 +621,7 @@ function WaiterTables() {
                   <div>
                     <p className="text-lg font-black">Mesa {selectedTable.number}</p>
                     <p className="text-xs text-slate-500">
-                      {status === "free" ? "Libre" : status === "paying" ? "Pagando" : "Ocupada"} - {money(subtotal)}
+                      {status === "free" ? "Libre" : status === "paying" ? "Cuenta cerrada" : "Abierta"} - {money(subtotal)}
                     </p>
                   </div>
                   <button onClick={() => setSelectedTable(null)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-900">
@@ -664,7 +687,7 @@ function WaiterTables() {
 
                     {status === "paying" && (
                       <div className="p-4 text-sm text-slate-500">
-                        Mesa en estado pagando. Podes volver a abrirla para agregar productos o cobrar.
+                        Cuenta cerrada. Podes reabrir la mesa si el cliente pide algo mas, o cobrar para liberar la mesa.
                       </div>
                     )}
 
@@ -709,12 +732,23 @@ function WaiterTables() {
                           </button>
                           <button
                             onClick={sendToKds}
-                            disabled={(!confirmedItems.length && !pendingCart.length) || saving}
+                            disabled={!pendingCart.length || saving}
                             className="rounded-xl bg-sky-600 px-3 py-4 text-sm font-black disabled:opacity-40"
                           >
-                            Cocina
+                            Comandar
                           </button>
                         </div>
+                      )}
+
+                      {status === "open" && confirmedItems.length > 0 && pendingCart.length === 0 && (
+                        <button
+                          onClick={closeTable}
+                          disabled={saving}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-4 text-sm font-black text-slate-950 disabled:opacity-40"
+                        >
+                          <FileText size={16} />
+                          Cerrar mesa y cobrar
+                        </button>
                       )}
 
                       {status === "paying" && (
@@ -781,5 +815,14 @@ function WaiterTables() {
         </div>
       )}
     </section>
+  );
+}
+
+function StatusLegend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="hidden items-center gap-1.5 rounded-full border border-slate-800 px-2 py-1 text-[10px] font-black uppercase text-slate-500 sm:flex">
+      <i className={`h-2 w-2 rounded-full ${color}`} />
+      {label}
+    </span>
   );
 }
