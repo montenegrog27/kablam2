@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   User,
@@ -8,8 +7,6 @@ import {
   MapPin,
   LogOut,
   ChevronLeft,
-  Menu,
-  X,
 } from "lucide-react";
 import { Branding } from "@/types/menu";
 
@@ -26,7 +23,6 @@ export default function AccountNavbar({
 }: AccountNavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navigation = [
     {
@@ -111,60 +107,13 @@ export default function AccountNavbar({
             </button>
           </div>
 
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="border border-[#FF1A1A] p-2 text-white md:hidden"
-            aria-label="Abrir menu"
-          >
-            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
-      </nav>
-
-      {mobileMenuOpen && (
-        <div className="border-b border-[#FF1A1A] bg-black text-white md:hidden">
-          <div className="space-y-3 px-4 py-3">
-            <div className="flex items-center gap-3 border border-[#FF1A1A] bg-black p-3">
-              <div className="flex h-10 w-10 items-center justify-center border border-[#FF1A1A] bg-black">
-                <User className="h-5 w-5 text-[#FF1A1A]" />
-              </div>
-              <div>
-                <div className="font-bold">{customerName || "Cliente"}</div>
-                <div className="text-xs uppercase text-[#A0A0A0]">Mi cuenta</div>
-              </div>
+          <div className="md:hidden">
+            <div className="rounded-full border border-[#FF1A1A] px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white">
+              {customerName || "Club"}
             </div>
-
-            <div className="space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <a
-                    key={item.name}
-                    href={item.href}
-                    className={`flex items-center gap-3 border border-[#FF1A1A] px-3 py-3 text-sm font-bold uppercase transition duration-200 ${
-                      item.current
-                        ? "bg-[#FF1A1A] text-white"
-                        : "text-[#A0A0A0] hover:bg-[#FF1A1A] hover:text-white"
-                    }`}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Icon size={18} />
-                    {item.name}
-                  </a>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="flex w-full items-center gap-3 border border-[#FF1A1A] px-3 py-3 text-sm font-bold uppercase text-[#A0A0A0] transition duration-200 hover:bg-[#FF1A1A] hover:text-white"
-            >
-              <LogOut size={18} />
-              Cerrar sesion
-            </button>
           </div>
         </div>
-      )}
+      </nav>
     </>
   );
 }

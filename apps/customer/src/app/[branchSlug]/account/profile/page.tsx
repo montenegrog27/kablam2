@@ -6,13 +6,16 @@ import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
+  ArrowRight,
   Camera,
+  Crown,
   Gift,
   Home,
   Loader2,
   LogOut,
   Mail,
   MapPin,
+  Menu,
   Package,
   Phone,
   Save,
@@ -20,6 +23,7 @@ import {
   ShoppingBag,
   Trophy,
   User,
+  X,
 } from "lucide-react";
 import ProdeProfile from "@/app/components/ProdeProfile";
 import { useAuth } from "@/hooks/useAuth";
@@ -65,7 +69,7 @@ const SOCIAL_STATUSES = [
   { name: "JOINED", minOrders: 0 },
   { name: "CREW", minOrders: 5 },
   { name: "SOCIAL CLUB", minOrders: 15 },
-  { name: "BLACKLIST", minOrders: 30 },
+  { name: "BLACK", minOrders: 30 },
   { name: "FOUNDER", minOrders: 60 },
 ] as const;
 
@@ -161,6 +165,7 @@ export default function ProfilePage() {
   const [message, setMessage] = useState("");
   const [editingDetails, setEditingDetails] = useState(false);
   const [section, setSection] = useState<ProfileSection>("club");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unlockStatus, setUnlockStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -363,11 +368,11 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <header className="sticky top-0 z-30 bg-[#E10600]/95 px-3 py-3 text-white">
+      <header className="sticky top-0 z-30 border-b border-black/10 bg-[#E10600]/95 px-3 py-3 text-white backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <button
             onClick={() => router.push(`/${branchSlug}/order`)}
-            className="flex items-center gap-2 rounded-full bg-black px-4 py-2.5 text-left text-[10px] font-black uppercase text-white transition duration-200 hover:bg-white hover:text-black"
+            className="flex h-11 items-center gap-2 rounded-full bg-black px-4 text-left text-[10px] font-black uppercase text-white transition duration-200 hover:bg-white hover:text-black"
           >
             <Home size={15} />
             Menu
@@ -381,12 +386,17 @@ export default function ProfilePage() {
             onChange={(event) => uploadAvatar(event.target.files?.[0])}
           />
 
-          <nav className="grid flex-1 grid-cols-4 gap-1 rounded-full bg-black p-1 sm:max-w-xl">
-            <ProfileNavButton active={section === "club"} icon={ShieldCheck} label="Club" onClick={() => setSection("club")} />
-            <ProfileNavButton active={section === "pedidos"} icon={ShoppingBag} label="Pedidos" onClick={() => setSection("pedidos")} />
-            <ProfileNavButton active={section === "datos"} icon={User} label="Datos" showDot={profileIsIncomplete} onClick={() => setSection("datos")} />
-            <ProfileNavButton active={section === "prode"} icon={Trophy} label="Prode" onClick={() => setSection("prode")} />
-          </nav>
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="profile-sidebar-trigger flex h-11 flex-1 items-center justify-between rounded-full bg-black px-4 text-left sm:max-w-sm"
+            aria-label="Abrir navegacion del perfil"
+          >
+            <span>
+              <span className="block text-[9px] font-black uppercase tracking-[0.22em] opacity-45">Mordisco Club</span>
+              <span className="block text-xs font-black uppercase">{profile.name || membership.current.name}</span>
+            </span>
+            <Menu size={18} />
+          </button>
 
           <button
             onClick={async () => {
@@ -401,6 +411,17 @@ export default function ProfilePage() {
         </div>
       </header>
 
+      <ProfileMobileSidebar
+        open={sidebarOpen}
+        section={section}
+        setSection={setSection}
+        onClose={() => setSidebarOpen(false)}
+        profile={profile}
+        membership={membership}
+        profileIsIncomplete={profileIsIncomplete}
+        branchSlug={branchSlug}
+      />
+
       <main className="mx-auto min-h-screen max-w-7xl px-4 pb-12 pt-5 sm:px-7 lg:px-10 lg:pt-8">
           {profileIsIncomplete && (
             <div className="mb-5 rounded-3xl bg-white px-5 py-4 text-sm font-black uppercase text-black">
@@ -412,7 +433,7 @@ export default function ProfilePage() {
           )}
 
           {message && (
-            <div className="mb-5 rounded-3xl bg-white px-5 py-4 text-center text-sm font-black uppercase text-black">
+            <div className="mb-5 rounded-3xl bg-black px-5 py-4 text-center text-sm font-black uppercase text-white">
               {message}
             </div>
           )}
@@ -425,6 +446,7 @@ export default function ProfilePage() {
               onAvatarClick={() => fileInputRef.current?.click()}
               redeemingRewardId={redeemingRewardId}
               onRedeemReward={redeemReward}
+              branchSlug={branchSlug}
             />
           )}
 
@@ -459,6 +481,150 @@ export default function ProfilePage() {
   );
 }
 
+function ProfileMobileSidebar({
+  open,
+  section,
+  setSection,
+  onClose,
+  profile,
+  membership,
+  profileIsIncomplete,
+  branchSlug,
+}: {
+  open: boolean;
+  section: ProfileSection;
+  setSection: Dispatch<SetStateAction<ProfileSection>>;
+  onClose: () => void;
+  profile: UserProfile;
+  membership: ReturnType<typeof getMembershipStatus>;
+  profileIsIncomplete: boolean;
+  branchSlug: string;
+}) {
+  const navItems: Array<{ id: ProfileSection; label: string; kicker: string; icon: LucideIcon; description: string; tone?: "gold" }> = [
+    { id: "club", label: "Club", kicker: "Estatus", icon: ShieldCheck, description: membership.current.name },
+    { id: "pedidos", label: "Pedidos", kicker: "Historial", icon: ShoppingBag, description: `${profile.totalOrders} pedidos` },
+    { id: "datos", label: "Datos", kicker: "Identidad", icon: User, description: profileIsIncomplete ? "Completar perfil" : "Perfil listo" },
+    { id: "prode", label: "Prode", kicker: "Mordisco Games", icon: Trophy, description: "Ranking y jugadas", tone: "gold" },
+  ];
+
+  const selectSection = (next: ProfileSection) => {
+    setSection(next);
+    onClose();
+  };
+
+  return (
+    <>
+      <div
+        className={[
+          "fixed inset-0 z-40 bg-black/70 transition-opacity duration-200",
+          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
+        ].join(" ")}
+        onClick={onClose}
+      />
+
+      <aside
+        className={[
+          "profile-mobile-sidebar fixed inset-y-0 left-0 z-50 flex w-[86vw] max-w-[360px] flex-col bg-black transition-transform duration-200",
+          open ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+        aria-hidden={!open}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#E10600]">Mordisco</p>
+            <p className="text-xl font-black uppercase leading-none tracking-[-0.05em]">Social Club</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white transition duration-200 active:scale-95"
+            aria-label="Cerrar navegacion"
+          >
+            <X size={19} />
+          </button>
+        </div>
+
+        <div className="px-5 py-5">
+          <div className="rounded-[28px] border border-[#E10600] bg-[#E10600] p-4 text-white">
+            <div className="flex items-center gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black text-2xl font-black uppercase">
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt={profile.name || "Miembro"} className="h-full w-full object-cover" />
+                ) : (
+                  (profile.name || "M").slice(0, 1).toUpperCase()
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-black uppercase leading-none tracking-[-0.04em]">{profile.name || "Miembro Mordisco"}</p>
+                <p className="mt-1 text-[10px] font-black uppercase tracking-[0.2em] text-white/70">{membership.current.name}</p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl bg-black px-3 py-3">
+                <p className="text-lg font-black leading-none">{profile.points.toLocaleString("es-AR")}</p>
+                <p className="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-white/50">Puntos</p>
+              </div>
+              <div className="rounded-2xl bg-black px-3 py-3">
+                <p className="text-lg font-black leading-none">{membership.progress}%</p>
+                <p className="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-white/50">Progreso</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 space-y-2 overflow-y-auto px-4 pb-5">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = section === item.id;
+            const isGold = item.tone === "gold";
+            return (
+              <button
+                key={item.id}
+                onClick={() => selectSection(item.id)}
+                className={[
+                  "group relative flex w-full items-center gap-3 rounded-[26px] border px-4 py-4 text-left transition duration-200 active:scale-[0.99]",
+                  active
+                    ? isGold
+                      ? "border-[#D6A100] bg-[#D6A100] text-black"
+                      : "border-[#E10600] bg-white text-black"
+                    : "border-white/10 bg-white/[0.04] text-white hover:border-[#E10600] hover:bg-white/[0.08]",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
+                    active ? "bg-black text-white" : isGold ? "bg-[#D6A100] text-black" : "bg-[#E10600] text-white",
+                  ].join(" ")}
+                >
+                  <Icon size={20} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={["block text-[9px] font-black uppercase tracking-[0.2em]", active ? "text-black/55" : "text-white/40"].join(" ")}>{item.kicker}</span>
+                  <span className="mt-0.5 block text-lg font-black uppercase leading-none tracking-[-0.04em]">{item.label}</span>
+                  <span className={["mt-1 block truncate text-xs font-bold uppercase", active ? "text-black/60" : "text-white/45"].join(" ")}>{item.description}</span>
+                </span>
+                {item.id === "datos" && profileIsIncomplete && <span className="absolute right-4 top-4 h-2.5 w-2.5 rounded-full bg-[#E10600]" />}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-white/10 p-4">
+          <button
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              window.location.href = `/${branchSlug}`;
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-3 text-xs font-black uppercase text-white transition duration-200 hover:border-[#E10600] hover:bg-[#E10600]"
+          >
+            <LogOut size={16} />
+            Salir
+          </button>
+        </div>
+      </aside>
+    </>
+  );
+}
+
 function ClubSection({
   profile,
   membership,
@@ -466,6 +632,7 @@ function ClubSection({
   onAvatarClick,
   redeemingRewardId,
   onRedeemReward,
+  branchSlug,
 }: {
   profile: UserProfile;
   membership: ReturnType<typeof getMembershipStatus>;
@@ -473,160 +640,152 @@ function ClubSection({
   onAvatarClick: () => void;
   redeemingRewardId: string | null;
   onRedeemReward: (rewardId: string) => void;
+  branchSlug: string;
 }) {
   const nextStatus = membership.next?.name || "MAX STATUS";
+  const router = useRouter();
+  const requiredOrders = membership.next?.minOrders || profile.totalOrders;
+  const memberSince = profile.createdAt ? new Date(profile.createdAt).toLocaleDateString("es-AR", { month: "short", year: "numeric" }) : "Mordisco";
+  const memberId = (profile.id || profile.phone || "mordisco").replace(/\D/g, "").slice(-6).padStart(6, "0");
 
   return (
-    <div className="space-y-6">
-      <section className="py-4 text-white sm:py-8">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-stretch">
-          <div className="flex min-h-[58vh] flex-col justify-between gap-12 rounded-[36px] bg-black p-6 sm:p-9 lg:p-12">
+    <div className="space-y-5">
+      <section className="min-h-[calc(100dvh-96px)] rounded-[34px] bg-black p-5 text-white sm:p-8 lg:p-10">
+        <div className="flex min-h-[calc(100dvh-136px)] flex-col justify-between gap-8">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.38em] text-white/55">Mordisco membership</p>
-              <h1 className="mt-5 max-w-5xl text-[70px] font-black uppercase leading-[0.74] tracking-[-0.085em] text-white sm:text-[132px] lg:text-[176px]">
-                Social<br />Club
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/55">Mordisco Social Club</p>
+              <h1 className="mt-4 break-words text-[56px] font-black uppercase leading-[0.82] tracking-[-0.07em] text-white sm:text-[96px] lg:text-[118px]">
+                {membership.current.name}
               </h1>
             </div>
-
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.38em] text-white/55">Estatus actual</p>
-              <p className="mt-3 text-[54px] font-black uppercase leading-[0.8] tracking-[-0.075em] text-[#E10600] sm:text-[96px] lg:text-[118px]">
-                {membership.current.name}
-              </p>
-              <p className="mt-5 max-w-2xl text-base font-black uppercase leading-6 text-white/85 sm:text-xl">
-                {profile.totalOrders} pedidos historicos
-                {membership.next
-                  ? ` / faltan ${membership.missingOrders} para ${membership.next.name}`
-                  : " / rango maximo desbloqueado"}
-              </p>
+            <div className="rounded-full border border-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/70">
+              #{memberId}
             </div>
           </div>
 
-          <aside className="flex flex-col justify-between rounded-[36px] bg-white p-5 text-black sm:p-6">
+          <div className="grid gap-4 lg:grid-cols-[1fr_0.78fr] lg:items-end">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-black/45">Member card</p>
-              <div className="mt-5 flex items-start gap-4">
-              <button
-                onClick={onAvatarClick}
-                className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-[#E10600] text-3xl font-black uppercase text-white"
-              >
-                {profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt={profile.name || "Cliente"} className="h-full w-full object-cover" />
-                ) : (
-                  (profile.name || "M").slice(0, 1).toUpperCase()
-                )}
-                <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black py-1.5 text-[9px] font-black uppercase text-white">
-                  {uploadingAvatar ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-                  Foto
-                </span>
-              </button>
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-black/45">Member</p>
-                <p className="mt-2 text-2xl font-black uppercase leading-none tracking-[-0.05em]">{profile.name || "Miembro Mordisco"}</p>
-                <p className="mt-3 inline-flex rounded-full bg-black px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white">{membership.current.name}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/45">Puntos disponibles</p>
+              <div className="mt-2 flex items-end gap-3">
+                <p className="text-[76px] font-black leading-[0.82] tracking-[-0.08em] text-[#E10600] sm:text-[118px]">
+                  {profile.points.toLocaleString("es-AR")}
+                </p>
+                <p className="pb-2 text-2xl font-black uppercase tracking-[-0.05em] text-white sm:text-4xl">PTS</p>
               </div>
-              </div>
+              <p className="mt-4 text-sm font-bold uppercase leading-6 text-white/70">Disponibles para canjear por premios y beneficios del club.</p>
             </div>
 
-            <div className="mt-8 grid gap-2">
-              <StatBlock value={String(profile.totalOrders)} label="Pedidos" />
-              <StatBlock value={formatCurrency(profile.totalSpent)} label="Consumido" />
-              <StatBlock value={String(profile.rewardsRedeemed)} label="Canjes" />
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">Proximo nivel</p>
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-3xl font-black uppercase leading-none tracking-[-0.05em] text-white">{nextStatus}</p>
+                  <p className="mt-2 text-xs font-black uppercase leading-5 text-white/60">
+                    {membership.next ? `${profile.totalOrders} / ${requiredOrders} pedidos` : "Rango maximo desbloqueado"}
+                  </p>
+                </div>
+                <p className="text-4xl font-black tracking-[-0.06em] text-[#E10600]">{membership.progress}%</p>
+              </div>
+              <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/15">
+                <div className="h-full rounded-full bg-[#E10600]" style={{ width: `${membership.progress}%` }} />
+              </div>
+              <p className="mt-4 text-sm font-black uppercase leading-6 text-white">
+                {membership.next ? `Te faltan ${membership.missingOrders} pedidos para llegar a ${membership.next.name}.` : "Ya estas en el maximo estatus del club."}
+              </p>
             </div>
-          </aside>
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
-        <div className="rounded-[32px] bg-white p-5 text-black sm:p-7">
-          <SectionHeader kicker="Status map" title="Ruta de estatus" />
-          <div className="mt-7 grid gap-0">
+      <section className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
+        <MemberCard profile={profile} membership={membership} uploadingAvatar={uploadingAvatar} onAvatarClick={onAvatarClick} memberSince={memberSince} memberId={memberId} />
+
+        <div className="rounded-[30px] bg-black p-5 text-white sm:rounded-[32px] sm:p-7">
+          <SectionHeader kicker="" title="Ruta Mordisco" />
+          <div className="mt-6 grid gap-3">
             {SOCIAL_STATUSES.map((status, index) => (
-              <StatusStep
+              <PremiumStatusStep
                 key={status.name}
                 name={status.name}
+                minOrders={status.minOrders}
                 completed={index < membership.currentIndex}
                 active={index === membership.currentIndex}
               />
             ))}
           </div>
-
-          <div className="mt-8 rounded-[28px] bg-[#E10600] p-5 text-white sm:p-6">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-white/75">Proximo estatus</p>
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-4xl font-black uppercase tracking-[-0.05em] text-white">{nextStatus}</p>
-                <p className="mt-2 text-sm font-black uppercase text-white/75">
-                  {membership.next ? `${profile.totalOrders} / ${membership.next.minOrders} pedidos` : "Status maximo"}
-                </p>
-              </div>
-              <p className="text-5xl font-black uppercase tracking-[-0.05em] text-black">{membership.progress}%</p>
-            </div>
-            <div className="mt-5 grid grid-cols-12 gap-1">
-              {Array.from({ length: 12 }).map((_, index) => (
-                <span
-                  key={index}
-                  className={index < Math.round((membership.progress / 100) * 12) ? "h-5 rounded-full bg-black" : "h-5 rounded-full bg-white/35"}
-                />
-              ))}
-            </div>
-            <p className="mt-4 text-sm font-black uppercase leading-6 text-white">
-              {membership.next
-                ? `Te faltan ${membership.missingOrders} pedidos para entrar a ${membership.next.name}.`
-                : "Ya desbloqueaste el estatus mas alto del club."}
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-[32px] bg-black p-5 text-white sm:p-7">
-          <SectionHeader kicker="Puntos" title={`${profile.points} PTS`} />
-          <p className="mt-2 text-sm font-bold uppercase text-white/65">Disponibles para canjear.</p>
-
-          {profile.availableRedemptions.length > 0 && (
-            <div className="mt-6 rounded-3xl bg-white p-4 text-black">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-black/45">Canjes activos</p>
-              <div className="mt-3 space-y-2">
-                {profile.availableRedemptions.map((redemption) => (
-                  <div key={redemption.id} className="rounded-2xl bg-black p-3 text-white">
-                    <p className="text-sm font-black uppercase">{redemption.name}</p>
-                    {redemption.code && <p className="mt-1 text-lg font-black tracking-[0.12em] text-[#E10600]">{redemption.code}</p>}
-                    {redemption.expires_at && <p className="mt-1 text-[10px] font-bold uppercase text-white/50">Vence {formatDate(redemption.expires_at)}</p>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-6 grid gap-3">
-            {profile.rewardCatalog.length === 0 && (
-              <div className="rounded-3xl bg-white/10 p-5 text-sm font-bold uppercase leading-6 text-white/70">
-                Todavía no hay recompensas disponibles.
-              </div>
-            )}
-            {profile.rewardCatalog.map((reward) => (
-              <div key={reward.id} className="overflow-hidden rounded-3xl bg-white/10">
-                {reward.imageUrl && <img src={reward.imageUrl} alt={reward.name} className="h-28 w-full object-cover" />}
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xl font-black uppercase tracking-[-0.04em] text-white">{reward.name}</p>
-                      {reward.description && <p className="mt-1 text-xs font-bold uppercase leading-5 text-white/55">{reward.description}</p>}
-                    </div>
-                    <p className="shrink-0 text-sm font-black uppercase text-[#E10600]">{reward.pointsCost} pts</p>
-                  </div>
-                  <button
-                    onClick={() => onRedeemReward(reward.id)}
-                    disabled={!reward.canRedeem || redeemingRewardId === reward.id}
-                    className="mt-4 flex w-full items-center justify-center rounded-full bg-[#E10600] py-3 text-xs font-black uppercase text-white transition duration-200 hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35"
-                  >
-                    {redeemingRewardId === reward.id ? "Canjeando..." : reward.canRedeem ? "Canjear" : "Faltan puntos"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
+
+      <section className="grid gap-3 sm:grid-cols-3 text-white">
+        <BenefitCard icon={ShoppingBag} title="Cada pedido suma" text="Volver a comprar te acerca al proximo estatus." />
+        <BenefitCard icon={Gift} title="Canjea recompensas" text="Tus puntos tienen valor real dentro del club." />
+        <BenefitCard icon={Crown} title="Beneficios exclusivos" text="Los niveles altos desbloquean acceso preferencial." />
+      </section>
+
+      <section className="rounded-[30px] bg-black p-5 text-white sm:rounded-[32px] sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <SectionHeader kicker="Premios" title="Recompensas" />
+            <p className="mt-2 text-sm font-bold uppercase text-white/65">Premios para convertir puntos en experiencia.</p>
+          </div>
+          {profile.rewardCatalog.length > 0 && (
+            <button
+              onClick={() => router.push(`/${branchSlug}/account/rewards`)}
+              className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-3 py-2 text-[10px] font-black uppercase text-black transition hover:bg-[#E10600] hover:text-white"
+            >
+              Ver todos <ArrowRight size={13} />
+            </button>
+          )}
+        </div>
+
+        {profile.availableRedemptions.length > 0 && (
+          <div className="mt-6 rounded-3xl bg-black/20 p-4 text-white">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-white/45">Canjes activos</p>
+            <div className="mt-3 space-y-2">
+              {profile.availableRedemptions.map((redemption) => (
+                <div key={redemption.id} className="rounded-2xl bg-black p-3 text-white">
+                  <p className="text-sm font-black uppercase">{redemption.name}</p>
+                  {redemption.code && <p className="mt-1 text-lg font-black tracking-[0.12em] text-[#E10600]">{redemption.code}</p>}
+                  {redemption.expires_at && <p className="mt-1 text-[10px] font-bold uppercase text-white/50">Vence {formatDate(redemption.expires_at)}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6">
+            {profile.rewardCatalog.length === 0 && (
+              <div className="rounded-3xl bg-white/10 p-5 text-sm font-bold uppercase leading-6 text-white/70">
+                Todavia no hay recompensas disponibles.
+              </div>
+            )}
+            {profile.rewardCatalog.length > 0 && (
+              <div className="-mx-5 flex snap-x gap-3 overflow-x-auto px-5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden  text-white">
+                {profile.rewardCatalog.slice(0, 8).map((reward, index) => (
+                  <RewardCard
+                    key={reward.id}
+                    reward={reward}
+                    redeeming={redeemingRewardId === reward.id}
+                    onRedeem={() => onRedeemReward(reward.id)}
+                    badge={getRewardBadge(reward, index)}
+                    compact
+                  />
+                ))}
+              </div>
+            )}
+        </div>
+      </section>
+
+      {/* <section className="rounded-[30px] bg-white p-5 text-white sm:rounded-[32px] sm:p-7">
+        <SectionHeader kicker="Exclusive access" title="Beneficios por nivel" />
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-white">
+          <ExclusiveBenefit level="CREW" text="Acceso anticipado a premios seleccionados." unlocked={membership.currentIndex >= 1} />
+          <ExclusiveBenefit level="SOCIAL CLUB" text="Beneficios especiales en fechas del club." unlocked={membership.currentIndex >= 2} />
+          <ExclusiveBenefit level="BLACK" text="Experiencias privadas y recompensas premium." unlocked={membership.currentIndex >= 3} />
+          <ExclusiveBenefit level="FOUNDER" text="Estatus maximo, acceso fundador y trato preferencial." unlocked={membership.currentIndex >= 4} />
+        </div>
+      </section> */}
     </div>
   );
 }
@@ -764,46 +923,177 @@ function DetailsSection({
 function SectionHeader({ kicker, title }: { kicker: string; title: string }) {
   return (
     <header>
-      <p className="text-xs font-black uppercase tracking-[0.32em] opacity-65">{kicker}</p>
-      <h2 className="mt-2 text-4xl font-black uppercase leading-[0.9] tracking-[-0.055em] sm:text-6xl">
+      <p className="text-[10px] font-black uppercase tracking-[0.22em] opacity-65 sm:text-xs sm:tracking-[0.32em]">{kicker}</p>
+      <h2 className="mt-2 break-words text-[34px] font-black uppercase leading-[0.92] tracking-[-0.045em] sm:text-6xl sm:tracking-[-0.055em]">
         {title}
       </h2>
     </header>
   );
 }
 
-function ProfileNavButton({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-  showDot,
+function MemberCard({
+  profile,
+  membership,
+  uploadingAvatar,
+  onAvatarClick,
+  memberSince,
+  memberId,
 }: {
-  active: boolean;
-  icon: LucideIcon;
-  label: string;
-  onClick: () => void;
-  showDot?: boolean;
+  profile: UserProfile;
+  membership: ReturnType<typeof getMembershipStatus>;
+  uploadingAvatar: boolean;
+  onAvatarClick: () => void;
+  memberSince: string;
+  memberId: string;
 }) {
-  const isProde = label.toLowerCase() === "prode";
   return (
-    <button
-      onClick={onClick}
-      className={[
-        "relative flex min-h-12 flex-col items-center justify-center gap-1 rounded-full px-2 text-[10px] font-black uppercase transition duration-200 lg:flex-row lg:justify-center lg:gap-2 lg:px-3 lg:text-xs",
-        active
-          ? isProde
-            ? "bg-[#D6A100] text-black"
-            : "bg-white text-black"
-          : isProde
-            ? "bg-black text-[#D6A100] hover:bg-[#D6A100] hover:text-black"
-            : "bg-black text-white/75 hover:bg-white hover:text-black",
-      ].join(" ")}
-    >
-      <Icon size={17} />
-      <span className="truncate">{label}</span>
-      {showDot && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#E10600]" />}
-    </button>
+    <aside className="relative overflow-hidden rounded-[32px] bg-black p-5 text-white sm:p-7">
+      <div className="absolute right-[-22%] top-[-18%] h-56 w-56 rounded-full border border-white/10" />
+      <div className="absolute bottom-[-24%] left-[-20%] h-56 w-56 rounded-full border border-[#E10600]/35" />
+      <div className="relative z-10">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/55">Member card</p>
+          <p className="rounded-full border border-white/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/70">#{memberId}</p>
+        </div>
+
+        <button
+          onClick={onAvatarClick}
+          className="relative mt-8 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[#E10600] text-3xl font-black uppercase text-white"
+        >
+          {profile.avatarUrl ? (
+            <img src={profile.avatarUrl} alt={profile.name || "Cliente"} className="h-full w-full object-cover" />
+          ) : (
+            (profile.name || "M").slice(0, 1).toUpperCase()
+          )}
+          <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/85 py-1 text-[8px] font-black uppercase text-white">
+            {uploadingAvatar ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
+          </span>
+        </button>
+
+        <p className="mt-6 break-words text-3xl font-black uppercase leading-[0.9] tracking-[-0.055em] text-white">{profile.name || "Miembro Mordisco"}</p>
+        <p className="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-black">{membership.current.name}</p>
+
+        <div className="mt-10 grid grid-cols-2 gap-3 border-t border-white/10 pt-5">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/45">Member since</p>
+            <p className="mt-1 text-sm font-black uppercase text-white">{memberSince}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/45">Status</p>
+            <p className="mt-1 text-sm font-black uppercase text-[#E10600]">{membership.current.name}</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function PremiumStatusStep({
+  name,
+  minOrders,
+  completed,
+  active,
+}: {
+  name: string;
+  minOrders: number;
+  completed: boolean;
+  active: boolean;
+}) {
+  const state = active ? "actual" : completed ? "desbloqueado" : "bloqueado";
+  return (
+    <div className={[
+      "rounded-3xl border p-4 transition",
+      active ? "border-[#E10600] bg-[#E10600] text-white" : completed ? "border-black bg-black text-white" : "border-black/10 bg-white/10 text-white",
+    ].join(" ")}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xl font-black uppercase leading-none tracking-[-0.04em]">{name}</p>
+          <p className={["mt-2 text-[10px] font-black uppercase tracking-[0.18em]", active || completed ? "text-white/65" : "text-white/45"].join(" ")}>
+            {minOrders} pedidos requeridos
+          </p>
+        </div>
+        <span className={["rounded-full px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.14em]", active || completed ? "bg-white text-black" : "bg-black/10 text-white/45"].join(" ")}>
+          {state}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function BenefitCard({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) {
+  return (
+    <article className="rounded-[28px] bg-black p-5 text-white">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E10600] text-white">
+        <Icon size={22} />
+      </div>
+      <p className="mt-5 text-xl font-black uppercase leading-none tracking-[-0.04em]">{title}</p>
+      <p className="mt-3 text-sm font-bold uppercase leading-6 text-white/55">{text}</p>
+    </article>
+  );
+}
+
+function ExclusiveBenefit({ level, text, unlocked }: { level: string; text: string; unlocked: boolean }) {
+  return (
+    <article className={["rounded-3xl border p-4", unlocked ? "border-black bg-black text-white" : "border-black/10 bg-black/[0.04] text-white"].join(" ")}>
+      <p className={["text-[10px] font-black uppercase tracking-[0.2em]", unlocked ? "text-[#E10600]" : "text-white/40"].join(" ")}>
+        {unlocked ? "Disponible" : "Bloqueado"}
+      </p>
+      <p className="mt-3 text-2xl font-black uppercase leading-none tracking-[-0.05em]">{level}</p>
+      <p className={["mt-3 text-xs font-bold uppercase leading-5", unlocked ? "text-white/65" : "text-white/55"].join(" ")}>{text}</p>
+    </article>
+  );
+}
+
+function getRewardBadge(reward: LoyaltyReward, index: number) {
+  if (index === 0) return "Popular";
+  if (reward.pointsCost >= 1500) return "Exclusivo";
+  if (index <= 2) return "Nuevo";
+  return null;
+}
+
+function RewardCard({
+  reward,
+  redeeming,
+  onRedeem,
+  compact,
+  badge,
+}: {
+  reward: LoyaltyReward;
+  redeeming: boolean;
+  onRedeem: () => void;
+  compact?: boolean;
+  badge?: string | null;
+}) {
+  return (
+    <article className={[
+      "overflow-hidden rounded-3xl bg-white/10 text-white",
+      compact ? "w-[76vw] max-w-[280px] shrink-0 snap-start sm:w-[260px]" : "w-full",
+    ].join(" ")}>
+      {reward.imageUrl ? (
+        <img src={reward.imageUrl} alt={reward.name} className={compact ? "h-28 w-full object-cover" : "h-32 w-full object-cover"} />
+      ) : (
+        <div className={compact ? "flex h-28 items-center justify-center bg-[#E10600] text-white" : "flex h-32 items-center justify-center bg-[#E10600] text-white"}>
+          <Gift size={34} />
+        </div>
+      )}
+      <div className="p-4">
+        {badge && <p className="mb-3 inline-flex rounded-full bg-[#E10600] px-3 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-white">{badge}</p>}
+        <div className="flex min-h-[84px] flex-col justify-between">
+          <div>
+            <p className="line-clamp-2 text-lg font-black uppercase leading-none tracking-[-0.04em] text-white">{reward.name}</p>
+            {reward.description && <p className="mt-2 line-clamp-2 text-[11px] font-bold uppercase leading-4 text-white/55">{reward.description}</p>}
+          </div>
+          <p className="mt-3 text-sm font-black uppercase text-[#E10600]">{reward.pointsCost} pts</p>
+        </div>
+        <button
+          onClick={onRedeem}
+          disabled={!reward.canRedeem || redeeming}
+          className="mt-4 flex w-full items-center justify-center rounded-full bg-black py-3 text-xs font-black uppercase text-white transition duration-200 hover:bg-[#E10600] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35"
+        >
+          {redeeming ? "Canjeando..." : reward.canRedeem ? "Canjear" : "Faltan puntos"}
+        </button>
+      </div>
+    </article>
   );
 }
 
