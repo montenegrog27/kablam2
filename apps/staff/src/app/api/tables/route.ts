@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isWaiterRole } from "@/lib/staffData";
+import { canManageTables } from "@/lib/staffData";
 import { getStaffSession } from "@/lib/staffSession";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -30,11 +30,11 @@ function normalizeCart(items: unknown): CartItem[] {
     .filter((item) => item.product_id && item.variant_id && item.qty > 0);
 }
 
-async function requireWaiter() {
+async function requireTableOperator() {
   const session = await getStaffSession();
   if (!session) return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
-  if (!isWaiterRole(session.role)) {
-    return { error: NextResponse.json({ error: "waiter_role_required" }, { status: 403 }) };
+  if (!canManageTables(session.role)) {
+    return { error: NextResponse.json({ error: "table_operator_role_required" }, { status: 403 }) };
   }
   return { session };
 }
@@ -143,14 +143,13 @@ async function insertItems(orderId: string, items: CartItem[]) {
       unit_price: item.price,
       total: item.price * item.qty,
       item_type: "product",
-      notes: item.note || null,
     })),
   );
   if (error) throw new Error(error.message);
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireWaiter();
+  const auth = await requireTableOperator();
   if (auth.error) return auth.error;
   const staffSession = auth.session!;
   const supabase = supabaseAdmin();
@@ -205,123 +204,130 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireWaiter();
-  if (auth.error) return auth.error;
-  const staffSession = auth.session!;
-  const body = await req.json();
-  const action = String(body.action || "");
-  const tableId = String(body.tableId || "");
-  const supabase = supabaseAdmin();
+  try {
+    const auth = await requireTableOperator();
+    if (auth.error) return auth.error;
+    const staffSession = auth.session!;
+    const body = await req.json();
+    const action = String(body.action || "");
+    const tableId = String(body.tableId || "");
+    const supabase = supabaseAdmin();
 
-  if (!tableId) return NextResponse.json({ error: "table_required" }, { status: 400 });
+    if (!tableId) return NextResponse.json({ error: "table_required" }, { status: 400 });
 
-  const { table, tableSession } = await getSessionForTable(tableId, staffSession.branchId);
-  if (!table) return NextResponse.json({ error: "table_not_found" }, { status: 404 });
+    const { table, tableSession } = await getSessionForTable(tableId, staffSession.branchId);
+    if (!table) return NextResponse.json({ error: "table_not_found" }, { status: 404 });
 
-  if (action === "start_session") {
-    if (tableSession) return NextResponse.json({ tableSession, status: "already_open" });
+    if (action === "start_session") {
+      if (tableSession) return NextResponse.json({ tableSession, status: "already_open" });
 
-    const { data, error } = await supabase
-      .from("table_sessions")
-      .insert({
-        table_id: tableId,
-        status: "open",
-        customer_count: Math.max(1, Math.floor(Number(body.customerCount || 1))),
-        total: 0,
-      })
-      .select("*")
-      .single();
+      const { data, error } = await supabase
+        .from("table_sessions")
+        .insert({
+          table_id: tableId,
+          status: "open",
+          customer_count: Math.max(1, Math.floor(Number(body.customerCount || 1))),
+          total: 0,
+        })
+        .select("*")
+        .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ tableSession: data, status: "opened" });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ tableSession: data, status: "opened" });
+    }
+
+    if (!tableSession) return NextResponse.json({ error: "table_session_not_found" }, { status: 404 });
+
+    if (action === "accept_items") {
+      const items = normalizeCart(body.items);
+      if (!items.length) return NextResponse.json({ error: "items_required" }, { status: 400 });
+      const orderId = await ensureOrder(tableSession, table, staffSession);
+      await insertItems(orderId, items);
+      const addedTotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const total = money(tableSession.total) + addedTotal;
+      await supabase.from("table_sessions").update({ order_id: orderId, total }).eq("id", tableSession.id);
+      await supabase.from("orders").update({ subtotal: total, total }).eq("id", orderId);
+      return NextResponse.json({ orderId, total, status: "items_accepted" });
+    }
+
+    if (action === "send_order") {
+      const items = normalizeCart(body.items);
+      if (!items.length) return NextResponse.json({ error: "items_required" }, { status: 400 });
+      const orderId = await ensureOrder(tableSession, table, staffSession);
+      await insertItems(orderId, items);
+      const addedTotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const total = money(tableSession.total) + addedTotal;
+      await supabase
+        .from("orders")
+        .update({
+          status: "confirmed",
+          subtotal: total,
+          total,
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq("id", orderId);
+      await supabase.from("table_sessions").update({ status: "open", order_id: orderId, total }).eq("id", tableSession.id);
+      return NextResponse.json({ orderId, total, status: "sent_to_kitchen" });
+    }
+
+    if (action === "close_table") {
+      if (!tableSession.order_id) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
+      const total = money(tableSession.total);
+      await supabase.from("table_sessions").update({ status: "paying", total }).eq("id", tableSession.id);
+      await supabase
+        .from("orders")
+        .update({
+          status: "confirmed",
+          subtotal: total,
+          total,
+        })
+        .eq("id", tableSession.order_id);
+      return NextResponse.json({ orderId: tableSession.order_id, total, status: "table_closed" });
+    }
+
+    if (action === "reopen_table") {
+      await supabase.from("table_sessions").update({ status: "open" }).eq("id", tableSession.id);
+      return NextResponse.json({ status: "reopened" });
+    }
+
+    if (action === "pay_table") {
+      const paymentMethodId = String(body.paymentMethodId || "");
+      const paymentRef = String(body.paymentRef || "");
+      if (!paymentMethodId) return NextResponse.json({ error: "payment_method_required" }, { status: 400 });
+      if (!tableSession.order_id) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
+
+      const total = money(body.total) || money(tableSession.total);
+      await supabase
+        .from("orders")
+        .update({
+          status: "delivered",
+          subtotal: total,
+          total,
+          paid_amount: total,
+          is_paid: true,
+        })
+        .eq("id", tableSession.order_id);
+
+      await supabase.from("order_payments").insert({
+        order_id: tableSession.order_id,
+        payment_method_id: paymentMethodId,
+        amount: total,
+        reference: paymentRef || null,
+      });
+
+      await supabase
+        .from("table_sessions")
+        .update({ status: "closed", closed_at: new Date().toISOString() })
+        .eq("id", tableSession.id);
+
+      return NextResponse.json({ status: "paid" });
+    }
+
+    return NextResponse.json({ error: "unknown_action" }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "table_action_failed", details: error instanceof Error ? error.message : "unknown_error" },
+      { status: 500 },
+    );
   }
-
-  if (!tableSession) return NextResponse.json({ error: "table_session_not_found" }, { status: 404 });
-
-  if (action === "accept_items") {
-    const items = normalizeCart(body.items);
-    if (!items.length) return NextResponse.json({ error: "items_required" }, { status: 400 });
-    const orderId = await ensureOrder(tableSession, table, staffSession);
-    await insertItems(orderId, items);
-    const addedTotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const total = money(tableSession.total) + addedTotal;
-    await supabase.from("table_sessions").update({ order_id: orderId, total }).eq("id", tableSession.id);
-    await supabase.from("orders").update({ subtotal: total, total }).eq("id", orderId);
-    return NextResponse.json({ orderId, total, status: "items_accepted" });
-  }
-
-  if (action === "send_order") {
-    const items = normalizeCart(body.items);
-    if (!items.length) return NextResponse.json({ error: "items_required" }, { status: 400 });
-    const orderId = await ensureOrder(tableSession, table, staffSession);
-    await insertItems(orderId, items);
-    const addedTotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const total = money(tableSession.total) + addedTotal;
-    await supabase
-      .from("orders")
-      .update({
-        status: "confirmed",
-        subtotal: total,
-        total,
-        confirmed_at: new Date().toISOString(),
-      })
-      .eq("id", orderId);
-    await supabase.from("table_sessions").update({ status: "open", order_id: orderId, total }).eq("id", tableSession.id);
-    return NextResponse.json({ orderId, total, status: "sent_to_kitchen" });
-  }
-
-  if (action === "close_table") {
-    if (!tableSession.order_id) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
-    const total = money(tableSession.total);
-    await supabase.from("table_sessions").update({ status: "paying", total }).eq("id", tableSession.id);
-    await supabase
-      .from("orders")
-      .update({
-        status: "confirmed",
-        subtotal: total,
-        total,
-      })
-      .eq("id", tableSession.order_id);
-    return NextResponse.json({ orderId: tableSession.order_id, total, status: "table_closed" });
-  }
-
-  if (action === "reopen_table") {
-    await supabase.from("table_sessions").update({ status: "open" }).eq("id", tableSession.id);
-    return NextResponse.json({ status: "reopened" });
-  }
-
-  if (action === "pay_table") {
-    const paymentMethodId = String(body.paymentMethodId || "");
-    const paymentRef = String(body.paymentRef || "");
-    if (!paymentMethodId) return NextResponse.json({ error: "payment_method_required" }, { status: 400 });
-    if (!tableSession.order_id) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
-
-    const total = money(body.total) || money(tableSession.total);
-    await supabase
-      .from("orders")
-      .update({
-        status: "delivered",
-        subtotal: total,
-        total,
-        paid_amount: total,
-        is_paid: true,
-      })
-      .eq("id", tableSession.order_id);
-
-    await supabase.from("order_payments").insert({
-      order_id: tableSession.order_id,
-      payment_method_id: paymentMethodId,
-      amount: total,
-      reference: paymentRef || null,
-    });
-
-    await supabase
-      .from("table_sessions")
-      .update({ status: "closed", closed_at: new Date().toISOString() })
-      .eq("id", tableSession.id);
-
-    return NextResponse.json({ status: "paid" });
-  }
-
-  return NextResponse.json({ error: "unknown_action" }, { status: 400 });
 }

@@ -12,6 +12,14 @@ export function isWaiterRole(role: unknown) {
   return String(role || "").trim().toLowerCase() === "mozo";
 }
 
+export function isAdminRole(role: unknown) {
+  return String(role || "").trim().toLowerCase() === "admin";
+}
+
+export function canManageTables(role: unknown) {
+  return isWaiterRole(role) || isAdminRole(role);
+}
+
 export async function getLatestAttendance(employeeId: string, tenantId: string) {
   const supabase = supabaseAdmin();
   const { data } = await supabase
