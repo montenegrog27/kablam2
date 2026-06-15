@@ -12,6 +12,12 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@kablam/supabase"],
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+      { protocol: "https", hostname: "res.cloudinary.com", pathname: "/**" },
+    ],
+  },
   turbopack: {
     root: path.join(__dirname, "../../"),
     resolveAlias: {

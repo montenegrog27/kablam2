@@ -257,7 +257,9 @@ export default function BranchesPage() {
       const fileName = `${crypto.randomUUID()}${fileExt}`;
       const { error: uploadError } = await supabase.storage
         .from("fonts")
-        .upload(fileName, file);
+        .upload(fileName, file, {
+          cacheControl: "31536000",
+        });
 
       if (uploadError) throw uploadError;
 

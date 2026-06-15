@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import type {
   Product,
@@ -764,10 +765,13 @@ export default function ProfessionalMenu({
         <div className="max-w-6xl mx-auto px-4 text-center space-y-4">
           {branding?.logo_url && (
             <div className="flex justify-center">
-              <img
+              <Image
                 src={branding.logo_url}
                 alt="Logo"
-                className="h-12 object-contain"
+                width={160}
+                height={48}
+                className="h-12 w-auto object-contain"
+                loading="lazy"
               />
             </div>
           )}
@@ -831,12 +835,15 @@ function PromotionCard({
     >
       <div className="relative h-36 md:h-44 overflow-hidden">
         {image ? (
-          <img
+          <Image
             src={image}
             alt={promotion.name}
+            fill
+            sizes="(max-width: 768px) 65vw, (max-width: 1024px) 33vw, 25vw"
             className={`w-full h-full object-cover transition-transform duration-500 ${
               isHovered ? "scale-110" : ""
             }`}
+            loading="lazy"
           />
         ) : (
           <div
@@ -982,7 +989,7 @@ function PromotionProductsModal({
                 >
                   <div className="h-[72px] w-[72px] overflow-hidden rounded-xl" style={{ backgroundColor: `${brandColor}18` }}>
                     {image ? (
-                      <img src={image} alt={product.name} className="h-full w-full object-cover" />
+                      <Image src={image} alt={product.name} fill sizes="72px" className="h-full w-full object-cover" loading="lazy" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-2xl" style={{ color: brandColor }}>
                         %
@@ -1034,6 +1041,7 @@ function FeaturedCard({
   disabled?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
+  const image = getImage(product);
 
   return (
     <div
@@ -1049,13 +1057,16 @@ function FeaturedCard({
     >
       {/* Image */}
       <div className="relative h-36 md:h-44 overflow-hidden">
-        {getImage(product) ? (
-          <img
-            src={getImage(product)}
+        {image ? (
+          <Image
+            src={image}
             alt={product.name}
+            fill
+            sizes="(max-width: 768px) 65vw, (max-width: 1024px) 33vw, 25vw"
             className={`w-full h-full object-cover transition-transform duration-500 ${
               isHovered ? "scale-110" : ""
             }`}
+            loading="lazy"
           />
         ) : (
           <div
@@ -1154,10 +1165,13 @@ function NormalProductCard({
       {/* Image - 2 cols */}
       <div className="col-span-2 aspect-square rounded-lg overflow-hidden relative">
         {image ? (
-          <img
+          <Image
             src={image}
             alt={product.name}
+            fill
+            sizes="64px"
             className="w-full h-full object-cover"
+            loading="lazy"
           />
         ) : (
           <div

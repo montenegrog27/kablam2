@@ -1,0 +1,183 @@
+{
+  "generatedAt": "2026-06-15T20:41:02.649Z",
+  "over500KB": [
+    {
+      "bucket": "customer-avatars",
+      "path": "3e3b5ec7-376e-4f5d-9735-c437a8849e95/0b9b0802-ea3b-4d7e-aadd-3b8ae5af4044/avatar.jpeg",
+      "size": 2837473,
+      "mb": 2.71,
+      "mimetype": "image/jpeg",
+      "updated_at": "2026-06-13T01:37:17.846Z"
+    },
+    {
+      "bucket": "product-images",
+      "path": "combo-778853b9-4c74-4202-a39c-6cf4b3eda38d.png",
+      "size": 1789133,
+      "mb": 1.71,
+      "mimetype": "image/png",
+      "updated_at": "2026-06-11T23:11:37.653Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780707857528-31619fcd-8a99-44cc-91da-8697477e0c53-video.mp4",
+      "size": 1619699,
+      "mb": 1.54,
+      "mimetype": "video/mp4",
+      "updated_at": "2026-06-06T01:04:17.694Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1781138386190-d1b31ed6-0629-4c4e-a75e-dc37a5e5109c-Transferencia1781138376953.pdf",
+      "size": 1075401,
+      "mb": 1.03,
+      "mimetype": "application/pdf",
+      "updated_at": "2026-06-11T00:39:46.607Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780877803496-ae93c579-8210-417d-bf6a-abd5ea52eb0a-Transferencia1780877790861.pdf",
+      "size": 1075348,
+      "mb": 1.03,
+      "mimetype": "application/pdf",
+      "updated_at": "2026-06-08T00:16:43.880Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780704742271-12d4c259-6a3c-4326-91ca-834c697b94c0-Transferencia1780704733902.pdf",
+      "size": 1075155,
+      "mb": 1.03,
+      "mimetype": "application/pdf",
+      "updated_at": "2026-06-06T00:12:22.634Z"
+    },
+    {
+      "bucket": "product-images",
+      "path": "37880017-59e7-4cb1-998d-e5d0c389b08d.png",
+      "size": 1046724,
+      "mb": 1,
+      "mimetype": "image/png",
+      "updated_at": "2026-05-18T22:33:13.788Z"
+    },
+    {
+      "bucket": "product-images",
+      "path": "combo-7bfab262-4e84-4ab3-8b04-95e7953ee1a3.png",
+      "size": 1046724,
+      "mb": 1,
+      "mimetype": "image/png",
+      "updated_at": "2026-05-22T20:24:40.468Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780709698256-fcea1552-f93d-40c6-924b-95dbfa4d19d1-Transferencia1780709667137.pdf",
+      "size": 808169,
+      "mb": 0.77,
+      "mimetype": "application/pdf",
+      "updated_at": "2026-06-06T01:34:58.685Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780795956547-f14c1946-5705-453e-9dc6-287011fd5e8d-Transferencia1780795932542.pdf",
+      "size": 807327,
+      "mb": 0.77,
+      "mimetype": "application/pdf",
+      "updated_at": "2026-06-07T01:32:36.739Z"
+    },
+    {
+      "bucket": "product-images",
+      "path": "combo-90821483-2577-4613-ad6f-d015e6e5fddc.png",
+      "size": 658447,
+      "mb": 0.63,
+      "mimetype": "image/png",
+      "updated_at": "2026-06-08T20:57:37.540Z"
+    },
+    {
+      "bucket": "customer-avatars",
+      "path": "3e3b5ec7-376e-4f5d-9735-c437a8849e95/6fd9544d-611a-4188-beb3-415c759442d1/avatar.png",
+      "size": 607822,
+      "mb": 0.58,
+      "mimetype": "image/png",
+      "updated_at": "2026-06-12T21:08:28.533Z"
+    },
+    {
+      "bucket": "product-images",
+      "path": "combo-bdf88c00-9f84-42cb-9b9f-3bf0ad09a962.png",
+      "size": 606032,
+      "mb": 0.58,
+      "mimetype": "image/png",
+      "updated_at": "2026-05-20T21:15:21.332Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780795416067-391a6eaf-be55-4a95-b93e-909726ecce24-image.jpg",
+      "size": 583895,
+      "mb": 0.56,
+      "mimetype": "image/jpeg",
+      "updated_at": "2026-06-07T01:23:36.483Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780795416879-2d6a8115-9bc1-40f2-a751-7fe3e5d45170-image.jpg",
+      "size": 583895,
+      "mb": 0.56,
+      "mimetype": "image/jpeg",
+      "updated_at": "2026-06-07T01:23:37.164Z"
+    },
+    {
+      "bucket": "product-images",
+      "path": "combo-0959d817-eccb-4ff5-b308-d3773521519c.png",
+      "size": 526452,
+      "mb": 0.5,
+      "mimetype": "image/png",
+      "updated_at": "2026-05-20T21:31:18.711Z"
+    }
+  ],
+  "over1MB": [
+    {
+      "bucket": "customer-avatars",
+      "path": "3e3b5ec7-376e-4f5d-9735-c437a8849e95/0b9b0802-ea3b-4d7e-aadd-3b8ae5af4044/avatar.jpeg",
+      "size": 2837473,
+      "mb": 2.71,
+      "mimetype": "image/jpeg",
+      "updated_at": "2026-06-13T01:37:17.846Z"
+    },
+    {
+      "bucket": "product-images",
+      "path": "combo-778853b9-4c74-4202-a39c-6cf4b3eda38d.png",
+      "size": 1789133,
+      "mb": 1.71,
+      "mimetype": "image/png",
+      "updated_at": "2026-06-11T23:11:37.653Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780707857528-31619fcd-8a99-44cc-91da-8697477e0c53-video.mp4",
+      "size": 1619699,
+      "mb": 1.54,
+      "mimetype": "video/mp4",
+      "updated_at": "2026-06-06T01:04:17.694Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1781138386190-d1b31ed6-0629-4c4e-a75e-dc37a5e5109c-Transferencia1781138376953.pdf",
+      "size": 1075401,
+      "mb": 1.03,
+      "mimetype": "application/pdf",
+      "updated_at": "2026-06-11T00:39:46.607Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780877803496-ae93c579-8210-417d-bf6a-abd5ea52eb0a-Transferencia1780877790861.pdf",
+      "size": 1075348,
+      "mb": 1.03,
+      "mimetype": "application/pdf",
+      "updated_at": "2026-06-08T00:16:43.880Z"
+    },
+    {
+      "bucket": "whatsapp-media",
+      "path": "incoming/3e3b5ec7-376e-4f5d-9735-c437a8849e95/450b71ba-05b5-4714-acff-eb35a5e3e731/1780704742271-12d4c259-6a3c-4326-91ca-834c697b94c0-Transferencia1780704733902.pdf",
+      "size": 1075155,
+      "mb": 1.03,
+      "mimetype": "application/pdf",
+      "updated_at": "2026-06-06T00:12:22.634Z"
+    }
+  ]
+}

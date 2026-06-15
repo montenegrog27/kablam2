@@ -178,7 +178,9 @@ export default function ProductsPage() {
     if (imageFile) {
       const fileExt = imageFile.name.split(".").pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      await supabase.storage.from("product-images").upload(fileName, imageFile);
+      await supabase.storage.from("product-images").upload(fileName, imageFile, {
+        cacheControl: "31536000",
+      });
       const { data } = supabase.storage
         .from("product-images")
         .getPublicUrl(fileName);
@@ -390,7 +392,9 @@ export default function ProductsPage() {
     if (imageFile) {
       const fileExt = imageFile.name.split(".").pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      await supabase.storage.from("product-images").upload(fileName, imageFile);
+      await supabase.storage.from("product-images").upload(fileName, imageFile, {
+        cacheControl: "31536000",
+      });
       const { data } = supabase.storage
         .from("product-images")
         .getPublicUrl(fileName);

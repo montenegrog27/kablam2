@@ -360,7 +360,9 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     const path = `chat/${branchId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const buckets = ["whatsapp-media", "media", "images", "files", "uploads"];
     for (const bucket of buckets) {
-      const { error } = await supabase.storage.from(bucket).upload(path, file);
+      const { error } = await supabase.storage.from(bucket).upload(path, file, {
+        cacheControl: "31536000",
+      });
       if (!error) return supabase.storage.from(bucket).getPublicUrl(path).data?.publicUrl || null;
     }
     return null;

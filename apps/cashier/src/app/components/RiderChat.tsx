@@ -278,7 +278,7 @@ export default function RiderChat({
 
     for (const bucket of buckets) {
       const { error } = await supabase.storage.from(bucket).upload(path, file, {
-        cacheControl: "3600",
+        cacheControl: "31536000",
         upsert: false,
       });
       if (!error) {

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, Gift, Loader2 } from "lucide-react";
@@ -121,7 +122,9 @@ export default function RewardsPage() {
             {rewards.map((reward) => (
               <article key={reward.id} className="overflow-hidden rounded-[24px] bg-black text-white">
                 {reward.imageUrl ? (
-                  <img src={reward.imageUrl} alt={reward.name} className="h-28 w-full object-cover sm:h-36" />
+                  <div className="relative h-28 w-full sm:h-36">
+                    <Image src={reward.imageUrl} alt={reward.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover" loading="lazy" />
+                  </div>
                 ) : (
                   <div className="flex h-28 items-center justify-center bg-black text-white sm:h-36">
                     <Gift size={32} />

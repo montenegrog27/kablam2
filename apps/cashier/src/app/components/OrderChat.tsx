@@ -231,7 +231,9 @@ export default function OrderChat({ order, session, onClose }: any) {
     let publicUrl: string | null = null;
 
     for (const bucket of buckets) {
-      const { error } = await supabase.storage.from(bucket).upload(path, file);
+      const { error } = await supabase.storage.from(bucket).upload(path, file, {
+        cacheControl: "31536000",
+      });
       if (!error) {
         publicUrl = supabase.storage.from(bucket).getPublicUrl(path).data?.publicUrl || null;
         break;

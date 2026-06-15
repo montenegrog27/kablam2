@@ -50,6 +50,7 @@ export async function POST(req: Request) {
     .from(BUCKET)
     .upload(path, bytes, {
       contentType: file.type || `image/${ext}`,
+      cacheControl: "31536000",
       upsert: true,
     });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
@@ -45,12 +46,17 @@ export default function CustomerPopupModal({ branchSlug }: { branchSlug: string 
   };
 
   const image = (
-    <img
-      src={popup.image_url}
-      alt={popup.name}
-      className="max-h-[78vh] w-full object-contain rounded-2xl"
-      draggable={false}
-    />
+    <div className="relative h-[min(78vh,720px)] w-full rounded-2xl">
+      <Image
+        src={popup.image_url}
+        alt={popup.name}
+        fill
+        sizes="(max-width: 768px) 92vw, 520px"
+        className="object-contain"
+        draggable={false}
+        loading="lazy"
+      />
+    </div>
   );
 
   return (

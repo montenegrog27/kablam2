@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Check, Minus, Plus, X } from "lucide-react";
 import type {
@@ -217,8 +218,15 @@ export default function ProductModal({
       >
         <div className="relative border-b border-gray-100">
           {image ? (
-            <div className="h-48 overflow-hidden bg-gray-100 sm:h-56">
-              <img src={image} alt={product.name} className="h-full w-full object-cover" />
+            <div className="relative h-48 overflow-hidden bg-gray-100 sm:h-56">
+              <Image
+                src={image}
+                alt={product.name}
+                fill
+                sizes="(max-width: 768px) 100vw, 520px"
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
             </div>
           ) : (
             <div className="h-24 bg-gray-50" />

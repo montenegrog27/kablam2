@@ -51,6 +51,7 @@ async function uploadIncomingMedia(
   for (const bucket of MEDIA_BUCKETS) {
     const { error } = await supabase.storage.from(bucket).upload(path, Buffer.from(bytes), {
       contentType,
+      cacheControl: "31536000",
       upsert: false,
     });
 

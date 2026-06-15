@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -552,7 +553,7 @@ function ProfileMobileSidebar({
             <div className="flex items-center gap-3">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black text-2xl font-black uppercase">
                 {profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt={profile.name || "Miembro"} className="h-full w-full object-cover" />
+                  <Image src={profile.avatarUrl} alt={profile.name || "Miembro"} width={56} height={56} className="h-full w-full object-cover" loading="lazy" />
                 ) : (
                   (profile.name || "M").slice(0, 1).toUpperCase()
                 )}
@@ -1051,7 +1052,7 @@ function MemberCard({
           className="relative mt-8 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[#E10600] text-3xl font-black uppercase text-white"
         >
           {profile.avatarUrl ? (
-            <img src={profile.avatarUrl} alt={profile.name || "Cliente"} className="h-full w-full object-cover" />
+            <Image src={profile.avatarUrl} alt={profile.name || "Cliente"} width={80} height={80} className="h-full w-full object-cover" loading="lazy" />
           ) : (
             (profile.name || "M").slice(0, 1).toUpperCase()
           )}
@@ -1160,7 +1161,9 @@ function RewardCard({
       compact ? "w-[76vw] max-w-[280px] shrink-0 snap-start sm:w-[260px]" : "w-full",
     ].join(" ")}>
       {reward.imageUrl ? (
-        <img src={reward.imageUrl} alt={reward.name} className={compact ? "h-28 w-full object-cover" : "h-32 w-full object-cover"} />
+        <div className={compact ? "relative h-28 w-full" : "relative h-32 w-full"}>
+          <Image src={reward.imageUrl} alt={reward.name} fill sizes={compact ? "280px" : "(max-width: 768px) 50vw, 320px"} className="object-cover" loading="lazy" />
+        </div>
       ) : (
         <div className={compact ? "flex h-28 items-center justify-center bg-[#E10600] text-white" : "flex h-32 items-center justify-center bg-[#E10600] text-white"}>
           <Gift size={34} />

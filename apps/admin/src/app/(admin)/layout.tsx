@@ -18,6 +18,7 @@ import {
   Wallet,
   BadgeDollarSign,
   Landmark,
+  QrCode,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -54,6 +55,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/prode", label: "Prode Mordisco", icon: Trophy },
       { href: "/categories", label: "Categorías", icon: Tags },
       { href: "/products", label: "Productos", icon: Package },
+      { href: "/qr-menu", label: "Menu QR", icon: QrCode },
       { href: "/variant-types", label: "Tipos de Variante", icon: Variable },
     ]},
     { section: "Ingredientes", items: [

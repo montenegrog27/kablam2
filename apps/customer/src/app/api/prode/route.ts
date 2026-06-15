@@ -15,6 +15,99 @@ function predictionLockDate() {
   return new Date(Date.now() + PREDICTION_LOCK_MINUTES * 60 * 1000);
 }
 
+function normalizeArgWhatsapp(input?: string | null) {
+  let digits = String(input || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("549") && digits.length >= 12) return digits;
+  if (digits.startsWith("54")) digits = digits.slice(2);
+  if (digits.startsWith("9") && digits.length === 11) digits = digits.slice(1);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.startsWith("15")) digits = digits.slice(2);
+  return digits.length === 10 ? `549${digits}` : null;
+}
+
+function formatMatchDate(date: string) {
+  return new Date(date).toLocaleString("es-AR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+}
+
+async function sendProdeParticipationWhatsapp({
+  phone,
+  name,
+  branchSlug,
+  match,
+  homeScore,
+  awayScore,
+  firstScorer,
+}: {
+  phone?: string | null;
+  name?: string | null;
+  branchSlug?: string | null;
+  match: any;
+  homeScore: number;
+  awayScore: number;
+  firstScorer?: string | null;
+}) {
+  const whatsappToken = String(process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_API_TOKEN || "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+  if (!whatsappToken) return { skipped: true, reason: "WHATSAPP_TOKEN missing" };
+
+  const whatsappPhone = normalizeArgWhatsapp(phone);
+  if (!whatsappPhone) return { ok: false, reason: "invalid_whatsapp_phone" };
+
+  const customerName = String(name || "crack").trim();
+  const scorerText = firstScorer ? firstScorer : "Sin goleador elegido";
+  const message =
+    `Hola ${customerName}!\n\n` +
+    `Gracias por participar en el *Prode Mordisco*.\n\n` +
+    `Tu jugada quedo registrada:\n\n` +
+    `*${match.home_team} ${homeScore} - ${awayScore} ${match.away_team}*\n` +
+    `Goleador: *${scorerText}*\n` +
+    `Partido: ${formatMatchDate(match.match_date)}\n\n` +
+    `Cuando termine el partido cargamos el resultado y actualizamos el ranking.\n\n` +
+    `Premios:\n` +
+    `- Resultado acertado: 1 Cheese Bacon Simple gratis.\n` +
+    `- Goleador acertado: 1 porcion de papas.\n` +
+    `- Doble acierto: 1 Cheese Bacon Doble con Papas.\n\n` +
+    `Gracias por jugar. Mordisco te espera.`;
+
+  try {
+    const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${whatsappToken}`,
+      },
+      body: JSON.stringify({
+        slug: "mordiscoburgers",
+        branchId: branchSlug || "mordiscoburgers",
+        phone: whatsappPhone,
+        message,
+      }),
+    });
+
+    const text = await response.text();
+    return {
+      ok: response.ok,
+      status: response.status,
+      response: text,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "whatsapp_send_failed",
+      error: error instanceof Error ? error.message : "No se pudo enviar WhatsApp",
+    };
+  }
+}
+
 async function getNextPlayableMatch(supabase: ReturnType<typeof supabaseService>, tenantId: string) {
   const { data } = await supabase
     .from("prode_matches")
@@ -167,5 +260,28 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true, prediction: data });
+  const [{ data: customer }, { data: branch }] = await Promise.all([
+    supabase
+      .from("customers")
+      .select("name, phone")
+      .eq("id", session.customerId)
+      .maybeSingle(),
+    supabase
+      .from("branches")
+      .select("slug")
+      .eq("id", session.branchId)
+      .maybeSingle(),
+  ]);
+
+  const whatsapp = await sendProdeParticipationWhatsapp({
+    phone: customer?.phone || session.phone,
+    name: customer?.name || session.name,
+    branchSlug: branch?.slug || session.branchId,
+    match: nextMatch,
+    homeScore,
+    awayScore,
+    firstScorer,
+  });
+
+  return NextResponse.json({ ok: true, prediction: data, whatsapp });
 }

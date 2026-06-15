@@ -161,7 +161,9 @@ export default function CombosPage() {
       const fileName = `combo-${crypto.randomUUID()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
         .from("product-images")
-        .upload(fileName, imageFile);
+        .upload(fileName, imageFile, {
+          cacheControl: "31536000",
+        });
       if (!uploadError) {
         const { data: pubUrl } = supabase.storage
           .from("product-images")
