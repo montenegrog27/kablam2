@@ -93,64 +93,38 @@ export default function ProdeAdminPage() {
     if (awayScore !== "") data.away_score = Number(awayScore);
     if (firstScorer) data.first_scorer = firstScorer;
 
+    let savedMatchId = editing?.id || null;
+
     if (editing) {
       await supabase.from("prode_matches").update(data).eq("id", editing.id);
     } else {
-      await supabase.from("prode_matches").insert(data);
+      const { data: inserted } = await supabase.from("prode_matches").insert(data).select("id").single();
+      savedMatchId = inserted?.id || null;
     }
 
-    // If match finished, recalculate points for all predictions
-    if (data.status === "finished" && (editing?.status !== "finished" || editing?.home_score !== data.home_score || editing?.away_score !== data.away_score)) {
-      await recalcPoints(data, editing?.id || null);
+    if (data.status === "finished" && savedMatchId) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (token) {
+        const response = await fetch("/api/prode/finalize-match", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ matchId: savedMatchId }),
+        });
+        const result = await response.json().catch(() => null);
+        if (response.ok && result) {
+          const unavailable = result.notificationsUnavailable ? " Ejecuta add_prode_reward_notifications.sql para activar deduplicacion de WhatsApp." : "";
+          setSyncMessage(`Partido cerrado: ${result.scoredPredictions || 0} jugada(s) puntuadas, ${result.notifiedWinners || 0} WhatsApp enviado(s).${unavailable}`);
+        } else {
+          setSyncMessage(result?.error || "Partido guardado, pero no pude notificar ganadores.");
+        }
+      }
     }
 
     resetForm(); load(); setSaving(false);
-  };
-
-  const recalcPoints = async (matchData: any, matchId: string | null) => {
-    const id = matchId || matchData.id;
-    const { data: predictions } = await supabase.from("prode_predictions").select("*").eq("match_id", id);
-    if (!predictions) return;
-
-    for (const pred of predictions) {
-      let pts = 0, bonus = 0;
-      if (pred.home_score === matchData.home_score && pred.away_score === matchData.away_score) pts += 5;
-      const predTotal = (pred.home_score || 0) + (pred.away_score || 0);
-      const actualTotal = (matchData.home_score || 0) + (matchData.away_score || 0);
-      if (pred.first_scorer && matchData.first_scorer && pred.first_scorer.toLowerCase() === matchData.first_scorer.toLowerCase()) pts += 3;
-      if (predTotal === actualTotal) pts += 2;
-      if (pts >= 10) bonus = 3;
-
-      await supabase.from("prode_predictions").update({ points_earned: pts, bonus_points: bonus, status: "finished" }).eq("id", pred.id);
-
-      // Update standings
-      await updateStanding(pred.customer_id, tenantId, pts, matchData, pred);
-    }
-  };
-
-  const updateStanding = async (customerId: string, tid: string, pts: number, matchData: any, pred: any) => {
-    const { data: existing } = await supabase.from("prode_standings").select("*").eq("tenant_id", tid).eq("customer_id", customerId).maybeSingle();
-    const isExact = pred.home_score === matchData.home_score && pred.away_score === matchData.away_score;
-    const isScorer = pred.first_scorer && matchData.first_scorer && pred.first_scorer.toLowerCase() === matchData.first_scorer.toLowerCase();
-    const isGoals = ((pred.home_score || 0) + (pred.away_score || 0)) === ((matchData.home_score || 0) + (matchData.away_score || 0));
-    const isPerfect = isExact && isScorer && isGoals;
-
-    if (existing) {
-      await supabase.from("prode_standings").update({
-        total_points: existing.total_points + pts,
-        correct_results: existing.correct_results + (isExact ? 1 : 0),
-        correct_scorers: existing.correct_scorers + (isScorer ? 1 : 0),
-        correct_goals: existing.correct_goals + (isGoals ? 1 : 0),
-        perfect_predictions: existing.perfect_predictions + (isPerfect ? 1 : 0),
-        updated_at: new Date().toISOString(),
-      }).eq("id", existing.id);
-    } else {
-      await supabase.from("prode_standings").insert({
-        tenant_id: tid, customer_id: customerId, total_points: pts,
-        correct_results: isExact ? 1 : 0, correct_scorers: isScorer ? 1 : 0,
-        correct_goals: isGoals ? 1 : 0, perfect_predictions: isPerfect ? 1 : 0,
-      });
-    }
   };
 
   const deleteMatch = async (id: string) => {
@@ -182,7 +156,8 @@ export default function ProdeAdminPage() {
         const firstError = data.failed[0];
         setSyncMessage(`ESPN encontro ${data.fetched || 0} partido(s), pero no pude guardar ${data.failed.length}. Primero: ${firstError.match} - ${firstError.error}`);
       } else if (data.imported > 0) {
-        setSyncMessage(`Sincronizado: ${data.imported} partido(s). Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`);
+        const scored = data.scoredPredictions ? ` Puntue ${data.scoredPredictions} jugada(s), notifique ${data.notifiedWinners || 0} ganador(es) y actualice el ranking.` : "";
+        setSyncMessage(`Sincronizado: ${data.imported} partido(s).${scored} Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`);
       } else if ((data.fetched || 0) > 0) {
         setSyncMessage(`ESPN encontro ${data.fetched} partido(s), pero no habia nuevos para guardar. Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`);
       } else {

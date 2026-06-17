@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { finalizeProdeMatch } from "@/lib/prode-rewards";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -188,6 +189,10 @@ export async function POST(req: NextRequest) {
 
   let inserted = 0;
   let updated = 0;
+  let scoredPredictions = 0;
+  let notifiedWinners = 0;
+  let skippedNotifications = 0;
+  let failedNotifications = 0;
   const failed: Array<{ match: string; error: string }> = [];
 
   for (const match of relevantMatches) {
@@ -217,12 +222,28 @@ export async function POST(req: NextRequest) {
 
     if (existing?.id) {
       const { error } = await auth.supabase.from("prode_matches").update(payload).eq("id", existing.id);
-      if (!error) updated += 1;
-      else failed.push({ match: `${match.home_team} vs ${match.away_team}`, error: error.message });
+      if (!error) {
+        updated += 1;
+        if (match.status === "finished") {
+          const result = await finalizeProdeMatch(auth.supabase, existing.id, { notifyWinners: true });
+          scoredPredictions += result.scoredPredictions;
+          notifiedWinners += result.notifiedWinners;
+          skippedNotifications += result.skippedNotifications;
+          failedNotifications += result.failedNotifications;
+        }
+      } else failed.push({ match: `${match.home_team} vs ${match.away_team}`, error: error.message });
     } else {
-      const { error } = await auth.supabase.from("prode_matches").insert(payload);
-      if (!error) inserted += 1;
-      else failed.push({ match: `${match.home_team} vs ${match.away_team}`, error: error.message });
+      const { data: insertedMatch, error } = await auth.supabase.from("prode_matches").insert(payload).select("id").single();
+      if (!error) {
+        inserted += 1;
+        if (match.status === "finished" && insertedMatch?.id) {
+          const result = await finalizeProdeMatch(auth.supabase, insertedMatch.id, { notifyWinners: true });
+          scoredPredictions += result.scoredPredictions;
+          notifiedWinners += result.notifiedWinners;
+          skippedNotifications += result.skippedNotifications;
+          failedNotifications += result.failedNotifications;
+        }
+      } else failed.push({ match: `${match.home_team} vs ${match.away_team}`, error: error.message });
     }
   }
 
@@ -236,6 +257,10 @@ export async function POST(req: NextRequest) {
     imported: inserted + updated,
     inserted,
     updated,
+    scoredPredictions,
+    notifiedWinners,
+    skippedNotifications,
+    failedNotifications,
     failed,
     nextMatch: nextMatch || null,
   });

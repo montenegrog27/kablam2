@@ -317,6 +317,11 @@ export default function ProfilePage() {
     setRedeemingRewardId(null);
   };
 
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.replace(`/${branchSlug}/order`);
+  };
+
   if (authLoading || loading) {
     return (
       <div className="customer-profile-red flex min-h-screen items-center justify-center">
@@ -404,10 +409,7 @@ export default function ProfilePage() {
           </button>
 
           <button
-            onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST" });
-              window.location.href = `/${branchSlug}`;
-            }}
+            onClick={logout}
             className="hidden items-center justify-center gap-2 rounded-full bg-black px-4 py-2.5 text-[10px] font-black uppercase text-white transition duration-200 hover:bg-white hover:text-black sm:flex"
           >
             <LogOut size={15} />
@@ -424,7 +426,7 @@ export default function ProfilePage() {
         profile={profile}
         membership={membership}
         profileIsIncomplete={profileIsIncomplete}
-        branchSlug={branchSlug}
+        onLogout={logout}
       />
 
       <main className="mx-auto min-h-screen max-w-7xl px-4 pb-12 pt-5 sm:px-7 lg:px-10 lg:pt-8">
@@ -494,7 +496,7 @@ function ProfileMobileSidebar({
   profile,
   membership,
   profileIsIncomplete,
-  branchSlug,
+  onLogout,
 }: {
   open: boolean;
   section: ProfileSection;
@@ -503,7 +505,7 @@ function ProfileMobileSidebar({
   profile: UserProfile;
   membership: ReturnType<typeof getMembershipStatus>;
   profileIsIncomplete: boolean;
-  branchSlug: string;
+  onLogout: () => void;
 }) {
   const navItems: Array<{ id: ProfileSection; label: string; kicker: string; icon: LucideIcon; description: string; tone?: "gold" }> = [
     { id: "club", label: "Club", kicker: "Estatus", icon: ShieldCheck, description: membership.current.name },
@@ -615,10 +617,7 @@ function ProfileMobileSidebar({
 
         <div className="border-t border-white/10 p-4">
           <button
-            onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST" });
-              window.location.href = `/${branchSlug}`;
-            }}
+            onClick={onLogout}
             className="flex w-full items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-3 text-xs font-black uppercase text-white transition duration-200 hover:border-[#E10600] hover:bg-[#E10600]"
           >
             <LogOut size={16} />
