@@ -116,8 +116,8 @@ export default function ProdeAdminPage() {
         });
         const result = await response.json().catch(() => null);
         if (response.ok && result) {
-          const unavailable = result.notificationsUnavailable ? " Ejecuta add_prode_reward_notifications.sql para activar deduplicacion de WhatsApp." : "";
-          setSyncMessage(`Partido cerrado: ${result.scoredPredictions || 0} jugada(s) puntuadas, ${result.notifiedWinners || 0} WhatsApp enviado(s).${unavailable}`);
+          const issues = result.notificationIssues?.length ? ` Motivo: ${result.notificationIssues.join(" / ")}` : "";
+          setSyncMessage(`Partido cerrado: ${result.scoredPredictions || 0} jugada(s), ${result.eligibleWinners || 0} ganador(es), ${result.notifiedWinners || 0} WhatsApp enviado(s), ${result.skippedNotifications || 0} salteado(s), ${result.failedNotifications || 0} fallido(s).${issues}`);
         } else {
           setSyncMessage(result?.error || "Partido guardado, pero no pude notificar ganadores.");
         }
@@ -156,7 +156,10 @@ export default function ProdeAdminPage() {
         const firstError = data.failed[0];
         setSyncMessage(`ESPN encontro ${data.fetched || 0} partido(s), pero no pude guardar ${data.failed.length}. Primero: ${firstError.match} - ${firstError.error}`);
       } else if (data.imported > 0) {
-        const scored = data.scoredPredictions ? ` Puntue ${data.scoredPredictions} jugada(s), notifique ${data.notifiedWinners || 0} ganador(es) y actualice el ranking.` : "";
+        const issues = data.notificationIssues?.length ? ` Motivo: ${data.notificationIssues.join(" / ")}` : "";
+        const scored = data.scoredPredictions
+          ? ` Puntue ${data.scoredPredictions} jugada(s), encontre ${data.eligibleWinners || 0} ganador(es), envie ${data.notifiedWinners || 0} WhatsApp, saltee ${data.skippedNotifications || 0} y fallaron ${data.failedNotifications || 0}.${issues}`
+          : "";
         setSyncMessage(`Sincronizado: ${data.imported} partido(s).${scored} Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`);
       } else if ((data.fetched || 0) > 0) {
         setSyncMessage(`ESPN encontro ${data.fetched} partido(s), pero no habia nuevos para guardar. Proximo: ${data.nextMatch ? `${data.nextMatch.home_team} vs ${data.nextMatch.away_team}` : "sin futuro disponible"}`);

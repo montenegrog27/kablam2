@@ -190,9 +190,11 @@ export async function POST(req: NextRequest) {
   let inserted = 0;
   let updated = 0;
   let scoredPredictions = 0;
+  let eligibleWinners = 0;
   let notifiedWinners = 0;
   let skippedNotifications = 0;
   let failedNotifications = 0;
+  const notificationIssues = new Set<string>();
   const failed: Array<{ match: string; error: string }> = [];
 
   for (const match of relevantMatches) {
@@ -227,9 +229,11 @@ export async function POST(req: NextRequest) {
         if (match.status === "finished") {
           const result = await finalizeProdeMatch(auth.supabase, existing.id, { notifyWinners: true });
           scoredPredictions += result.scoredPredictions;
+          eligibleWinners += result.eligibleWinners;
           notifiedWinners += result.notifiedWinners;
           skippedNotifications += result.skippedNotifications;
           failedNotifications += result.failedNotifications;
+          result.notificationIssues?.forEach((issue) => notificationIssues.add(issue));
         }
       } else failed.push({ match: `${match.home_team} vs ${match.away_team}`, error: error.message });
     } else {
@@ -239,9 +243,11 @@ export async function POST(req: NextRequest) {
         if (match.status === "finished" && insertedMatch?.id) {
           const result = await finalizeProdeMatch(auth.supabase, insertedMatch.id, { notifyWinners: true });
           scoredPredictions += result.scoredPredictions;
+          eligibleWinners += result.eligibleWinners;
           notifiedWinners += result.notifiedWinners;
           skippedNotifications += result.skippedNotifications;
           failedNotifications += result.failedNotifications;
+          result.notificationIssues?.forEach((issue) => notificationIssues.add(issue));
         }
       } else failed.push({ match: `${match.home_team} vs ${match.away_team}`, error: error.message });
     }
@@ -258,9 +264,11 @@ export async function POST(req: NextRequest) {
     inserted,
     updated,
     scoredPredictions,
+    eligibleWinners,
     notifiedWinners,
     skippedNotifications,
     failedNotifications,
+    notificationIssues: Array.from(notificationIssues).slice(0, 5),
     failed,
     nextMatch: nextMatch || null,
   });

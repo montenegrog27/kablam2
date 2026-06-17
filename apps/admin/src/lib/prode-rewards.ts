@@ -4,10 +4,12 @@ type RewardType = "exact" | "scorer" | "double";
 
 type FinalizeResult = {
   scoredPredictions: number;
+  eligibleWinners: number;
   notifiedWinners: number;
   skippedNotifications: number;
   failedNotifications: number;
   notificationsUnavailable?: boolean;
+  notificationIssues?: string[];
 };
 
 function normalizeArgWhatsapp(input?: string | null) {
@@ -151,7 +153,7 @@ async function notifyWinners(supabase: SupabaseClient, match: any, predictions: 
     .filter((item): item is { prediction: any; rewardType: RewardType } => Boolean(item.rewardType));
 
   if (!winners.length) {
-    return { notifiedWinners: 0, skippedNotifications: 0, failedNotifications: 0 };
+    return { eligibleWinners: 0, notifiedWinners: 0, skippedNotifications: 0, failedNotifications: 0, notificationIssues: [] };
   }
 
   const customerIds = Array.from(new Set(winners.map((item) => item.prediction.customer_id).filter(Boolean)));
@@ -165,41 +167,81 @@ async function notifyWinners(supabase: SupabaseClient, match: any, predictions: 
   let skippedNotifications = 0;
   let failedNotifications = 0;
   let notificationsUnavailable = false;
+  const notificationIssues: string[] = [];
 
   for (const winner of winners) {
     const customer = customerById.get(winner.prediction.customer_id);
     const message = buildWinnerMessage({ customer, match, prediction: winner.prediction, rewardType: winner.rewardType });
-    const { data: notification, error: insertError } = await supabase
-      .from("prode_reward_notifications")
-      .insert({
-        tenant_id: match.tenant_id,
-        match_id: match.id,
-        prediction_id: winner.prediction.id,
-        customer_id: winner.prediction.customer_id,
-        reward_type: winner.rewardType,
-        message,
-      })
-      .select("id")
-      .single();
+    let notificationId = "";
 
-    if (insertError) {
-      if (insertError.code === "23505") {
-        skippedNotifications += 1;
-        continue;
-      }
-      if (insertError.code === "PGRST205" || insertError.message?.includes("prode_reward_notifications")) {
+    const { data: existingNotification, error: existingError } = await supabase
+      .from("prode_reward_notifications")
+      .select("id, status")
+      .eq("prediction_id", winner.prediction.id)
+      .eq("reward_type", winner.rewardType)
+      .maybeSingle();
+
+    if (existingError) {
+      if (existingError.code === "PGRST205" || existingError.message?.includes("prode_reward_notifications")) {
         notificationsUnavailable = true;
         skippedNotifications += 1;
+        notificationIssues.push("Falta correr add_prode_reward_notifications.sql en Supabase.");
         continue;
       }
       failedNotifications += 1;
+      notificationIssues.push(existingError.message);
       continue;
+    }
+
+    if (existingNotification?.id) {
+      notificationId = existingNotification.id;
+      if (existingNotification.status === "sent") {
+        skippedNotifications += 1;
+        continue;
+      }
+      await supabase.from("prode_reward_notifications").update({ message, status: "pending", response: null }).eq("id", notificationId);
+    } else {
+      const { data: notification, error: insertError } = await supabase
+        .from("prode_reward_notifications")
+        .insert({
+          tenant_id: match.tenant_id,
+          match_id: match.id,
+          prediction_id: winner.prediction.id,
+          customer_id: winner.prediction.customer_id,
+          reward_type: winner.rewardType,
+          message,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        if (insertError.code === "23505") {
+          skippedNotifications += 1;
+          continue;
+        }
+        if (insertError.code === "PGRST205" || insertError.message?.includes("prode_reward_notifications")) {
+          notificationsUnavailable = true;
+          skippedNotifications += 1;
+          notificationIssues.push("Falta correr add_prode_reward_notifications.sql en Supabase.");
+          continue;
+        }
+        failedNotifications += 1;
+        notificationIssues.push(insertError.message);
+        continue;
+      }
+
+      notificationId = notification.id;
     }
 
     const result = await sendWhatsapp(customer?.phone, message, branch?.slug);
     if (result.ok) notifiedWinners += 1;
-    else if (result.skipped) skippedNotifications += 1;
-    else failedNotifications += 1;
+    else if (result.skipped) {
+      skippedNotifications += 1;
+      notificationIssues.push(result.response);
+    } else {
+      failedNotifications += 1;
+      notificationIssues.push(result.response || "whatsapp_send_failed");
+    }
 
     await supabase
       .from("prode_reward_notifications")
@@ -208,10 +250,17 @@ async function notifyWinners(supabase: SupabaseClient, match: any, predictions: 
         response: result.response,
         sent_at: result.ok ? new Date().toISOString() : null,
       })
-      .eq("id", notification.id);
+      .eq("id", notificationId);
   }
 
-  return { notifiedWinners, skippedNotifications, failedNotifications, notificationsUnavailable };
+  return {
+    eligibleWinners: winners.length,
+    notifiedWinners,
+    skippedNotifications,
+    failedNotifications,
+    notificationsUnavailable,
+    notificationIssues: Array.from(new Set(notificationIssues)).slice(0, 5),
+  };
 }
 
 export async function finalizeProdeMatch(
@@ -221,7 +270,7 @@ export async function finalizeProdeMatch(
 ): Promise<FinalizeResult> {
   const { data: match } = await supabase.from("prode_matches").select("*").eq("id", matchId).maybeSingle();
   if (!match || match.status !== "finished") {
-    return { scoredPredictions: 0, notifiedWinners: 0, skippedNotifications: 0, failedNotifications: 0 };
+    return { scoredPredictions: 0, eligibleWinners: 0, notifiedWinners: 0, skippedNotifications: 0, failedNotifications: 0, notificationIssues: [] };
   }
 
   const { data: predictions } = await supabase.from("prode_predictions").select("*").eq("match_id", matchId);
@@ -244,7 +293,7 @@ export async function finalizeProdeMatch(
 
   const notifications = options.notifyWinners
     ? await notifyWinners(supabase, match, rows)
-    : { notifiedWinners: 0, skippedNotifications: 0, failedNotifications: 0 };
+    : { eligibleWinners: 0, notifiedWinners: 0, skippedNotifications: 0, failedNotifications: 0, notificationIssues: [] };
 
   return {
     scoredPredictions: rows.length,
