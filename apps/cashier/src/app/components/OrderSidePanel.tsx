@@ -7,7 +7,17 @@ import { calculateShippingCost } from "@/lib/calculateShippingCost";
 import { calculateDistanceKm } from "@/lib/calculateDelivery";
 import { logAppError } from "@/lib/logAppError";
 import { useCurrentBranch } from "../(cashier)/context/BranchContext";
-import { Minus, Plus, Search, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Bike,
+  Check,
+  Minus,
+  Plus,
+  Search,
+  ShoppingBag,
+  Store,
+  X,
+} from "lucide-react";
 
 type PaymentLine = {
   payment_method_id: string;
@@ -25,6 +35,12 @@ const DEBUG_LOGS = process.env.NEXT_PUBLIC_DEBUG_LOGS === "true";
 const debugLog = (...args: unknown[]) => {
   if (DEBUG_LOGS) console.log(...args);
 };
+
+const ORDER_TYPES = [
+  { id: "delivery", label: "Delivery", description: "Con direccion y envio", icon: Bike },
+  { id: "takeaway", label: "Takeaway", description: "Retira por el local", icon: Store },
+  { id: "pedidosya", label: "PedidosYa", description: "Canal externo", icon: ShoppingBag },
+];
 
 export default function OrderSidePanel({
   selectedOrder,
@@ -469,6 +485,22 @@ export default function OrderSidePanel({
     setPayments(updated);
   };
 
+  const rebalanceSplitPayments = (lines: PaymentLine[]) => {
+    if (lines.length <= 1) return lines;
+    const total = calculateTotal();
+    const lastIndex = lines.length - 1;
+    const sumExceptLast = lines
+      .slice(0, lastIndex)
+      .reduce((acc, p) => acc + Number(p.amount || 0), 0);
+    const remaining = total - sumExceptLast;
+
+    return lines.map((line, index) =>
+      index === lastIndex
+        ? { ...line, amount: remaining > 0 ? remaining.toString() : "0" }
+        : line,
+    );
+  };
+
   const addPaymentLine = () => {
     const total = calculateTotal();
 
@@ -499,7 +531,8 @@ export default function OrderSidePanel({
     noCashSession || cart.length === 0 || isPhoneMissingForCoupon;
 
   const removePaymentLine = (index: number) => {
-    setPayments(payments.filter((_, i) => i !== index));
+    const next = payments.filter((_, i) => i !== index);
+    setPayments(next.length <= 1 ? next.map((line) => ({ ...line, amount: "" })) : rebalanceSplitPayments(next));
   };
   const removeCoupon = () => {
     setAppliedCoupon(null);
@@ -548,6 +581,27 @@ export default function OrderSidePanel({
     const total = calculateTotal();
 
     const isSplitPayment = payments.length > 1;
+    const selectedPayments = isSplitPayment
+      ? payments
+      : [{ ...payments[0], amount: total.toString() }];
+
+    for (const [index, payment] of selectedPayments.entries()) {
+      const method = paymentMethods.find((pm) => pm.id === payment.payment_method_id);
+      if (!payment.payment_method_id || !method) {
+        alert(`Selecciona un metodo de pago${isSplitPayment ? ` en la linea ${index + 1}` : ""}`);
+        return;
+      }
+
+      if (isSplitPayment && Number(payment.amount || 0) <= 0) {
+        alert(`Ingresa un monto valido en la linea ${index + 1}`);
+        return;
+      }
+
+      if (method.requires_reference && !payment.reference.trim()) {
+        alert(`Ingresa la referencia de ${method.name}`);
+        return;
+      }
+    }
 
     if (!payments[0].payment_method_id) {
       alert("Seleccioná un método de pago");
@@ -564,7 +618,7 @@ export default function OrderSidePanel({
         0,
       );
 
-      if (totalPayments !== total) {
+      if (Math.round(totalPayments) !== Math.round(total)) {
         alert("Los pagos no coinciden con el total");
         return;
       }
@@ -950,26 +1004,36 @@ export default function OrderSidePanel({
     })
     .slice(0, normalizedSearch ? 12 : 8);
 
+  const orderTypeMeta =
+    ORDER_TYPES.find((type) => type.id === orderType) || ORDER_TYPES[1];
+  const OrderTypeIcon = orderTypeMeta.icon;
+  const totalItems = cart.reduce((acc, item) => acc + Number(item.quantity || 0), 0);
+
   return (
-    <div className="w-[520px] h-full flex flex-col bg-white border-l border-gray-200">
+    <div className="h-full w-[min(600px,100vw)] flex flex-col border-l border-slate-200 bg-[#F6F7F9] text-slate-950">
       {/* HEADER */}
-      <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
+      <div className="border-b border-slate-200 bg-white px-5 py-3">
+        <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
+          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+            <OrderTypeIcon size={13} />
+            {orderTypeMeta.label}
+          </div>
+          <h2 className="mt-1.5 text-xl font-black tracking-[-0.04em] text-slate-950">
             {step === "build" && (selectedOrder ? "Editar pedido" : "Construir pedido")}
             {step === "checkout" && (selectedOrder ? "Guardar cambios" : "Confirmar pedido")}
           </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            {cart.length} productos agregados
+          <p className="mt-0.5 text-xs font-medium text-slate-500">
+            {totalItems} unidades / {cart.length} lineas / Total ${calculateTotal().toLocaleString("es-AR")}
           </p>
         </div>
 
         {step === "checkout" && (
-          <div className="flex gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {isEdit && selectedOrder && (
               <button
                 onClick={() => setMode("view")}
-                className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+                className="rounded-full border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
               >
                 Cancelar edición
               </button>
@@ -979,43 +1043,60 @@ export default function OrderSidePanel({
                 if (isEdit) setMode("view");
                 setStep("build");
               }}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-2 text-xs font-black uppercase text-white transition hover:bg-black"
             >
               ← Volver
             </button>
           </div>
         )}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-xl bg-slate-100 p-1">
+          <div className={`rounded-lg px-3 py-1.5 text-center text-[11px] font-black uppercase transition ${step === "build" ? "bg-white text-slate-950 shadow-sm" : "text-slate-400"}`}>
+            1. Productos
+          </div>
+          <div className={`rounded-lg px-3 py-1.5 text-center text-[11px] font-black uppercase transition ${step === "checkout" ? "bg-white text-slate-950 shadow-sm" : "text-slate-400"}`}>
+            2. Cobro
+          </div>
+        </div>
       </div>
 
       {/* BODY */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {step === "build" && (
           <>
             {/* Tipo orden */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              {["delivery", "takeaway", "pedidosya"].map((type) => (
+            <div className="grid grid-cols-3 gap-2">
+              {ORDER_TYPES.map((type) => {
+                const Icon = type.icon;
+                const active = orderType === type.id;
+                return (
                 <button
-                  key={type}
-                  onClick={() => setOrderType(type)}
-                  className={`flex-1 py-2 text-sm rounded-md ${
-                    orderType === type
-                      ? "bg-white shadow text-gray-900"
-                      : "text-gray-500"
+                  key={type.id}
+                  onClick={() => setOrderType(type.id)}
+                  className={`rounded-xl border px-3 py-2 text-left transition ${
+                    active
+                      ? "border-slate-950 bg-white shadow-sm"
+                      : "border-slate-200 bg-white/70 hover:border-slate-300 hover:bg-white"
                   }`}
                 >
-                  {type.toUpperCase()}
+                  <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${active ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-500"}`}>
+                    <Icon size={15} />
+                  </div>
+                  <p className="mt-2 text-[11px] font-black uppercase text-slate-950">{type.label}</p>
+                  <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500">{type.description}</p>
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             {/* CATEGORÍAS / PRODUCTOS */}
-            <div className="space-y-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                   Buscar producto
                 </label>
-                <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm focus-within:border-gray-900">
-                  <Search size={18} className="text-gray-400" />
+                <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition focus-within:border-slate-950 focus-within:bg-white">
+                  <Search size={17} className="text-slate-400" />
                   <input
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
@@ -1026,31 +1107,31 @@ export default function OrderSidePanel({
                       }
                     }}
                     autoFocus
-                    placeholder="Nombre del producto..."
-                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                    placeholder="Buscar por nombre, categoria o descripcion..."
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-slate-950 outline-none placeholder:text-slate-400"
                   />
                   {productSearch && (
                     <button
                       type="button"
                       onClick={() => setProductSearch("")}
-                      className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      className="rounded-full p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
                     >
                       <X size={14} />
                     </button>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1.5 text-[11px] font-medium text-slate-400">
                   Enter agrega el primer resultado. Click agrega directo.
                 </p>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+              <div className="mt-3 max-h-[46vh] overflow-y-auto rounded-xl border border-slate-200 bg-white">
                 {searchResults.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-sm text-gray-400">
+                  <div className="px-4 py-7 text-center text-sm font-semibold text-slate-400">
                     No encontramos productos con esa busqueda
                   </div>
                 ) : (
-                  <div className="divide-y divide-gray-100">
+                  <div className="divide-y divide-slate-100">
                     {searchResults.map((product) => {
                       const defaultVariant =
                         product.product_variants?.find((variant: any) => variant.is_default) ||
@@ -1066,21 +1147,21 @@ export default function OrderSidePanel({
                             addToCart(product);
                             setProductSearch("");
                           }}
-                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-gray-50"
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-slate-50"
                         >
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-gray-900">
+                            <p className="truncate text-sm font-bold text-slate-950">
                               {product.name}
                             </p>
                             {category?.name && (
-                              <p className="truncate text-xs text-gray-400">{category.name}</p>
+                              <p className="truncate text-[11px] font-medium text-slate-400">{category.name}</p>
                             )}
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-sm font-bold text-gray-900">
+                            <span className="text-xs font-black text-slate-950">
                               ${price.toLocaleString("es-AR")}
                             </span>
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-white">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-white">
                               <Plus size={14} />
                             </span>
                           </div>
@@ -1324,14 +1405,14 @@ export default function OrderSidePanel({
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Nombre del cliente"
               readOnly={!!selectedOrder}
-              className={`w-full border p-3 rounded-lg text-sm ${selectedOrder ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "border-gray-300"}`}
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition focus:border-slate-950 ${selectedOrder ? "bg-slate-100 text-slate-500 cursor-not-allowed" : "border-slate-200 bg-white text-slate-950"}`}
             />
 
             <input
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
               placeholder="Teléfono"
-              className="w-full border border-gray-300 p-3 rounded-lg text-sm"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-slate-950"
             />
 
             {orderType === "delivery" && (
@@ -1344,24 +1425,24 @@ export default function OrderSidePanel({
                   setCustomerLng(null);
                 }}
                 placeholder="Dirección"
-                className="w-full border border-gray-300 p-3 rounded-lg text-sm"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-slate-950"
               />
             )}
 
             {orderType === "delivery" && autoShippingEnabled && (
-              <div className="text-xs text-gray-500">
+              <div className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
                 Envío calculado automáticamente según distancia
               </div>
             )}
             {orderType === "delivery" && (
-              <div className="flex bg-gray-100 rounded-lg p-1">
+              <div className="flex rounded-xl bg-slate-100 p-1">
                 <button
                   type="button"
                   onClick={() => setAutoShippingEnabled(true)}
-                  className={`flex-1 py-2 text-xs rounded-md ${
+                  className={`flex-1 rounded-lg py-1.5 text-[11px] font-black uppercase ${
                     autoShippingEnabled
-                      ? "bg-white shadow text-gray-900"
-                      : "text-gray-500"
+                      ? "bg-white shadow-sm text-slate-950"
+                      : "text-slate-500"
                   }`}
                 >
                   Automático
@@ -1370,10 +1451,10 @@ export default function OrderSidePanel({
                 <button
                   type="button"
                   onClick={() => setAutoShippingEnabled(false)}
-                  className={`flex-1 py-2 text-xs rounded-md ${
+                  className={`flex-1 rounded-lg py-1.5 text-[11px] font-black uppercase ${
                     !autoShippingEnabled
-                      ? "bg-white shadow text-gray-900"
-                      : "text-gray-500"
+                      ? "bg-white shadow-sm text-slate-950"
+                      : "text-slate-500"
                   }`}
                 >
                   Manual
@@ -1386,7 +1467,7 @@ export default function OrderSidePanel({
                 value={shippingCost}
                 onChange={(e) => setShippingCost(Number(e.target.value))}
                 placeholder="Costo de envío"
-                className="w-full border border-gray-300 p-3 rounded-lg text-sm"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-slate-950"
               />
             )}
 
@@ -1394,7 +1475,7 @@ export default function OrderSidePanel({
               value={manualDiscount}
               onChange={(e) => setManualDiscount(e.target.value)}
               placeholder="Descuento (10% o 500)"
-              className="w-full border border-gray-300 p-3 rounded-lg text-sm"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-slate-950"
             />
             <div className="space-y-3">
               {!appliedCoupon && (
@@ -1403,13 +1484,13 @@ export default function OrderSidePanel({
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value)}
                     placeholder="Código de cupón"
-                    className="flex-1 border border-gray-300 p-3 rounded-lg text-sm"
+                    className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-slate-950"
                   />
 
                   <button
                     type="button"
                     onClick={handleValidateCoupon}
-                    className="px-4 bg-gray-900 text-white rounded-lg text-sm"
+                    className="rounded-xl bg-slate-950 px-4 text-xs font-black uppercase text-white transition hover:bg-black"
                   >
                     Aplicar
                   </button>
@@ -1417,7 +1498,7 @@ export default function OrderSidePanel({
               )}
 
               {appliedCoupon && (
-                <div className="flex items-center justify-between bg-green-50 border border-green-200 px-4 py-3 rounded-lg">
+                <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs bg-green-600 text-white px-2 py-1 rounded-full">
                       CUPÓN
@@ -1458,7 +1539,7 @@ export default function OrderSidePanel({
                 Este cupón requiere ingresar un teléfono
               </div>
             )}
-            <div className="border-t pt-4 space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-3">
               <h3 className="font-semibold text-gray-800">Método de pago</h3>
 
               {payments.map((payment, index) => {
@@ -1471,7 +1552,7 @@ export default function OrderSidePanel({
                 return (
                   <div
                     key={index}
-                    className="space-y-2 border border-gray-200 p-3 rounded-lg bg-gray-50"
+                    className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5"
                   >
                     <div className="flex gap-2 items-center">
                       <select
@@ -1483,7 +1564,7 @@ export default function OrderSidePanel({
                             e.target.value,
                           )
                         }
-                        className="flex-1 border p-2 rounded text-sm"
+                        className="flex-1 rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-semibold text-slate-950 outline-none focus:border-slate-950"
                       >
                         <option value="">Seleccionar método</option>
                         {paymentMethods.map((pm) => (
@@ -1500,7 +1581,7 @@ export default function OrderSidePanel({
                           onChange={(e) =>
                             updatePayment(index, "amount", e.target.value)
                           }
-                          className="w-28 border p-2 rounded text-sm"
+                          className="w-24 rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-semibold text-slate-950 outline-none focus:border-slate-950"
                           placeholder="Monto"
                         />
                       )}
@@ -1522,7 +1603,7 @@ export default function OrderSidePanel({
                         onChange={(e) =>
                           updatePayment(index, "reference", e.target.value)
                         }
-                        className="w-full border p-2 rounded text-sm"
+                        className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-semibold text-slate-950 outline-none focus:border-slate-950"
                       />
                     )}
                   </div>
@@ -1533,7 +1614,7 @@ export default function OrderSidePanel({
                 <button
                   type="button"
                   onClick={addPaymentLine}
-                  className="text-sm text-blue-600 font-medium hover:underline"
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-black uppercase text-slate-600 transition hover:border-slate-950 hover:text-slate-950"
                 >
                   + Dividir pago
                 </button>
@@ -1559,54 +1640,54 @@ export default function OrderSidePanel({
       </div>
 
       {/* RESUMEN INFERIOR */}
-      <div className="border-t border-gray-200 p-6 bg-gray-50 space-y-4">
-        <div className="max-h-[220px] overflow-y-auto space-y-2">
+      <div className="border-t border-slate-200 bg-white p-4 shadow-[0_-18px_45px_rgba(15,23,42,0.08)] space-y-3">
+        <div className="max-h-[150px] overflow-y-auto space-y-2">
           {cart.length === 0 && (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-400">
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-xs font-semibold text-slate-400">
               Buscá productos y agregalos con Enter
             </div>
           )}
 
           {cart.map((item, i) => (
-            <div key={i} className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+            <div key={i} className="space-y-1.5 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">
+                  <p className="truncate text-sm font-bold text-slate-950">
                     {item.variant.name}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[11px] font-medium text-slate-500">
                     ${Number(item.variant.price || 0).toLocaleString("es-AR")} c/u
                   </p>
                 </div>
 
-                <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50">
+                <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50">
                   <button
                     type="button"
                     onClick={() => changeCartQuantity(i, -1)}
-                    className="flex h-8 w-8 items-center justify-center text-gray-600 hover:text-gray-900"
+                    className="flex h-7 w-7 items-center justify-center text-slate-600 hover:text-slate-950"
                   >
                     <Minus size={14} />
                   </button>
-                  <span className="w-8 text-center text-sm font-bold tabular-nums text-gray-900">
+                  <span className="w-7 text-center text-xs font-black tabular-nums text-slate-950">
                     {item.quantity}
                   </span>
                   <button
                     type="button"
                     onClick={() => changeCartQuantity(i, 1)}
-                    className="flex h-8 w-8 items-center justify-center text-gray-600 hover:text-gray-900"
+                    className="flex h-7 w-7 items-center justify-center text-slate-600 hover:text-slate-950"
                   >
                     <Plus size={14} />
                   </button>
                 </div>
 
-                <div className="w-20 text-right text-sm font-bold text-gray-900">
+                <div className="w-20 text-right text-xs font-black text-slate-950">
                   ${(Number(item.variant.price || 0) * item.quantity).toLocaleString("es-AR")}
                 </div>
 
                 <button
                   type="button"
                   onClick={() => removeFromCart(i)}
-                  className="rounded-full p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                  className="rounded-full p-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
                 >
                   <X size={15} />
                 </button>
@@ -1616,7 +1697,7 @@ export default function OrderSidePanel({
                 value={item.note ?? ""}
                 onChange={(e) => updateNote(i, e.target.value)}
                 placeholder="Nota para este producto"
-                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-gray-900"
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 outline-none focus:border-slate-950"
               />
             </div>
           ))}
@@ -1647,18 +1728,18 @@ export default function OrderSidePanel({
           ))}
         </div>
 
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between text-gray-600">
+        <div className="space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs">
+          <div className="flex justify-between font-medium text-slate-500">
             <span>Subtotal</span>
             <span>${calculateSubtotal()}</span>
           </div>
           {orderType === "delivery" && (
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between font-medium text-slate-500">
               <span>Envío</span>
               <span>${calculateShipping().toLocaleString("es-AR")}</span>
             </div>
           )}
-          <div className="flex justify-between text-gray-600">
+          <div className="flex justify-between font-medium text-slate-500">
             <span>Descuento</span>
             <span>${calculateDiscount()}</span>
           </div>
@@ -1669,7 +1750,7 @@ export default function OrderSidePanel({
               <span>- ${couponDiscount}</span>
             </div>
           )}
-          <div className="flex justify-between text-lg font-semibold text-gray-900">
+          <div className="flex justify-between border-t border-slate-200 pt-2 text-xl font-black tracking-[-0.04em] text-slate-950">
             <span>Total</span>
             <span>${calculateTotal()}</span>
           </div>
@@ -1679,9 +1760,9 @@ export default function OrderSidePanel({
           <button
             disabled={cart.length === 0}
             onClick={() => setStep("checkout")}
-            className="w-full bg-gray-900 text-white py-3 rounded-lg disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-black uppercase text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Continuar
+            Continuar <ArrowLeft size={16} className="rotate-180" />
           </button>
         )}
 
@@ -1689,13 +1770,13 @@ export default function OrderSidePanel({
           <button
             onClick={handleSave}
             disabled={isCheckoutBlocked}
-            className={`w-full py-3 rounded-lg transition ${
+            className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-black uppercase transition ${
               isCheckoutBlocked
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-blue-600 text-white hover:bg-blue-700"
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-slate-950 text-white hover:bg-black"
             }`}
           >
-            {selectedOrder ? "Guardar Cambios" : "Confirmar Pedido"}
+            <Check size={17} /> {selectedOrder ? "Guardar Cambios" : "Confirmar Pedido"}
           </button>
         )}
         {isPhoneMissingForCoupon && (
