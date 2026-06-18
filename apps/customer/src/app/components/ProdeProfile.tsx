@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
@@ -35,13 +36,13 @@ type Prediction = {
   points_earned: number;
   bonus_points: number;
   status: string;
-  customers?: { name?: string };
+  customers?: { name?: string; avatar_url?: string | null };
   matches?: Match;
 };
 
 type Standing = {
   customer_id: string;
-  customers?: { name?: string };
+  customers?: { name?: string; avatar_url?: string | null };
   total_points: number;
   correct_results: number;
   correct_scorers: number;
@@ -71,7 +72,6 @@ const PRODE_TERMS_BROKEN = [
   "Los pronósticos podrán realizarse o modificarse hasta 5 minutos antes del inicio oficial de cada partido.",
   "Una vez iniciado el partido, los pronósticos quedarán cerrados y no podrán modificarse.",
   "Los premios son personales e intransferibles.",
-  "Para canjear el máximo premio (goleador y resultado juntos), el cliente deberá realizar una compra mínima de $5.000.",
   "El premio deberá utilizarse dentro de los 30 días posteriores a su obtención.",
   "Los premios no son canjeables por dinero en efectivo.",
   "En pedidos con delivery, el costo de envío deberá ser abonado por el cliente.",
@@ -85,7 +85,6 @@ const PRODE_TERMS = [
   "Los pronósticos podrán realizarse o modificarse hasta 5 minutos antes del inicio oficial de cada partido.",
   "Una vez iniciado el partido, los pronósticos quedarán cerrados y no podrán modificarse.",
   "Los premios son personales e intransferibles.",
-  "Para canjear el máximo premio (goleador y resultado juntos), el cliente deberá realizar una compra mínima de $5.000.",
   "El premio deberá utilizarse dentro de los 30 días posteriores a su obtención.",
   "Los premios no son canjeables por dinero en efectivo.",
   "En pedidos con delivery, el costo de envío deberá ser abonado por el cliente.",
@@ -269,6 +268,15 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
 
   return (
     <section className="space-y-4 text-white">
+      <div className="sticky top-2 z-20 grid grid-cols-2 gap-2 rounded-full border border-[#E10600] bg-black p-1 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+        <button onClick={() => setTab("ranking")} className={`rounded-full py-3 text-xs font-black uppercase transition ${tab === "ranking" ? "text-white" : "text-white/60 hover:text-white"}`} style={tab === "ranking" ? { backgroundColor: RED } : undefined}>
+          Ranking
+        </button>
+        <button onClick={() => setTab("predictions")} className={`rounded-full py-3 text-xs font-black uppercase transition ${tab === "predictions" ? "bg-[#E10600] text-white" : "text-white/60 hover:text-white"}`}>
+          Mi jugada
+        </button>
+      </div>
+
       <div className="overflow-hidden rounded-[34px] border border-black bg-black text-white">
         <div className="grid gap-0 lg:grid-cols-[1fr_360px]">
           <div className="relative overflow-hidden p-5 sm:p-7">
@@ -336,15 +344,6 @@ export default function ProdeProfile({ branchSlug, customerId, tenantId }: { bra
           <p className="mt-2 text-sm font-bold uppercase text-white/70">Ya estas en el ranking. Ahi podes ver tu jugada, las de los demas participantes y los aciertos.</p>
         </div>
       )}
-
-      <div className="grid grid-cols-2 gap-2 rounded-full border border-black bg-black p-1">
-        <button onClick={() => setTab("predictions")} className={`rounded-full py-3 text-xs font-black uppercase transition ${tab === "predictions" ? "bg-[#E10600] text-white" : "text-white/60 hover:text-white"}`}>
-          Mis pronosticos
-        </button>
-        <button onClick={() => setTab("ranking")} className={`rounded-full py-3 text-xs font-black uppercase transition ${tab === "ranking" ? "text-white" : "text-white/60 hover:text-white"}`} style={tab === "ranking" ? { backgroundColor: RED } : undefined}>
-          Ranking
-        </button>
-      </div>
 
       {tab === "predictions" && (
         <div className="space-y-4">
@@ -644,18 +643,28 @@ function StatusPill({ finished, closed, saved }: { finished: boolean; closed: bo
 
 function RankingRow({ standing, predictions, rank, isMe, compact }: { standing: Standing; predictions: Prediction[]; rank: number; isMe: boolean; compact?: boolean }) {
   const medal = rank === 1 ? "1" : rank === 2 ? "2" : rank === 3 ? "3" : String(rank);
+  const customerName = standing.customers?.name || "Anonimo";
+  const avatarUrl = standing.customers?.avatar_url || "";
+  const initial = customerName.trim().charAt(0).toUpperCase() || "?";
   return (
     <div className={[
       "rounded-3xl border p-3",
       isMe ? "border-[#E10600] bg-black text-white" : compact ? "border-white/10 bg-black text-white" : "border-white/10 bg-white/[0.06] text-white",
     ].join(" ")}>
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black text-white" style={{ backgroundColor: rank <= 3 ? RED : isMe ? "#000000" : "#FFFFFF18" }}>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black text-white sm:h-10 sm:w-10 sm:text-sm" style={{ backgroundColor: rank <= 3 ? RED : isMe ? "#000000" : "#FFFFFF18" }}>
           #{medal}
         </span>
+        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-[#0A0A0A] text-sm font-black uppercase text-white sm:h-11 sm:w-11">
+          {avatarUrl ? (
+            <Image src={avatarUrl} alt={customerName} fill sizes="44px" className="object-cover" loading="lazy" />
+          ) : (
+            <span>{initial}</span>
+          )}
+        </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-black uppercase">
-            {standing.customers?.name || "Anonimo"} {isMe && <span className="text-yellow-500">(vos)</span>}
+            {customerName} {isMe && <span className="text-yellow-500">(vos)</span>}
           </p>
           <p className={["mt-1 text-[10px] font-bold uppercase", isMe ? "text-white/70" : "text-white/45"].join(" ")}>
             {standing.correct_results} exactos / {standing.correct_scorers} goleadores / {standing.perfect_predictions} perfectos

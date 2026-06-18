@@ -1,18 +1,25 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 import { getCustomerSession } from "@/lib/customer-session";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const BUCKET = "customer-avatars";
 
-function getExt(file: File) {
-  const fromName = file.name.split(".").pop()?.toLowerCase();
-  if (fromName && ["jpg", "jpeg", "png", "webp", "gif"].includes(fromName)) return fromName;
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-  if (file.type === "image/gif") return "gif";
-  return "jpg";
+export const runtime = "nodejs";
+
+async function optimizeAvatar(file: File) {
+  const input = Buffer.from(await file.arrayBuffer());
+  return sharp(input)
+    .rotate()
+    .resize(256, 256, {
+      fit: "cover",
+      position: "centre",
+      withoutEnlargement: true,
+    })
+    .webp({ quality: 82, effort: 4 })
+    .toBuffer();
 }
 
 export async function POST(req: Request) {
@@ -42,14 +49,19 @@ export async function POST(req: Request) {
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
   }).then(() => null, () => null);
 
-  const ext = getExt(file);
-  const path = `${session.tenantId}/${session.customerId}/avatar.${ext}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
+  let bytes: Buffer;
+  try {
+    bytes = await optimizeAvatar(file);
+  } catch {
+    return NextResponse.json({ error: "No pudimos procesar la imagen" }, { status: 400 });
+  }
+
+  const path = `${session.tenantId}/${session.customerId}/avatar.webp`;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(path, bytes, {
-      contentType: file.type || `image/${ext}`,
+      contentType: "image/webp",
       cacheControl: "31536000",
       upsert: true,
     });

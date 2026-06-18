@@ -170,7 +170,7 @@ export async function GET() {
     customerIds.length
       ? supabase
           .from("customers")
-          .select("id, name")
+          .select("id, name, avatar_url")
           .in("id", customerIds)
       : Promise.resolve({ data: [] }),
   ]);

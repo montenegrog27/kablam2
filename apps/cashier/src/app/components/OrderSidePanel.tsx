@@ -665,8 +665,6 @@ export default function OrderSidePanel({
           customer_name: customerName || null,
           customer_phone: hasCustomerPhone ? phone : null,
           address: orderType === "delivery" ? address : null,
-          customer_lat: orderType === "delivery" ? customerLat : null,
-          customer_lng: orderType === "delivery" ? customerLng : null,
 
           subtotal,
           discount,
@@ -695,8 +693,6 @@ export default function OrderSidePanel({
           customer_name: customerName || null,
           customer_phone: hasCustomerPhone ? phone : null,
           address: orderType === "delivery" ? address : null,
-          customer_lat: orderType === "delivery" ? customerLat : null,
-          customer_lng: orderType === "delivery" ? customerLng : null,
           subtotal,
           discount,
           total,
