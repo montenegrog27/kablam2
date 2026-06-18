@@ -39,6 +39,24 @@ async function authorize(req: NextRequest, permission: string) {
   return { supabase, user };
 }
 
+function isMissingCashSessionExpenseColumn(error: any) {
+  return (
+    error?.code === "42703" &&
+    String(error?.message || "").includes("expenses.cash_session_id")
+  );
+}
+
+function missingCashierExpensesSetupResponse() {
+  return NextResponse.json(
+    {
+      error: "cashier_expenses_schema_missing",
+      message: "Falta actualizar Supabase: ejecuta add_cashier_expenses.sql para asociar gastos al turno de caja.",
+      setupFile: "add_cashier_expenses.sql",
+    },
+    { status: 500 },
+  );
+}
+
 export async function GET(req: NextRequest) {
   const auth = await authorize(req, "cashier.expenses.view");
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -55,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   if (!session) return NextResponse.json({ error: "cash_session_not_found" }, { status: 404 });
 
-  const [{ data: expenses }, { data: categories }] = await Promise.all([
+  const [expensesResult, { data: categories }] = await Promise.all([
     auth.supabase
       .from("expenses")
       .select("*, expense_categories(name)")
@@ -69,7 +87,12 @@ export async function GET(req: NextRequest) {
       .order("name"),
   ]);
 
-  return NextResponse.json({ expenses: expenses || [], categories: categories || [] });
+  if (expensesResult.error) {
+    if (isMissingCashSessionExpenseColumn(expensesResult.error)) return missingCashierExpensesSetupResponse();
+    return NextResponse.json({ error: expensesResult.error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ expenses: expensesResult.data || [], categories: categories || [] });
 }
 
 export async function POST(req: NextRequest) {
@@ -114,7 +137,10 @@ export async function POST(req: NextRequest) {
     .select("*, expense_categories(name)")
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    if (isMissingCashSessionExpenseColumn(error)) return missingCashierExpensesSetupResponse();
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ expense });
 }
 
@@ -125,12 +151,17 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "expense_id_required" }, { status: 400 });
 
-  const { data: expense } = await auth.supabase
+  const { data: expense, error: expenseError } = await auth.supabase
     .from("expenses")
     .select("id, tenant_id, cash_session_id, cash_sessions(status)")
     .eq("id", id)
     .eq("tenant_id", auth.user.tenant_id)
     .maybeSingle();
+
+  if (expenseError) {
+    if (isMissingCashSessionExpenseColumn(expenseError)) return missingCashierExpensesSetupResponse();
+    return NextResponse.json({ error: expenseError.message }, { status: 500 });
+  }
 
   if (!expense) return NextResponse.json({ error: "expense_not_found" }, { status: 404 });
   if ((expense.cash_sessions as any)?.status !== "open") {

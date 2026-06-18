@@ -34,6 +34,13 @@ function formatDuration(from: string) {
   return `${hours}h ${minutes}m`;
 }
 
+function isMissingCashSessionExpenseColumn(error: any) {
+  return (
+    error?.code === "42703" &&
+    String(error?.message || "").includes("expenses.cash_session_id")
+  );
+}
+
 export default function CloseCash({ session, onClosed, onCancel }: any) {
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
@@ -198,11 +205,18 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
     movementsSummary.net = movementsSummary.in - movementsSummary.out;
 
     // ================= GASTOS =================
-    const { data: expensesData } = await supabase
+    const { data: expensesData, error: expensesError } = await supabase
       .from("expenses")
       .select("id, description, total, expense_categories(name)")
       .eq("cash_session_id", session.id)
       .order("created_at", { ascending: false });
+    if (expensesError && isMissingCashSessionExpenseColumn(expensesError)) {
+      setExpenseError("Falta actualizar Supabase: ejecuta add_cashier_expenses.sql para asociar gastos al turno.");
+    } else if (expensesError) {
+      setExpenseError(expensesError.message || "No pudimos cargar los gastos del turno.");
+    } else {
+      setExpenseError("");
+    }
     const totalExpenses = (expensesData || []).reduce((s: number, e: any) => s + Number(e.total), 0);
     expectedCash -= totalExpenses;
 
@@ -329,7 +343,7 @@ export default function CloseCash({ session, onClosed, onCancel }: any) {
     const data = await response.json();
 
     if (!response.ok) {
-      setExpenseError(data.error || "No se pudo cargar el gasto.");
+      setExpenseError(data.message || data.error || "No se pudo cargar el gasto.");
       setAddingExpense(false);
       return;
     }
