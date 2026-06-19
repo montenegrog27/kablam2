@@ -783,7 +783,7 @@ export default function CheckoutForm({
                 <div className="flex items-center gap-2.5 text-sm bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl">
                   <CheckCircle size={16} className="flex-shrink-0" />
                   <span style={{ fontFamily }}>
-                    Hola <strong>{customerDisplayName}</strong>, tu cupón <strong>{couponDisplayName}</strong> es válido, que lo disfrutes!
+                    Hola <strong>{couponDisplayName}</strong> tu cupón es válido, que lo disfrutes!
                   </span>
                 </div>
               )}
