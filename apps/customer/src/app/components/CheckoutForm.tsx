@@ -66,6 +66,7 @@ type PaymentMethod = {
 type Coupon = {
   id: string;
   code: string;
+  name?: string;
   requires_phone?: boolean;
   discount_type?: string;
   discount_value?: number;
@@ -420,6 +421,8 @@ export default function CheckoutForm({
   };
 
   const couponRequiresPhone = appliedCoupon?.requires_phone === true;
+  const couponDisplayName = appliedCoupon?.name || appliedCoupon?.code || "tu cupon";
+  const customerDisplayName = customer.name.trim() || "crack";
 
   const isPhoneMissingForCoupon =
     couponRequiresPhone && !customer.phone?.trim();
@@ -776,27 +779,20 @@ export default function CheckoutForm({
                 </div>
               )}
 
-              {appliedCoupon && (
+              {appliedCoupon && couponRequiresPhone && (
                 <div className="flex items-center gap-2.5 text-sm bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl">
                   <CheckCircle size={16} className="flex-shrink-0" />
                   <span style={{ fontFamily }}>
-                    Cupón <strong>{appliedCoupon.code}</strong> aplicado
+                    Hola <strong>{customerDisplayName}</strong>, tu cupón <strong>{couponDisplayName}</strong> es válido, que lo disfrutes!
                   </span>
                 </div>
               )}
 
-              {couponRequiresPhone && !customer.phone && (
-                <div className="flex items-center gap-2.5 text-sm bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl">
-                  <AlertCircle size={16} className="flex-shrink-0" />
-                  <span style={{ fontFamily }}>Este cupón requiere ingresar un teléfono</span>
-                </div>
-              )}
-
-              {appliedCoupon && (
+              {appliedCoupon && !couponRequiresPhone && (
                 <div className="flex items-center gap-2.5 text-sm bg-emerald-50 border border-emerald-100 text-emerald-700 px-4 py-3 rounded-xl">
                   <CheckCircle size={16} className="flex-shrink-0" />
                   <span style={{ fontFamily }}>
-                    Cupón <strong>{appliedCoupon.code}</strong> aplicado
+                    Cupón <strong>{couponDisplayName}</strong> aplicado
                   </span>
                 </div>
               )}

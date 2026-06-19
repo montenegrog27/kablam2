@@ -7,6 +7,7 @@ import type { CartItem } from "@/types/menu";
 type Coupon = {
   requires_phone?: boolean;
   code: string;
+  name?: string;
 };
 
 export default function CheckoutPage() {
@@ -79,6 +80,8 @@ export default function CheckoutPage() {
   ========================= */
 
   const couponRequiresPhone = appliedCoupon?.requires_phone === true;
+  const couponDisplayName = appliedCoupon?.name || appliedCoupon?.code || "tu cupon";
+  const customerDisplayName = name.trim() || "crack";
 
   const isPhoneMissingForCoupon = couponRequiresPhone && !phone?.trim();
 
@@ -171,7 +174,9 @@ export default function CheckoutPage() {
       {/* MENSAJES CUPÓN */}
       {appliedCoupon && (
         <div className="bg-green-100 text-green-700 p-2 rounded">
-          Cupón aplicado: {appliedCoupon.code}
+          {couponRequiresPhone
+            ? `Hola ${customerDisplayName}, tu cupón ${couponDisplayName} es válido, que lo disfrutes!`
+            : `Cupón aplicado: ${couponDisplayName}`}
         </div>
       )}
 
