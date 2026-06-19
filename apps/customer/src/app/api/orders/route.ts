@@ -69,6 +69,20 @@ const debugLog = (...args: unknown[]) => {
   if (DEBUG_LOGS) console.log(...args);
 };
 
+function normalizePaymentText(value?: string | null) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isCustomerAllowedPaymentMethod(method: { name?: string | null; type?: string | null }) {
+  const type = normalizePaymentText(method.type);
+  const name = normalizePaymentText(method.name);
+  return type === "cash" || type === "transfer" || name.includes("efectivo") || name.includes("transferencia");
+}
+
 export async function POST(req: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -134,6 +148,31 @@ export async function POST(req: Request) {
 
     if (!branch) {
       return Response.json({ success: false, error: "Branch not found" });
+    }
+
+    if (paymentMethodId) {
+      const { data: paymentMethod } = await supabase
+        .from("payment_methods")
+        .select("id, name, type, requires_reference")
+        .eq("id", paymentMethodId)
+        .eq("tenant_id", branch.tenant_id)
+        .eq("is_active", true)
+        .or(`branch_id.eq.${branch.id},branch_id.is.null`)
+        .maybeSingle();
+
+      if (!paymentMethod || !isCustomerAllowedPaymentMethod(paymentMethod)) {
+        return Response.json({
+          success: false,
+          error: "Metodo de pago no disponible para pedidos web",
+        });
+      }
+
+      if (paymentMethod.requires_reference && !String(paymentReference || "").trim()) {
+        return Response.json({
+          success: false,
+          error: "Referencia de pago requerida",
+        });
+      }
     }
 
     const [{ data: branchSettings }, { data: branchHours }] = await Promise.all([

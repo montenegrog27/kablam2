@@ -7,12 +7,14 @@ import {
   CalendarDays,
   Copy,
   Eye,
+  Pencil,
   Printer,
   RefreshCw,
   Search,
   TicketPercent,
   Trash2,
   Wand2,
+  X,
 } from "lucide-react";
 
 type Coupon = {
@@ -116,6 +118,14 @@ function formatDate(value?: string | null) {
   });
 }
 
+function toDateTimeLocalValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 16);
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
 function chunk<T>(items: T[], size: number) {
   const pages: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -216,6 +226,7 @@ export default function CouponsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [mode, setMode] = useState<"single" | "batch">("batch");
+  const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
 
   const [name, setName] = useState("Cumple Mordisco");
   const [campaign, setCampaign] = useState("Evento Cumple Mordisco");
@@ -436,6 +447,57 @@ export default function CouponsPage() {
     return "";
   };
 
+  const resetCouponForm = () => {
+    setEditingCoupon(null);
+    setMode("batch");
+    setName("Cumple Mordisco");
+    setCampaign("Evento Cumple Mordisco");
+    setCode("");
+    setPrefix("cumplemordisco");
+    setQuantity("9");
+    setSuffixLength("3");
+    setDiscountType("percentage");
+    setDiscountValue("20");
+    setRequiresPhone(true);
+    setAllowedPhone("");
+    setHasExpiration(true);
+    setExpiresAt("");
+    setUsageType("one_time");
+    setUsageLimit("");
+    setWeeklyLimit("");
+    setMonthlyLimit("");
+    setUsageScope("phone");
+    setIsAccumulable(false);
+    setPrintLabel("CupÃ³n especial");
+    setPrintNote("MostrÃ¡ este cupÃ³n al hacer tu pedido.");
+    setMessage("");
+  };
+
+  const startEditCoupon = (coupon: Coupon) => {
+    setEditingCoupon(coupon);
+    setMode("single");
+    setName(coupon.name || "");
+    setCampaign(coupon.campaign || "");
+    setCode(coupon.code || "");
+    setPrefix(coupon.prefix || "");
+    setDiscountType(coupon.discount_type || "percentage");
+    setDiscountValue(coupon.discount_value != null ? String(coupon.discount_value) : "");
+    setRequiresPhone(Boolean(coupon.requires_phone));
+    setAllowedPhone(coupon.allowed_phone || "");
+    setHasExpiration(Boolean(coupon.has_expiration || coupon.expires_at));
+    setExpiresAt(toDateTimeLocalValue(coupon.expires_at));
+    setUsageType(coupon.usage_type || "unlimited");
+    setUsageLimit(coupon.usage_limit != null ? String(coupon.usage_limit) : "");
+    setWeeklyLimit(coupon.weekly_limit != null ? String(coupon.weekly_limit) : "");
+    setMonthlyLimit(coupon.monthly_limit != null ? String(coupon.monthly_limit) : "");
+    setUsageScope((coupon.usage_scope as UsageScope) || "phone");
+    setIsAccumulable(Boolean(coupon.is_accumulable));
+    setPrintLabel(coupon.print_label || "");
+    setPrintNote(coupon.print_note || "");
+    setMessage(`Editando cupÃ³n ${coupon.code}.`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleCreate = async (event: FormEvent) => {
     event.preventDefault();
     const formError = validateForm();
@@ -446,6 +508,55 @@ export default function CouponsPage() {
 
     setSaving(true);
     setMessage("");
+
+    if (editingCoupon) {
+      if (!editingCoupon.id) {
+        setSaving(false);
+        setMessage("No se puede editar este cupÃ³n porque no tiene ID.");
+        return;
+      }
+
+      const normalizedCode = normalizeCode(code);
+      const duplicatedCode = coupons.some(
+        (coupon) =>
+          coupon.id !== editingCoupon.id && normalizeCode(coupon.code || "") === normalizedCode,
+      );
+
+      if (duplicatedCode) {
+        setSaving(false);
+        setMessage("Ya existe otro cupÃ³n con ese cÃ³digo.");
+        return;
+      }
+
+      const payload = {
+        ...buildCouponPayload(normalizedCode, name, editingCoupon.batch_id || undefined),
+        batch_id: editingCoupon.batch_id || null,
+        prefix: editingCoupon.prefix || null,
+      };
+      const { data, error } = await supabase
+        .from("coupons")
+        .update(payload)
+        .eq("tenant_id", tenantId)
+        .eq("id", editingCoupon.id)
+        .select("*")
+        .single();
+
+      setSaving(false);
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      setPrintCoupons((current) =>
+        current.map((coupon) => (coupon.id === editingCoupon.id ? ((data || payload) as Coupon) : coupon)),
+      );
+      setEditingCoupon(null);
+      setCode("");
+      setMessage("CupÃ³n actualizado correctamente.");
+      await loadData();
+      return;
+    }
 
     if (mode === "single") {
       const payload = buildCouponPayload(code, name);
@@ -651,6 +762,16 @@ export default function CouponsPage() {
       });
   }, [batchSearch, batchSort, batchStatusFilter, batches]);
 
+  const submitText = saving
+    ? editingCoupon
+      ? "Guardando..."
+      : "Generando..."
+    : editingCoupon
+      ? "Guardar cambios"
+      : mode === "batch"
+        ? "Generar lote"
+        : "Crear cupÃ³n";
+
   return (
     <div className="min-h-screen bg-gray-950 p-4 text-gray-100 md:p-6">
       <style>{`
@@ -738,22 +859,42 @@ export default function CouponsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <form onSubmit={handleCreate} className="rounded-xl border border-gray-800 bg-gray-900/70 p-4 shadow-xl md:p-6">
+          {editingCoupon && (
+            <div className="mb-5 flex flex-col gap-3 rounded-xl border border-orange-500/30 bg-orange-500/10 p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-orange-200">
+                  Editando cupÃ³n
+                </p>
+                <p className="mt-1 font-bold text-white">{editingCoupon.code}</p>
+              </div>
+              <button
+                type="button"
+                onClick={resetCouponForm}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-orange-400/40 px-3 py-2 text-xs font-bold text-orange-100 transition hover:bg-orange-500/15"
+              >
+                <X size={14} />
+                Cancelar ediciÃ³n
+              </button>
+            </div>
+          )}
           <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-gray-950 p-1">
             <button
               type="button"
+              disabled={Boolean(editingCoupon)}
               onClick={() => setMode("batch")}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                 mode === "batch" ? "bg-orange-500 text-white" : "text-gray-400 hover:bg-gray-900"
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-50`}
             >
               Lote imprimible
             </button>
             <button
               type="button"
+              disabled={Boolean(editingCoupon)}
               onClick={() => setMode("single")}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                 mode === "single" ? "bg-orange-500 text-white" : "text-gray-400 hover:bg-gray-900"
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-50`}
             >
               Cupón individual
             </button>
@@ -930,8 +1071,8 @@ export default function CouponsPage() {
               disabled={saving}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-500 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-400 disabled:opacity-50"
             >
-              <Wand2 size={17} />
-              {saving ? "Generando..." : mode === "batch" ? "Generar lote" : "Crear cupón"}
+              {editingCoupon ? <Pencil size={17} /> : <Wand2 size={17} />}
+              {submitText}
             </button>
           </div>
         </form>
@@ -1402,7 +1543,14 @@ export default function CouponsPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2 md:justify-end">
+              <div className="flex flex-wrap gap-2 md:justify-end">
+                <button
+                  onClick={() => startEditCoupon(coupon)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-700 px-3 py-2 text-xs font-semibold text-gray-200 hover:bg-gray-800"
+                >
+                  <Pencil size={13} />
+                  Editar
+                </button>
                 {coupon.batch_id && (
                   <button
                     onClick={() => loadBatchForPrint(coupon.batch_id)}

@@ -60,6 +60,7 @@ type Props = {
 type PaymentMethod = {
   id: string;
   name: string;
+  type?: string | null;
   requires_reference: boolean;
 };
 
@@ -89,6 +90,20 @@ type SavedAddress = {
   latitude?: number | null;
   longitude?: number | null;
 };
+
+function normalizePaymentText(value?: string | null) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isCustomerAllowedPaymentMethod(method: PaymentMethod) {
+  const type = normalizePaymentText(method.type);
+  const name = normalizePaymentText(method.name);
+  return type === "cash" || type === "transfer" || name.includes("efectivo") || name.includes("transferencia");
+}
 
 export default function CheckoutForm({
   cart,
@@ -152,7 +167,7 @@ export default function CheckoutForm({
 
     const { data: branch, error: branchError } = await supabase
       .from("branches")
-      .select("id")
+      .select("id, tenant_id")
       .eq("slug", branchSlug)
       .single();
 
@@ -166,16 +181,22 @@ export default function CheckoutForm({
     // Traer métodos específicos de la branch O métodos del tenant (branch_id = null)
     const { data: methods, error: methodsError } = await supabase
       .from("payment_methods")
-      .select("id, name, requires_reference")
+      .select("id, name, type, requires_reference")
       .eq("is_active", true)
+      .eq("tenant_id", branch.tenant_id)
       .or(`branch_id.eq.${branch.id},branch_id.is.null`)
       .order("name");
 
     console.log("CHECKOUT: payment methods result:", { methods, methodsError });
 
-    if (methods && methods.length > 0) {
-      setPaymentMethods(methods);
-      setSelectedPaymentMethod(methods[0].id);
+    const customerMethods = (methods || []).filter(isCustomerAllowedPaymentMethod);
+
+    if (customerMethods.length > 0) {
+      setPaymentMethods(customerMethods);
+      setSelectedPaymentMethod(customerMethods[0].id);
+    } else {
+      setPaymentMethods([]);
+      setSelectedPaymentMethod("");
     }
   }, [branchSlug]);
 
