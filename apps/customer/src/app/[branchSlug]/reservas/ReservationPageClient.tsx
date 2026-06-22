@@ -596,6 +596,7 @@ function EventRegistrationView({
             <p className="mt-3 text-slate-700">
               Para confirmar tu lugar, transferi {price ? formatCurrency(price) : "el importe indicado"} y envia el comprobante por WhatsApp.
             </p>
+            <h3 className="text-2xl font-black">Alias:</h3>
             {settings.deposit_alias && (
               <div className="mt-5 rounded-lg bg-slate-950 px-4 py-3 font-mono text-lg font-bold text-white">
                 {settings.deposit_alias}
