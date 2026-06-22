@@ -38,42 +38,47 @@ export async function POST(req: NextRequest) {
 
     if (!(await isSuperAdmin(req, supabaseService))) {
       return NextResponse.json(
-        { error: "No autorizado. Solo SuperAdmin puede crear branches." },
+        { error: "No autorizado. Solo SuperAdmin puede crear tenants." },
         { status: 403 },
       );
     }
 
     const body = await req.json();
-    const { tenant_id, name, slug } = body;
+    const { name, slug, plan, trial_ends_at } = body;
 
-    if (!tenant_id || !name || !slug) {
+    if (!name || !slug) {
       return NextResponse.json(
-        { error: "Faltan campos requeridos: tenant_id, name, slug" },
+        { error: "Faltan campos requeridos: name, slug" },
         { status: 400 },
       );
     }
 
-    const { data: branch, error } = await supabaseService
-      .from("branches")
-      .insert({ tenant_id, name, slug })
+    const { data: tenant, error } = await supabaseService
+      .from("tenants")
+      .insert({
+        name,
+        slug,
+        plan: plan || "free",
+        trial_ends_at: trial_ends_at || null,
+      })
       .select()
       .single();
 
     if (error) {
-      console.error("Error creando branch:", error);
+      console.error("Error creando tenant:", error);
       return NextResponse.json(
-        { error: "Error al crear branch", details: error.message },
+        { error: "Error al crear tenant", details: error.message },
         { status: 500 },
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: "Branch creada exitosamente",
-      branch,
+      message: "Tenant creado exitosamente",
+      tenant,
     });
   } catch (error: any) {
-    console.error("Error en API superadmin/branches:", error);
+    console.error("Error en API superadmin/tenants:", error);
     return NextResponse.json(
       { error: "Error interno del servidor", details: error.message },
       { status: 500 },
@@ -87,64 +92,48 @@ export async function PUT(req: NextRequest) {
 
     if (!(await isSuperAdmin(req, supabaseService))) {
       return NextResponse.json(
-        { error: "No autorizado. Solo SuperAdmin puede editar branches." },
+        { error: "No autorizado. Solo SuperAdmin puede editar tenants." },
         { status: 403 },
       );
     }
 
     const body = await req.json();
-    const {
-      id,
-      tenant_id,
-      name,
-      slug,
-      address,
-      phone,
-      active,
-      delivery_enabled,
-      pickup_enabled,
-      dine_in_enabled,
-    } = body;
+    const { id, name, slug, plan, trial_ends_at } = body;
 
-    if (!id || !tenant_id || !name || !slug) {
+    if (!id || !name || !slug) {
       return NextResponse.json(
-        { error: "Faltan campos requeridos: id, tenant_id, name, slug" },
+        { error: "Faltan campos requeridos: id, name, slug" },
         { status: 400 },
       );
     }
 
-    const { data: branch, error } = await supabaseService
-      .from("branches")
+    const { data: tenant, error } = await supabaseService
+      .from("tenants")
       .update({
-        tenant_id,
         name,
         slug,
-        address: address || null,
-        phone: phone || null,
-        active: active ?? true,
-        delivery_enabled: delivery_enabled ?? true,
-        pickup_enabled: pickup_enabled ?? true,
-        dine_in_enabled: dine_in_enabled ?? true,
+        plan: plan || "free",
+        trial_ends_at: trial_ends_at || null,
       })
       .eq("id", id)
       .select()
       .single();
 
     if (error) {
-      console.error("Error editando branch:", error);
+      console.error("Error editando tenant:", error);
       return NextResponse.json(
-        { error: "Error al editar branch", details: error.message },
+        { error: "Error al editar tenant", details: error.message },
         { status: 500 },
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: "Branch editada exitosamente",
-      branch,
+      message: "Tenant editado exitosamente",
+      tenant,
     });
   } catch (error: any) {
-    console.error("Error en API superadmin/branches PUT:", error);
+    console.error("Error en API superadmin/tenants PUT:", error);
     return NextResponse.json(
       { error: "Error interno del servidor", details: error.message },
       { status: 500 },

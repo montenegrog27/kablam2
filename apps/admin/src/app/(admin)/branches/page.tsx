@@ -270,6 +270,10 @@ export default function BranchesPage() {
           catalog_order_pickup_addresses: cleanPickupAddresses(
             branchSettings.catalog_order_pickup_addresses,
           ),
+          catalog_order_advance_days: Math.max(
+            1,
+            Number(branchSettings.catalog_order_advance_days || 10),
+          ),
         },
         { onConflict: "branch_id" },
       );
@@ -301,7 +305,8 @@ export default function BranchesPage() {
             "ADD COLUMN IF NOT EXISTS catalog_order_instructions TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_show_delivery_address BOOLEAN,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_show_pickup_addresses BOOLEAN,\n" +
-            "ADD COLUMN IF NOT EXISTS catalog_order_pickup_addresses JSONB;",
+            "ADD COLUMN IF NOT EXISTS catalog_order_pickup_addresses JSONB,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_advance_days INTEGER;",
         );
       } else {
         alert("Error al guardar configuración: " + error.message);
@@ -1068,6 +1073,30 @@ export default function BranchesPage() {
                         )
                       }
                     />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      Dias disponibles para encargar
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      step={1}
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100"
+                      value={branchSettings.catalog_order_advance_days ?? 10}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_advance_days",
+                          e.target.value,
+                        )
+                      }
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Customer muestra solo hoy y los proximos dias configurados.
+                    </p>
                   </div>
 
                   <div className="md:col-span-2">

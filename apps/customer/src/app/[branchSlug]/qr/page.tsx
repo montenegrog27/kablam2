@@ -57,7 +57,6 @@ export default async function QrMenuPage({
               {data.branch.name.slice(0, 1)}
             </div>
           )}
-          <p className="mt-3 text-xs font-black uppercase tracking-[0.28em] text-slate-500">Menu de mesa</p>
         </div>
       </header>
 

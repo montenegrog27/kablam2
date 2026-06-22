@@ -49,6 +49,16 @@ function isValidDate(value: string) {
   return date.getTime() >= today.getTime();
 }
 
+function isDateWithinAdvanceDays(value: string, advanceDays: number) {
+  if (!isValidDate(value)) return false;
+  const date = new Date(`${value}T12:00:00-03:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDate = new Date(today);
+  maxDate.setDate(today.getDate() + Math.max(1, advanceDays) - 1);
+  return date.getTime() <= maxDate.getTime();
+}
+
 function getDefaultVariant(product: any) {
   return (
     product.product_variants?.find((variant: any) => variant.is_default) ||
@@ -64,10 +74,12 @@ function getRequestedVariant(product: any, variantId?: string) {
 }
 
 async function sendWhatsapp({
+  tenantSlug,
   branchSlug,
   phone,
   message,
 }: {
+  tenantSlug: string;
   branchSlug: string;
   phone: string;
   message: string;
@@ -85,21 +97,43 @@ async function sendWhatsapp({
     return { ok: false, skipped: true, error: "WHATSAPP_TOKEN missing" };
   }
 
+  const whatsappPayload = {
+    slug: tenantSlug,
+    branchId: branchSlug,
+    phone,
+    message,
+  };
+
+  console.log("[catalog-orders] WhatsApp request", {
+    url: `${baseUrl}/api/whatsapp/send`,
+    slug: whatsappPayload.slug,
+    branchId: whatsappPayload.branchId,
+    phone: whatsappPayload.phone,
+    tokenConfigured: Boolean(token),
+    payload: whatsappPayload,
+    messagePreview: whatsappPayload.message.slice(0, 500),
+    messageLength: whatsappPayload.message.length,
+  });
+
   const response = await fetch(`${baseUrl}/api/whatsapp/send`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      slug: "mordiscoburgers",
-      branchId: branchSlug,
-      phone,
-      message,
-    }),
+    body: JSON.stringify(whatsappPayload),
   });
 
   const payload = await response.json().catch(() => ({}));
+  console.log("[catalog-orders] WhatsApp response", {
+    slug: whatsappPayload.slug,
+    branchId: whatsappPayload.branchId,
+    phone: whatsappPayload.phone,
+    status: response.status,
+    ok: response.ok,
+    payload,
+  });
+
   return {
     ok: response.ok && !payload?.error,
     status: response.status,
@@ -224,12 +258,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "branch_not_found" }, { status: 404 });
     }
 
+    const { data: tenant, error: tenantError } = await supabase
+      .from("tenants")
+      .select("slug")
+      .eq("id", branch.tenant_id)
+      .maybeSingle();
+
+    if (tenantError) throw new Error(tenantError.message);
+    if (!tenant?.slug) {
+      return NextResponse.json({ error: "tenant_not_found" }, { status: 404 });
+    }
+
     const [{ data: settings, error: settingsError }, { data: product, error: productError }] =
       await Promise.all([
         supabase
           .from("branch_settings")
           .select(
-            "catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses",
+            "catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days",
           )
           .eq("branch_id", branch.id)
           .maybeSingle(),
@@ -266,6 +311,14 @@ export async function POST(req: Request) {
     const pickupAddresses = Array.isArray(settings?.catalog_order_pickup_addresses)
       ? settings.catalog_order_pickup_addresses.filter(Boolean).map(String)
       : [];
+    const advanceDays = Math.max(1, Number(settings?.catalog_order_advance_days || 10));
+    if (!isDateWithinAdvanceDays(requestedDate, advanceDays)) {
+      return NextResponse.json(
+        { error: "requested_date_not_available" },
+        { status: 400 },
+      );
+    }
+
     const deliveryEnabled = settings?.catalog_order_show_delivery_address !== false;
     const pickupEnabled = Boolean(
       settings?.catalog_order_show_pickup_addresses && pickupAddresses.length > 0,
@@ -389,11 +442,13 @@ export async function POST(req: Request) {
 
     const [customerSend, branchSend] = await Promise.all([
       sendWhatsapp({
+        tenantSlug: tenant.slug,
         branchSlug: branch.slug,
         phone: customerPhone,
         message: customerMessage,
       }),
       sendWhatsapp({
+        tenantSlug: tenant.slug,
         branchSlug: branch.slug,
         phone: branchReceiverPhone,
         message: branchMessage,

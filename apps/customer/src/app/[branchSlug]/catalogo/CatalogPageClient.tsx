@@ -35,6 +35,22 @@ function todayInput() {
   return new Date().toISOString().split("T")[0];
 }
 
+function dateInputFromOffset(offset: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return date.toISOString().split("T")[0];
+}
+
+function formatDayLabel(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return new Intl.DateTimeFormat("es-AR", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(date);
+}
+
 export default function CatalogPageClient({ data, branchSlug }: Props) {
   const [selectedProduct, setSelectedProduct] = useState<QrMenuProduct | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState("");
@@ -60,6 +76,11 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
   const pickupAddresses = data.catalogOrder?.pickup_addresses || [];
   const showDeliveryAddress = data.catalogOrder?.show_delivery_address !== false;
   const showPickupAddresses = Boolean(data.catalogOrder?.show_pickup_addresses && pickupAddresses.length > 0);
+  const advanceDays = Math.max(1, Number(data.catalogOrder?.advance_days || 10));
+  const availableDates = useMemo(
+    () => Array.from({ length: advanceDays }, (_, index) => dateInputFromOffset(index)),
+    [advanceDays],
+  );
   const defaultFulfillmentType: OrderForm["fulfillmentType"] = showDeliveryAddress
     ? "delivery"
     : showPickupAddresses
@@ -90,7 +111,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
     setSelectedVariantId(defaultVariant?.id || "");
     setForm((current) => ({
       ...current,
-      date: current.date || todayInput(),
+      date: availableDates.includes(current.date) ? current.date : availableDates[0] || todayInput(),
       fulfillmentType: defaultFulfillmentType,
       address:
         defaultFulfillmentType === "pickup"
@@ -164,6 +185,8 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
             "Revisa nombre, WhatsApp, datos de entrega/retiro y fecha para continuar.",
           pickup_address_required:
             "Elegi una direccion de retiro para continuar.",
+          requested_date_not_available:
+            "Elegi una de las fechas disponibles para continuar.",
           product_without_price:
             "Este producto todavia no tiene precio configurado.",
         };
@@ -201,7 +224,6 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
             ) : (
               <p className="truncate text-lg font-black">{data.branch.name}</p>
             )}
-            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.22em] text-stone-500">Catalogo</p>
           </div>
 
           <a
@@ -469,21 +491,28 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                 )}
 
                 {showPickupAddresses && form.fulfillmentType === "pickup" && (
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Direccion de retiro</span>
-                    <select
-                      required
-                      value={form.address}
-                      onChange={(event) => updateForm("address", event.target.value)}
-                      className="w-full rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-stone-500"
-                    >
+                  <div>
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">
+                      Lugar de retiro
+                    </span>
+                    <input required value={form.address} onChange={() => undefined} className="sr-only" />
+                    <div className="grid gap-2">
                       {pickupAddresses.map((address) => (
-                        <option key={address} value={address}>
+                        <button
+                          key={address}
+                          type="button"
+                          onClick={() => updateForm("address", address)}
+                          className={`rounded-2xl border px-3 py-3 text-left text-sm font-black transition ${
+                            form.address === address
+                              ? "border-stone-900 bg-white text-stone-950 shadow-sm"
+                              : "border-stone-200 bg-white/70 text-stone-600"
+                          }`}
+                        >
                           {address}
-                        </option>
+                        </button>
                       ))}
-                    </select>
-                  </label>
+                    </div>
+                  </div>
                 )}
 
                 {!showDeliveryAddress && !showPickupAddresses && (
@@ -493,17 +522,26 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                 )}
 
                 <label className="block">
-                  <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Fecha del pedido</span>
-                  <div className="relative">
-                    <CalendarDays size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                    <input
-                      required
-                      type="date"
-                      min={todayInput()}
-                      value={form.date}
-                      onChange={(event) => updateForm("date", event.target.value)}
-                      className="w-full rounded-xl border border-stone-200 bg-white py-3 pl-10 pr-3 text-sm font-semibold outline-none focus:border-stone-500"
-                    />
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">
+                    Fecha del pedido
+                  </span>
+                  <input required value={form.date} onChange={() => undefined} className="sr-only" />
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {availableDates.map((date) => (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => updateForm("date", date)}
+                        className={`flex items-center gap-2 rounded-2xl border px-3 py-3 text-left text-sm font-black transition ${
+                          form.date === date
+                            ? "border-stone-900 bg-white text-stone-950 shadow-sm"
+                            : "border-stone-200 bg-white/70 text-stone-600"
+                        }`}
+                      >
+                        <CalendarDays size={16} className="shrink-0 text-stone-400" />
+                        <span className="capitalize">{formatDayLabel(date)}</span>
+                      </button>
+                    ))}
                   </div>
                 </label>
 
