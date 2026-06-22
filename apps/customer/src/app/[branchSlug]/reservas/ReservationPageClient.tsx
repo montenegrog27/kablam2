@@ -489,7 +489,7 @@ function EventRegistrationView({
     eventTimeMode === "none"
       ? "Sin horario"
       : eventTimeMode === "single"
-        ? `Entrada ${eventTime}`
+        ? `Largada ${eventTime}`
         : `${normalizeTime(settings.start_time)} a ${normalizeTime(settings.end_time)}`;
   const price = Number(settings.deposit_amount || 0);
   const capacity = Number(settings.capacity_per_slot || 0);
