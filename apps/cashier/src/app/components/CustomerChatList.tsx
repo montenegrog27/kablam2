@@ -106,17 +106,25 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const msgPageRef = useRef<Map<string, number>>(new Map());
   const convPageRef = useRef(0);
   const conversationsRef = useRef<Conversation[]>([]);
+  const activeConvRef = useRef<Conversation | null>(null);
 
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
 
   useEffect(() => {
+    activeConvRef.current = activeConv;
+  }, [activeConv]);
+
+  useEffect(() => {
     if (!branchId) return;
     convPageRef.current = 0;
     setAllConversationsLoaded(false);
-    if (cachedConvs.current) { setConversations(cachedConvs.current); setLoading(false); }
-    else loadConversations(0);
+    if (cachedConvs.current) {
+      setConversations(cachedConvs.current);
+      setLoading(false);
+    }
+    loadConversations(0);
     loadUnreadCounts();
     loadOrdersFilter();
     setNotificationPermission(getWhatsAppNotificationPermission());
@@ -129,17 +137,27 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
         (payload) => {
           const msg = payload.new as Message & { conversation_id: string };
           const isIncomingCustomerMessage = msg.sender_type === "customer";
-          if (activeConv && msg.conversation_id === activeConv.id) {
+          const currentActiveConv = activeConvRef.current;
+          if (currentActiveConv && msg.conversation_id === currentActiveConv.id) {
             setMessages((prev) => { const e = prev.find((m) => m.id === msg.id); return e ? prev : [...prev, msg]; });
           } else if (isIncomingCustomerMessage) {
             setUnreadMap((p) => ({ ...p, [msg.conversation_id]: (p[msg.conversation_id] || 0) + 1 }));
             notifyNewMessage(msg);
           }
           // Siempre mover la conversación al tope (como WhatsApp)
-          upsertConversationFromMessage(msg);
-        }).subscribe();
+          void upsertConversationFromMessage(msg);
+        })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversations", filter: `branch_id=eq.${branchId}` },
+        (payload) => {
+          void upsertConversationFromConversation(payload.new as { id: string; customer_id?: string; last_message_at?: string | null });
+        })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations", filter: `branch_id=eq.${branchId}` },
+        (payload) => {
+          void upsertConversationFromConversation(payload.new as { id: string; customer_id?: string; last_message_at?: string | null });
+        })
+      .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [branchId, activeConv]);
+  }, [branchId]);
 
   useEffect(() => {
     if (activeConv) {
@@ -162,7 +180,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
       .from("conversations")
       .select("id, customer_id, last_message_at")
       .eq("branch_id", branchId)
-      .order("last_message_at", { ascending: false, nullsFirst: true })
+      .order("last_message_at", { ascending: false, nullsFirst: false })
       .range(from, to);
 
     if (error || !data) { console.error("Error loading conversations:", error); setLoading(false); return; }
@@ -216,10 +234,20 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
       .eq("id", conv.customer_id)
       .maybeSingle();
 
+    const { data: lastMessage } = await supabase
+      .from("messages")
+      .select("message, media_type, created_at")
+      .eq("conversation_id", convId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     return {
       ...conv,
       customers: customer || { id: conv.customer_id, name: "Cliente", phone: "" },
-      last_message: "Sin mensajes",
+      last_message: lastMessage?.message || getMediaLabel(lastMessage?.media_type) || "Sin mensajes",
+      last_media_type: lastMessage?.media_type,
+      last_message_at: conv.last_message_at || lastMessage?.created_at || null,
       unread_count: 0,
     } as Conversation;
   };
@@ -262,6 +290,25 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
         },
         ...prev,
       ]);
+      cachedConvs.current = next;
+      return next;
+    });
+  };
+
+  const upsertConversationFromConversation = async (convRow: { id: string; customer_id?: string; last_message_at?: string | null }) => {
+    const hydrated = await hydrateConversation(convRow.id);
+    if (!hydrated) return;
+
+    const incoming = {
+      ...hydrated,
+      last_message_at: convRow.last_message_at || hydrated.last_message_at,
+    };
+
+    setConversations((prev) => {
+      const exists = prev.some((c) => c.id === incoming.id);
+      const next = sortConversations(exists
+        ? prev.map((c) => c.id === incoming.id ? { ...c, ...incoming } : c)
+        : [incoming, ...prev]);
       cachedConvs.current = next;
       return next;
     });
