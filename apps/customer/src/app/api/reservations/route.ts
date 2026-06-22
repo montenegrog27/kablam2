@@ -52,12 +52,47 @@ function buildReservationCustomerMessage({
 }) {
   const title = settings.title || "tu reserva";
   const isEvent = settings.reservation_type === "event";
+  const includes = Array.isArray(settings.event_includes)
+    ? settings.event_includes.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+    : [];
+
+  if (isEvent) {
+    const location = [settings.location_name, settings.location_address]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .join(", ");
+    const value = formatCurrency(settings.deposit_amount);
+    const distance = String(settings.event_badge || "").trim();
+    const subtitle = String(settings.event_subtitle || "").trim();
+    const eventLines = [
+      `*${String(title).toUpperCase()}* 🇦🇷`,
+      "",
+      `Hola ${customerName.trim()}! Tu inscripción quedó registrada.`,
+      "",
+      `📅 *Fecha:* ${formatDate(reservationDate)}`,
+      resolveTimeMode(settings) === "none" ? null : `🕒 *Horario:* ${reservationTime.slice(0, 5)}`,
+      location ? `📍 *Largada y llegada:* ${location}` : null,
+      distance ? `🏃‍♀️ *Distancia:* ${distance}` : null,
+      value ? `💵 *Valor:* ${value}` : null,
+      "",
+      settings.deposit_alias
+        ? `Para confirmar tu lugar, transferí al alias:\n👉 *${settings.deposit_alias}*`
+        : "Te vamos a contactar por WhatsApp para confirmar tu lugar.",
+      settings.deposit_alias
+        ? "\nDespués respondé este WhatsApp con el screenshot del comprobante de pago."
+        : null,
+      includes.length ? "\nIncluye:" : null,
+      ...includes.map((item: string) => item),
+      subtitle ? `\n${subtitle}` : null,
+    ];
+
+    return eventLines.filter(Boolean).join("\n");
+  }
+
   const lines = [
     `Hola ${customerName.trim()}!`,
     "",
-    isEvent
-      ? `Tu inscripcion a *${title}* quedo registrada.`
-      : `Tu reserva en *${branchName}* quedo registrada.`,
+    `Tu reserva en *${branchName}* quedo registrada.`,
     "",
     `Fecha: ${formatDate(reservationDate)}`,
     resolveTimeMode(settings) === "none" ? null : `Horario: ${reservationTime.slice(0, 5)}`,
