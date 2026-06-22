@@ -618,9 +618,6 @@ function EventRegistrationView({
             <div className="border-t border-white/50 pt-3">
               Entrada: {price ? formatCurrency(price) : "A confirmar"}
             </div>
-            <div className="border-t border-white/50 pt-3">
-              Cupos: {capacity ? `${registrationCount}/${capacity}` : registrationCount}
-            </div>
           </div>
         </div>
       </section>
