@@ -122,7 +122,7 @@ export default function BranchesPage() {
   };
 
   const parsePickupAddresses = (value: any) => {
-    if (Array.isArray(value)) return value.filter(Boolean).map(String);
+    if (Array.isArray(value)) return value.map(String);
     if (typeof value === "string") {
       try {
         const parsed = JSON.parse(value);
@@ -135,6 +135,41 @@ export default function BranchesPage() {
       }
     }
     return [];
+  };
+
+  const cleanPickupAddresses = (value: any) =>
+    parsePickupAddresses(value)
+      .map((address) => address.trim())
+      .filter(Boolean);
+
+  const updatePickupAddress = (
+    branchId: string,
+    currentValue: any,
+    index: number,
+    value: string,
+  ) => {
+    const addresses = parsePickupAddresses(currentValue);
+    addresses[index] = value;
+    updateLocalSettings(branchId, "catalog_order_pickup_addresses", addresses);
+  };
+
+  const addPickupAddress = (branchId: string, currentValue: any) => {
+    updateLocalSettings(branchId, "catalog_order_pickup_addresses", [
+      ...parsePickupAddresses(currentValue),
+      "",
+    ]);
+  };
+
+  const removePickupAddress = (
+    branchId: string,
+    currentValue: any,
+    index: number,
+  ) => {
+    updateLocalSettings(
+      branchId,
+      "catalog_order_pickup_addresses",
+      parsePickupAddresses(currentValue).filter((_, i) => i !== index),
+    );
   };
 
   /* =============================
@@ -232,7 +267,7 @@ export default function BranchesPage() {
             branchSettings.catalog_order_show_delivery_address ?? true,
           catalog_order_show_pickup_addresses:
             branchSettings.catalog_order_show_pickup_addresses ?? false,
-          catalog_order_pickup_addresses: parsePickupAddresses(
+          catalog_order_pickup_addresses: cleanPickupAddresses(
             branchSettings.catalog_order_pickup_addresses,
           ),
         },
@@ -1036,23 +1071,76 @@ export default function BranchesPage() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-xs font-semibold text-gray-400">
-                      Direcciones de retiro
-                    </label>
-                    <textarea
-                      placeholder={"Una direccion por linea\nEj: San Juan 635\nEj: Mendoza 123"}
-                      className="min-h-24 w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
-                      value={parsePickupAddresses(
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="block text-xs font-semibold text-gray-400">
+                        Direcciones de retiro
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          addPickupAddress(
+                            branch.id,
+                            branchSettings.catalog_order_pickup_addresses,
+                          )
+                        }
+                        className="rounded-lg border border-gray-600 bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-100 hover:bg-gray-950"
+                      >
+                        Agregar direccion
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {parsePickupAddresses(
                         branchSettings.catalog_order_pickup_addresses,
-                      ).join("\n")}
-                      onChange={(e) =>
-                        updateLocalSettings(
-                          branch.id,
-                          "catalog_order_pickup_addresses",
-                          e.target.value,
-                        )
-                      }
-                    />
+                      ).map((address, index) => (
+                        <div key={index} className="flex gap-2">
+                          <input
+                            placeholder="Ej: San Juan 635"
+                            className="min-w-0 flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                            value={address}
+                            onChange={(e) =>
+                              updatePickupAddress(
+                                branch.id,
+                                branchSettings.catalog_order_pickup_addresses,
+                                index,
+                                e.target.value,
+                              )
+                            }
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removePickupAddress(
+                                branch.id,
+                                branchSettings.catalog_order_pickup_addresses,
+                                index,
+                              )
+                            }
+                            className="rounded-lg border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/60"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ))}
+
+                      {parsePickupAddresses(
+                        branchSettings.catalog_order_pickup_addresses,
+                      ).length === 0 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            addPickupAddress(
+                              branch.id,
+                              branchSettings.catalog_order_pickup_addresses,
+                            )
+                          }
+                          className="w-full rounded-lg border border-dashed border-gray-600 bg-gray-900/60 px-3 py-3 text-sm font-semibold text-gray-400 hover:border-gray-500 hover:text-gray-200"
+                        >
+                          Agregar primera direccion de retiro
+                        </button>
+                      )}
+                    </div>
+
                     <p className="mt-1 text-xs text-gray-500">
                       Si activas retiro, carga al menos una direccion para que el cliente pueda elegir.
                     </p>
