@@ -47,6 +47,7 @@ export type QrMenuData = {
     name: string;
     slug: string;
     tenant_id: string;
+    phone?: string | null;
   };
   branding: {
     logo_url?: string;
@@ -57,6 +58,13 @@ export type QrMenuData = {
     font_family?: string;
     font_url?: string;
   } | null;
+  catalogOrder: {
+    whatsapp_phone?: string | null;
+    deposit_enabled?: boolean | null;
+    deposit_percent?: number | null;
+    transfer_alias?: string | null;
+    instructions?: string | null;
+  };
   categories: QrMenuCategory[];
 };
 
@@ -73,7 +81,7 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
 
   const { data: branch } = await supabase
     .from("branches")
-    .select("id, name, slug, tenant_id")
+    .select("id, name, slug, tenant_id, phone")
     .eq("slug", branchSlug)
     .maybeSingle();
 
@@ -82,7 +90,7 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
   const [{ data: branding }, { data: categories }, { data: products }] = await Promise.all([
     supabase
       .from("branch_settings")
-      .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url")
+      .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions")
       .eq("branch_id", branch.id)
       .maybeSingle(),
     supabase
@@ -146,6 +154,13 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
   return {
     branch,
     branding: branding || null,
+    catalogOrder: {
+      whatsapp_phone: branding?.catalog_order_whatsapp_phone || branch.phone || null,
+      deposit_enabled: branding?.catalog_order_deposit_enabled ?? false,
+      deposit_percent: branding?.catalog_order_deposit_percent ?? 50,
+      transfer_alias: branding?.catalog_order_transfer_alias || null,
+      instructions: branding?.catalog_order_instructions || null,
+    },
     categories: menuCategories,
   };
 }

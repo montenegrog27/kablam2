@@ -201,6 +201,17 @@ export default function BranchesPage() {
           ga4_measurement_id: branchSettings.ga4_measurement_id,
           meta_pixel_script: branchSettings.meta_pixel_script,
           ga4_script: branchSettings.ga4_script,
+          catalog_order_whatsapp_phone:
+            branchSettings.catalog_order_whatsapp_phone || null,
+          catalog_order_deposit_enabled:
+            branchSettings.catalog_order_deposit_enabled ?? false,
+          catalog_order_deposit_percent: Number(
+            branchSettings.catalog_order_deposit_percent || 50,
+          ),
+          catalog_order_transfer_alias:
+            branchSettings.catalog_order_transfer_alias || null,
+          catalog_order_instructions:
+            branchSettings.catalog_order_instructions || null,
         },
         { onConflict: "branch_id" },
       );
@@ -216,7 +227,7 @@ export default function BranchesPage() {
       ) {
         alert(
           "Error: Falta agregar columnas a la tabla branch_settings.\n\n" +
-            "Ejecuta el SQL en add_meta_fields_to_branch_settings.sql:\n\n" +
+            "Ejecuta el SQL en add_meta_fields_to_branch_settings.sql y add_catalog_orders.sql:\n\n" +
             "ALTER TABLE branch_settings\n" +
             "ADD COLUMN IF NOT EXISTS loading_icon_url TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS favicon_url TEXT,\n" +
@@ -224,7 +235,12 @@ export default function BranchesPage() {
             "ADD COLUMN IF NOT EXISTS meta_pixel_id TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS ga4_measurement_id TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS meta_pixel_script TEXT,\n" +
-            "ADD COLUMN IF NOT EXISTS ga4_script TEXT;",
+            "ADD COLUMN IF NOT EXISTS ga4_script TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_whatsapp_phone TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_deposit_enabled BOOLEAN,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_deposit_percent NUMERIC,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_transfer_alias TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_instructions TEXT;",
         );
       } else {
         alert("Error al guardar configuración: " + error.message);
@@ -886,6 +902,104 @@ export default function BranchesPage() {
                       </div>
                     );
                   })}
+                </div>
+              </details>
+
+              <details className="bg-gray-800 rounded-xl p-3 border border-gray-700" open>
+                <summary className="text-sm font-medium text-gray-300 cursor-pointer hover:text-gray-100">
+                  Catalogo y encargos
+                </summary>
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      WhatsApp receptor de la sucursal
+                    </label>
+                    <input
+                      placeholder="Ej: 5492615551234"
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                      value={branchSettings.catalog_order_whatsapp_phone || ""}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_whatsapp_phone",
+                          e.target.value,
+                        )
+                      }
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      A este numero llega el aviso interno de cada encargo.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      Alias para transferencia
+                    </label>
+                    <input
+                      placeholder="alias.del.local"
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                      value={branchSettings.catalog_order_transfer_alias || ""}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_transfer_alias",
+                          e.target.value,
+                        )
+                      }
+                    />
+                  </div>
+
+                  <ToggleSwitch
+                    label="Requiere sena"
+                    description="El cliente recibe el importe a transferir para confirmar"
+                    checked={branchSettings.catalog_order_deposit_enabled ?? false}
+                    onChange={(v) =>
+                      updateLocalSettings(
+                        branch.id,
+                        "catalog_order_deposit_enabled",
+                        v,
+                      )
+                    }
+                  />
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      Porcentaje de sena
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100"
+                      value={branchSettings.catalog_order_deposit_percent ?? 50}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_deposit_percent",
+                          e.target.value,
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      Instrucciones extra para el cliente
+                    </label>
+                    <textarea
+                      placeholder="Ej: Enviar comprobante por este chat. El pedido queda confirmado cuando validamos la transferencia."
+                      className="min-h-24 w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                      value={branchSettings.catalog_order_instructions || ""}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_instructions",
+                          e.target.value,
+                        )
+                      }
+                    />
+                  </div>
                 </div>
               </details>
 
