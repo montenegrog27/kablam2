@@ -12,6 +12,7 @@ type CatalogOrderBody = {
     phone?: string;
     address?: string;
   };
+  fulfillmentType?: "delivery" | "pickup" | "coordinate";
   requestedDate?: string;
   notes?: string;
 };
@@ -106,6 +107,7 @@ function buildCustomerMessage(args: {
   total: number;
   requestedDate: string;
   address: string;
+  fulfillmentType: string;
   notes?: string | null;
   depositRequired: boolean;
   depositPercent: number;
@@ -119,7 +121,7 @@ function buildCustomerMessage(args: {
     `Producto: ${args.productName}`,
     `Total estimado: ${money(args.total)}`,
     `Fecha solicitada: ${args.requestedDate}`,
-    `Entrega: ${args.address}`,
+    `${args.fulfillmentType === "pickup" ? "Retiro" : args.fulfillmentType === "coordinate" ? "Coordinacion" : "Entrega"}: ${args.address}`,
     args.notes ? `Nota: ${args.notes}` : null,
     "",
     args.depositRequired
@@ -144,6 +146,7 @@ function buildBranchMessage(args: {
   total: number;
   requestedDate: string;
   address: string;
+  fulfillmentType: string;
   notes?: string | null;
   depositRequired: boolean;
   depositPercent: number;
@@ -160,7 +163,7 @@ function buildBranchMessage(args: {
       ? `Sena requerida: ${args.depositPercent}% (${money(args.depositAmount)})`
       : "Sin sena configurada",
     `Fecha solicitada: ${args.requestedDate}`,
-    `Direccion: ${args.address}`,
+    `${args.fulfillmentType === "pickup" ? "Retiro" : args.fulfillmentType === "coordinate" ? "Coordinacion" : "Direccion"}: ${args.address}`,
     args.notes ? `Nota: ${args.notes}` : null,
     "",
     "Contactar al cliente para confirmar disponibilidad y coordinar.",
@@ -178,7 +181,8 @@ export async function POST(req: Request) {
     const productId = String(body.productId || "").trim();
     const customerName = String(body.customer?.name || "").trim();
     const customerPhone = normalizeArgWhatsapp(body.customer?.phone);
-    const deliveryAddress = String(body.customer?.address || "").trim();
+    const requestedFulfillmentType = body.fulfillmentType || "delivery";
+    const requestedAddress = String(body.customer?.address || "").trim();
     const requestedDate = String(body.requestedDate || "").trim();
     const notes = String(body.notes || "").trim();
 
@@ -192,7 +196,6 @@ export async function POST(req: Request) {
     if (
       !customerName ||
       !customerPhone ||
-      !deliveryAddress ||
       !isValidDate(requestedDate)
     ) {
       return NextResponse.json(
@@ -217,7 +220,7 @@ export async function POST(req: Request) {
         supabase
           .from("branch_settings")
           .select(
-            "catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions",
+            "catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses",
           )
           .eq("branch_id", branch.id)
           .maybeSingle(),
@@ -247,6 +250,42 @@ export async function POST(req: Request) {
     }
 
     const total = Number(variant.price || 0);
+    const pickupAddresses = Array.isArray(settings?.catalog_order_pickup_addresses)
+      ? settings.catalog_order_pickup_addresses.filter(Boolean).map(String)
+      : [];
+    const deliveryEnabled = settings?.catalog_order_show_delivery_address !== false;
+    const pickupEnabled = Boolean(
+      settings?.catalog_order_show_pickup_addresses && pickupAddresses.length > 0,
+    );
+    const fulfillmentType =
+      requestedFulfillmentType === "pickup" && pickupEnabled
+        ? "pickup"
+        : requestedFulfillmentType === "delivery" && deliveryEnabled
+          ? "delivery"
+          : deliveryEnabled
+            ? "delivery"
+            : pickupEnabled
+              ? "pickup"
+              : "coordinate";
+
+    if (fulfillmentType === "delivery" && !requestedAddress) {
+      return NextResponse.json(
+        { error: "customer_data_required" },
+        { status: 400 },
+      );
+    }
+
+    if (fulfillmentType === "pickup" && !pickupAddresses.includes(requestedAddress)) {
+      return NextResponse.json(
+        { error: "pickup_address_required" },
+        { status: 400 },
+      );
+    }
+
+    const deliveryAddress =
+      fulfillmentType === "coordinate"
+        ? "A coordinar por WhatsApp"
+        : requestedAddress;
     const depositRequired = Boolean(settings?.catalog_order_deposit_enabled);
     const depositPercent = depositRequired
       ? Math.max(
@@ -290,6 +329,8 @@ export async function POST(req: Request) {
         customer_name: customerName,
         customer_phone: customerPhone,
         delivery_address: deliveryAddress,
+        fulfillment_type: fulfillmentType,
+        pickup_address: fulfillmentType === "pickup" ? deliveryAddress : null,
         requested_date: requestedDate,
         notes: notes || null,
         deposit_required: depositRequired,
@@ -310,6 +351,7 @@ export async function POST(req: Request) {
       total,
       requestedDate,
       address: deliveryAddress,
+      fulfillmentType,
       notes,
       depositRequired,
       depositPercent,
@@ -325,6 +367,7 @@ export async function POST(req: Request) {
       total,
       requestedDate,
       address: deliveryAddress,
+      fulfillmentType,
       notes,
       depositRequired,
       depositPercent,

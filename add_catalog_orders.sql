@@ -3,7 +3,10 @@ add column if not exists catalog_order_whatsapp_phone text,
 add column if not exists catalog_order_deposit_enabled boolean not null default false,
 add column if not exists catalog_order_deposit_percent numeric(5, 2) not null default 50,
 add column if not exists catalog_order_transfer_alias text,
-add column if not exists catalog_order_instructions text;
+add column if not exists catalog_order_instructions text,
+add column if not exists catalog_order_show_delivery_address boolean not null default true,
+add column if not exists catalog_order_show_pickup_addresses boolean not null default false,
+add column if not exists catalog_order_pickup_addresses jsonb not null default '[]'::jsonb;
 
 create table if not exists public.catalog_orders (
   id uuid primary key default gen_random_uuid(),
@@ -17,6 +20,8 @@ create table if not exists public.catalog_orders (
   customer_name text not null,
   customer_phone text not null,
   delivery_address text not null,
+  fulfillment_type text not null default 'delivery',
+  pickup_address text,
   requested_date date not null,
   notes text,
   deposit_required boolean not null default false,
@@ -32,8 +37,20 @@ create table if not exists public.catalog_orders (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (quantity > 0),
+  check (fulfillment_type in ('delivery', 'pickup', 'coordinate')),
   check (status in ('pending', 'confirmed', 'rejected', 'completed', 'cancelled'))
 );
+
+alter table public.catalog_orders
+add column if not exists fulfillment_type text not null default 'delivery',
+add column if not exists pickup_address text;
+
+alter table public.catalog_orders
+drop constraint if exists catalog_orders_fulfillment_type_check;
+
+alter table public.catalog_orders
+add constraint catalog_orders_fulfillment_type_check
+check (fulfillment_type in ('delivery', 'pickup', 'coordinate'));
 
 create index if not exists catalog_orders_tenant_created_idx
 on public.catalog_orders(tenant_id, created_at desc);

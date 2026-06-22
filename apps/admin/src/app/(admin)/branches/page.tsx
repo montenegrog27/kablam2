@@ -121,6 +121,22 @@ export default function BranchesPage() {
     });
   };
 
+  const parsePickupAddresses = (value: any) => {
+    if (Array.isArray(value)) return value.filter(Boolean).map(String);
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String);
+      } catch {
+        return value
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+      }
+    }
+    return [];
+  };
+
   /* =============================
       SAVE BRANCH
    ============================= */
@@ -212,6 +228,13 @@ export default function BranchesPage() {
             branchSettings.catalog_order_transfer_alias || null,
           catalog_order_instructions:
             branchSettings.catalog_order_instructions || null,
+          catalog_order_show_delivery_address:
+            branchSettings.catalog_order_show_delivery_address ?? true,
+          catalog_order_show_pickup_addresses:
+            branchSettings.catalog_order_show_pickup_addresses ?? false,
+          catalog_order_pickup_addresses: parsePickupAddresses(
+            branchSettings.catalog_order_pickup_addresses,
+          ),
         },
         { onConflict: "branch_id" },
       );
@@ -240,7 +263,10 @@ export default function BranchesPage() {
             "ADD COLUMN IF NOT EXISTS catalog_order_deposit_enabled BOOLEAN,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_deposit_percent NUMERIC,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_transfer_alias TEXT,\n" +
-            "ADD COLUMN IF NOT EXISTS catalog_order_instructions TEXT;",
+            "ADD COLUMN IF NOT EXISTS catalog_order_instructions TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_show_delivery_address BOOLEAN,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_show_pickup_addresses BOOLEAN,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_pickup_addresses JSONB;",
         );
       } else {
         alert("Error al guardar configuración: " + error.message);
@@ -962,6 +988,32 @@ export default function BranchesPage() {
                     }
                   />
 
+                  <ToggleSwitch
+                    label="Pedir direccion de entrega"
+                    description="Muestra el campo direccion en el formulario del cliente"
+                    checked={branchSettings.catalog_order_show_delivery_address ?? true}
+                    onChange={(v) =>
+                      updateLocalSettings(
+                        branch.id,
+                        "catalog_order_show_delivery_address",
+                        v,
+                      )
+                    }
+                  />
+
+                  <ToggleSwitch
+                    label="Mostrar direcciones de retiro"
+                    description="Permite que el cliente elija donde retirar"
+                    checked={branchSettings.catalog_order_show_pickup_addresses ?? false}
+                    onChange={(v) =>
+                      updateLocalSettings(
+                        branch.id,
+                        "catalog_order_show_pickup_addresses",
+                        v,
+                      )
+                    }
+                  />
+
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-gray-400">
                       Porcentaje de sena
@@ -981,6 +1033,29 @@ export default function BranchesPage() {
                         )
                       }
                     />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      Direcciones de retiro
+                    </label>
+                    <textarea
+                      placeholder={"Una direccion por linea\nEj: San Juan 635\nEj: Mendoza 123"}
+                      className="min-h-24 w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                      value={parsePickupAddresses(
+                        branchSettings.catalog_order_pickup_addresses,
+                      ).join("\n")}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_pickup_addresses",
+                          e.target.value,
+                        )
+                      }
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Si activas retiro, carga al menos una direccion para que el cliente pueda elegir.
+                    </p>
                   </div>
 
                   <div className="md:col-span-2">

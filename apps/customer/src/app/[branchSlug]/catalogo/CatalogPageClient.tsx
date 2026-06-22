@@ -12,6 +12,7 @@ type Props = {
 type OrderForm = {
   name: string;
   phone: string;
+  fulfillmentType: "delivery" | "pickup" | "coordinate";
   address: string;
   date: string;
   note: string;
@@ -20,6 +21,7 @@ type OrderForm = {
 const emptyForm: OrderForm = {
   name: "",
   phone: "",
+  fulfillmentType: "delivery",
   address: "",
   date: "",
   note: "",
@@ -49,6 +51,14 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
   const depositEnabled = Boolean(data.catalogOrder?.deposit_enabled);
   const depositPercent = Number(data.catalogOrder?.deposit_percent ?? 50);
   const depositAmount = selectedProduct ? Math.round(selectedProduct.price * depositPercent) / 100 : 0;
+  const pickupAddresses = data.catalogOrder?.pickup_addresses || [];
+  const showDeliveryAddress = data.catalogOrder?.show_delivery_address !== false;
+  const showPickupAddresses = Boolean(data.catalogOrder?.show_pickup_addresses && pickupAddresses.length > 0);
+  const defaultFulfillmentType: OrderForm["fulfillmentType"] = showDeliveryAddress
+    ? "delivery"
+    : showPickupAddresses
+      ? "pickup"
+      : "coordinate";
 
   const filteredCategories = useMemo(() => {
     const clean = query.trim().toLowerCase();
@@ -68,7 +78,17 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
 
   const openProduct = (product: QrMenuProduct) => {
     setSelectedProduct(product);
-    setForm((current) => ({ ...current, date: current.date || todayInput() }));
+    setForm((current) => ({
+      ...current,
+      date: current.date || todayInput(),
+      fulfillmentType: defaultFulfillmentType,
+      address:
+        defaultFulfillmentType === "pickup"
+          ? pickupAddresses[0] || ""
+          : defaultFulfillmentType === "coordinate"
+            ? ""
+            : current.address,
+    }));
     setSent(false);
     setResultMessage("");
     setErrorMessage("");
@@ -84,6 +104,14 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
 
   const updateForm = (key: keyof OrderForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const setFulfillmentType = (value: OrderForm["fulfillmentType"]) => {
+    setForm((current) => ({
+      ...current,
+      fulfillmentType: value,
+      address: value === "pickup" ? pickupAddresses[0] || "" : "",
+    }));
   };
 
   const submitOrder = async (event: React.FormEvent) => {
@@ -107,6 +135,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
             phone: form.phone,
             address: form.address,
           },
+          fulfillmentType: form.fulfillmentType,
           requestedDate: form.date,
           notes: form.note,
         }),
@@ -121,7 +150,9 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
           catalog_transfer_alias_required:
             "La sucursal requiere sena, pero falta configurar el alias de transferencia.",
           customer_data_required:
-            "Revisa nombre, WhatsApp, direccion y fecha para continuar.",
+            "Revisa nombre, WhatsApp, datos de entrega/retiro y fecha para continuar.",
+          pickup_address_required:
+            "Elegi una direccion de retiro para continuar.",
           product_without_price:
             "Este producto todavia no tiene precio configurado.",
         };
@@ -343,16 +374,82 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   </div>
                 </label>
 
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Direccion de entrega</span>
-                  <input
-                    required
-                    value={form.address}
-                    onChange={(event) => updateForm("address", event.target.value)}
-                    className="w-full rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-stone-500"
-                    placeholder="Calle, numero, piso o referencia"
-                  />
-                </label>
+                {showDeliveryAddress && showPickupAddresses && (
+                  <div>
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Modalidad</span>
+                    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1">
+                      <button
+                        type="button"
+                        onClick={() => setFulfillmentType("delivery")}
+                        className={`rounded-xl px-3 py-3 text-sm font-black transition ${
+                          form.fulfillmentType === "delivery"
+                            ? "text-white shadow-sm"
+                            : "text-stone-600"
+                        }`}
+                        style={
+                          form.fulfillmentType === "delivery"
+                            ? { backgroundColor: accentColor }
+                            : undefined
+                        }
+                      >
+                        Entrega
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFulfillmentType("pickup")}
+                        className={`rounded-xl px-3 py-3 text-sm font-black transition ${
+                          form.fulfillmentType === "pickup"
+                            ? "text-white shadow-sm"
+                            : "text-stone-600"
+                        }`}
+                        style={
+                          form.fulfillmentType === "pickup"
+                            ? { backgroundColor: accentColor }
+                            : undefined
+                        }
+                      >
+                        Retiro
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {showDeliveryAddress && form.fulfillmentType === "delivery" && (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Direccion de entrega</span>
+                    <input
+                      required
+                      value={form.address}
+                      onChange={(event) => updateForm("address", event.target.value)}
+                      className="w-full rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-stone-500"
+                      placeholder="Calle, numero, piso o referencia"
+                    />
+                  </label>
+                )}
+
+                {showPickupAddresses && form.fulfillmentType === "pickup" && (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Direccion de retiro</span>
+                    <select
+                      required
+                      value={form.address}
+                      onChange={(event) => updateForm("address", event.target.value)}
+                      className="w-full rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-stone-500"
+                    >
+                      {pickupAddresses.map((address) => (
+                        <option key={address} value={address}>
+                          {address}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {!showDeliveryAddress && !showPickupAddresses && (
+                  <div className="rounded-2xl border border-stone-200 bg-white px-3 py-3 text-sm font-semibold text-stone-600">
+                    Coordinamos entrega o retiro por WhatsApp despues de confirmar el encargo.
+                  </div>
+                )}
 
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Fecha del pedido</span>

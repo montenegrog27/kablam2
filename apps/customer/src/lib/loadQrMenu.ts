@@ -64,6 +64,9 @@ export type QrMenuData = {
     deposit_percent?: number | null;
     transfer_alias?: string | null;
     instructions?: string | null;
+    show_delivery_address?: boolean | null;
+    show_pickup_addresses?: boolean | null;
+    pickup_addresses?: string[] | null;
   };
   categories: QrMenuCategory[];
 };
@@ -90,7 +93,7 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
   const [{ data: branding }, { data: categories }, { data: products }] = await Promise.all([
     supabase
       .from("branch_settings")
-      .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions")
+      .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses")
       .eq("branch_id", branch.id)
       .maybeSingle(),
     supabase
@@ -160,6 +163,11 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
       deposit_percent: branding?.catalog_order_deposit_percent ?? 50,
       transfer_alias: branding?.catalog_order_transfer_alias || null,
       instructions: branding?.catalog_order_instructions || null,
+      show_delivery_address: branding?.catalog_order_show_delivery_address ?? true,
+      show_pickup_addresses: branding?.catalog_order_show_pickup_addresses ?? false,
+      pickup_addresses: Array.isArray(branding?.catalog_order_pickup_addresses)
+        ? branding.catalog_order_pickup_addresses.filter(Boolean).map(String)
+        : [],
     },
     categories: menuCategories,
   };
