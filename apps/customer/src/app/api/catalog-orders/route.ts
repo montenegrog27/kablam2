@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 type CatalogOrderBody = {
   branchSlug?: string;
   productId?: string;
+  variantId?: string;
   customer?: {
     name?: string;
     phone?: string;
@@ -52,6 +53,13 @@ function getDefaultVariant(product: any) {
   return (
     product.product_variants?.find((variant: any) => variant.is_default) ||
     product.product_variants?.[0]
+  );
+}
+
+function getRequestedVariant(product: any, variantId?: string) {
+  return (
+    product.product_variants?.find((variant: any) => variant.id === variantId) ||
+    getDefaultVariant(product)
   );
 }
 
@@ -179,6 +187,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as CatalogOrderBody;
     const branchSlug = String(body.branchSlug || "").trim();
     const productId = String(body.productId || "").trim();
+    const variantId = String(body.variantId || "").trim();
     const customerName = String(body.customer?.name || "").trim();
     const customerPhone = normalizeArgWhatsapp(body.customer?.phone);
     const requestedFulfillmentType = body.fulfillmentType || "delivery";
@@ -227,7 +236,7 @@ export async function POST(req: Request) {
         supabase
           .from("products")
           .select(
-            "id, name, branch_id, is_active, product_variants(id, price, is_default)",
+            "id, name, branch_id, is_active, product_variants(id, name, price, is_default)",
           )
           .eq("id", productId)
           .eq("branch_id", branch.id)
@@ -241,7 +250,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "product_not_found" }, { status: 404 });
     }
 
-    const variant = getDefaultVariant(product);
+    const variant = getRequestedVariant(product, variantId);
     if (!variant) {
       return NextResponse.json(
         { error: "product_without_price" },
@@ -250,6 +259,10 @@ export async function POST(req: Request) {
     }
 
     const total = Number(variant.price || 0);
+    const productLabel =
+      variant.name && variant.name !== product.name
+        ? `${product.name} - ${variant.name}`
+        : product.name;
     const pickupAddresses = Array.isArray(settings?.catalog_order_pickup_addresses)
       ? settings.catalog_order_pickup_addresses.filter(Boolean).map(String)
       : [];
@@ -322,7 +335,7 @@ export async function POST(req: Request) {
         tenant_id: branch.tenant_id,
         branch_id: branch.id,
         product_id: product.id,
-        product_name: product.name,
+        product_name: productLabel,
         unit_price: total,
         quantity: 1,
         total,
@@ -347,7 +360,7 @@ export async function POST(req: Request) {
 
     const customerMessage = buildCustomerMessage({
       branchName: branch.name,
-      productName: product.name,
+      productName: productLabel,
       total,
       requestedDate,
       address: deliveryAddress,
@@ -363,7 +376,7 @@ export async function POST(req: Request) {
       branchName: branch.name,
       customerName,
       customerPhone,
-      productName: product.name,
+      productName: productLabel,
       total,
       requestedDate,
       address: deliveryAddress,

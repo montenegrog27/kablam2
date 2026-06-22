@@ -15,6 +15,7 @@ type ProductRow = {
   name: string;
   description: string | null;
   category_id: string | null;
+  pricing_mode: "unit" | "kg" | "portion" | null;
   qr_position: number | null;
   qr_visible: boolean | null;
   product_variants: Array<{
@@ -23,6 +24,7 @@ type ProductRow = {
     price: number;
     image_url: string | null;
     is_default: boolean;
+    sort_order: number | null;
   }>;
 };
 
@@ -32,6 +34,14 @@ export type QrMenuProduct = {
   description?: string;
   price: number;
   imageUrl?: string;
+  pricingMode?: "unit" | "kg" | "portion";
+  variants: Array<{
+    id: string;
+    name: string;
+    price: number;
+    imageUrl?: string;
+    isDefault: boolean;
+  }>;
 };
 
 export type QrMenuCategory = {
@@ -110,9 +120,10 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
           name,
           description,
           category_id,
+          pricing_mode,
           qr_position,
           qr_visible,
-          product_variants(id, name, price, image_url, is_default)
+          product_variants(id, name, price, image_url, is_default, sort_order)
         `,
       )
       .eq("branch_id", branch.id)
@@ -141,6 +152,20 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
         description: product.description || undefined,
         price: Number(variant.price || 0),
         imageUrl: variant.image_url || undefined,
+        pricingMode: product.pricing_mode || "unit",
+        variants: (product.product_variants || [])
+          .sort(
+            (a, b) =>
+              orderValue(a.sort_order) - orderValue(b.sort_order) ||
+              Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)),
+          )
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            price: Number(item.price || 0),
+            imageUrl: item.image_url || undefined,
+            isDefault: Boolean(item.is_default),
+          })),
       });
       productsByCategory.set(product.category_id, current);
     });

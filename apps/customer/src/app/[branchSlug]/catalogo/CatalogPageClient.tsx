@@ -37,6 +37,7 @@ function todayInput() {
 
 export default function CatalogPageClient({ data, branchSlug }: Props) {
   const [selectedProduct, setSelectedProduct] = useState<QrMenuProduct | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState("");
   const [form, setForm] = useState<OrderForm>(() => ({ ...emptyForm, date: todayInput() }));
   const [query, setQuery] = useState("");
   const [sent, setSent] = useState(false);
@@ -50,7 +51,12 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
   const accentColor = data.branding?.accent_color || data.branding?.brand_color || "#ef4444";
   const depositEnabled = Boolean(data.catalogOrder?.deposit_enabled);
   const depositPercent = Number(data.catalogOrder?.deposit_percent ?? 50);
-  const depositAmount = selectedProduct ? Math.round(selectedProduct.price * depositPercent) / 100 : 0;
+  const selectedVariant =
+    selectedProduct?.variants?.find((variant) => variant.id === selectedVariantId) ||
+    selectedProduct?.variants?.find((variant) => variant.isDefault) ||
+    selectedProduct?.variants?.[0];
+  const selectedPrice = Number(selectedVariant?.price ?? selectedProduct?.price ?? 0);
+  const depositAmount = selectedProduct ? Math.round(selectedPrice * depositPercent) / 100 : 0;
   const pickupAddresses = data.catalogOrder?.pickup_addresses || [];
   const showDeliveryAddress = data.catalogOrder?.show_delivery_address !== false;
   const showPickupAddresses = Boolean(data.catalogOrder?.show_pickup_addresses && pickupAddresses.length > 0);
@@ -78,6 +84,10 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
 
   const openProduct = (product: QrMenuProduct) => {
     setSelectedProduct(product);
+    const defaultVariant =
+      product.variants?.find((variant) => variant.isDefault) ||
+      product.variants?.[0];
+    setSelectedVariantId(defaultVariant?.id || "");
     setForm((current) => ({
       ...current,
       date: current.date || todayInput(),
@@ -130,6 +140,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
         body: JSON.stringify({
           branchSlug,
           productId: selectedProduct.id,
+          variantId: selectedVariant?.id,
           customer: {
             name: form.name,
             phone: form.phone,
@@ -276,7 +287,12 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                         </h3>
                         <div className="mt-3 flex items-center justify-between gap-2">
                           <span className="text-base font-black" style={{ color: accentColor }}>
-                            {money(product.price)}
+                            {product.pricingMode && product.pricingMode !== "unit"
+                              ? (product.variants || [])
+                                  .slice(0, 2)
+                                  .map((variant) => `${variant.name} - ${money(variant.price)}`)
+                                  .join(" | ")
+                              : money(product.price)}
                           </span>
                           <span className="rounded-full bg-stone-100 px-2 py-1 text-[10px] font-black text-stone-600">
                             Ver
@@ -326,7 +342,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   )}
                 </div>
                 <p className="whitespace-nowrap text-xl font-black" style={{ color: accentColor }}>
-                  {money(selectedProduct.price)}
+                  {money(selectedPrice)}
                 </p>
               </div>
 
@@ -345,6 +361,31 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                       <p className="mt-1 text-xs font-semibold">Alias: {data.catalogOrder.transfer_alias}</p>
                     )}
                     <p className="mt-1 text-xs">Te enviaremos el detalle por WhatsApp cuando registres el encargo.</p>
+                  </div>
+                )}
+
+                {selectedProduct.variants?.length > 1 && (
+                  <div>
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">
+                      Elegi una opcion
+                    </span>
+                    <div className="grid gap-2">
+                      {selectedProduct.variants.map((variant) => (
+                        <button
+                          key={variant.id}
+                          type="button"
+                          onClick={() => setSelectedVariantId(variant.id)}
+                          className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm font-black transition ${
+                            selectedVariantId === variant.id
+                              ? "border-stone-900 bg-white text-stone-950 shadow-sm"
+                              : "border-stone-200 bg-white/70 text-stone-600"
+                          }`}
+                        >
+                          <span>{variant.name}</span>
+                          <span style={{ color: accentColor }}>{money(variant.price)}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 

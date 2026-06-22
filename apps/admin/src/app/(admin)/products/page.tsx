@@ -3,6 +3,23 @@
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
+type PricingMode = "unit" | "kg" | "portion";
+type PriceOption = { label: string; price: string };
+
+const pricingModeLabels: Record<PricingMode, string> = {
+  unit: "Precio por unidad",
+  kg: "Precio por kg",
+  portion: "Precio por porciones",
+};
+
+function sortVariants(variants: any[] = []) {
+  return [...variants].sort(
+    (a, b) =>
+      Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0) ||
+      Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)),
+  );
+}
+
 export default function ProductsPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -18,6 +35,10 @@ export default function ProductsPage() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
+  const [pricingMode, setPricingMode] = useState<PricingMode>("unit");
+  const [priceOptions, setPriceOptions] = useState<PriceOption[]>([
+    { label: "1 kg", price: "" },
+  ]);
   const [allowHalf, setAllowHalf] = useState(false);
   const [isSuggestable, setIsSuggestable] = useState(false);
   const [showInMenu, setShowInMenu] = useState(true);
@@ -126,6 +147,112 @@ export default function ProductsPage() {
     }
   };
 
+  const resetPricing = () => {
+    setPricingMode("unit");
+    setPrice("");
+    setPriceOptions([{ label: "1 kg", price: "" }]);
+  };
+
+  const normalizePriceOptions = () => {
+    if (pricingMode === "unit") {
+      return [{ label: name || "Unidad", price }];
+    }
+
+    return priceOptions
+      .map((option) => ({
+        label: option.label.trim(),
+        price: option.price,
+      }))
+      .filter((option) => option.label && Number(option.price) > 0);
+  };
+
+  const addPriceOption = () => {
+    const nextLabel =
+      pricingMode === "kg"
+        ? `${priceOptions.length + 1} kg`
+        : `${priceOptions.length + 1} porciones`;
+    setPriceOptions([...priceOptions, { label: nextLabel, price: "" }]);
+  };
+
+  const updatePriceOption = (
+    index: number,
+    field: keyof PriceOption,
+    value: string,
+  ) => {
+    setPriceOptions((current) =>
+      current.map((option, optionIndex) =>
+        optionIndex === index ? { ...option, [field]: value } : option,
+      ),
+    );
+  };
+
+  const removePriceOption = (index: number) => {
+    setPriceOptions((current) => current.filter((_, i) => i !== index));
+  };
+
+  const changePricingMode = (mode: PricingMode) => {
+    setPricingMode(mode);
+    if (mode === "kg") {
+      setPriceOptions([{ label: "1 kg", price: "" }]);
+    }
+    if (mode === "portion") {
+      setPriceOptions([{ label: "1 porcion", price: "" }]);
+    }
+  };
+
+  const saveProductVariants = async ({
+    productId,
+    imageUrl,
+    existingVariants = [],
+  }: {
+    productId: string;
+    imageUrl: string | null;
+    existingVariants?: any[];
+  }) => {
+    const options = normalizePriceOptions();
+    if (options.length === 0) {
+      throw new Error("Carga al menos una opcion de precio");
+    }
+
+    if (pricingMode !== "unit" && existingVariants.length > 0) {
+      const variantIds = existingVariants.map((variant) => variant.id);
+      await supabase.from("order_item_modifiers").delete().in("variant_id", variantIds);
+      await supabase.from("product_recipes").delete().in("variant_id", variantIds);
+      await supabase.from("product_packaging").delete().in("variant_id", variantIds);
+      await supabase.from("product_variants").delete().in("id", variantIds);
+    }
+
+    if (pricingMode === "unit" && existingVariants[0]) {
+      const { error } = await supabase
+        .from("product_variants")
+        .update({
+          name,
+          price: Number(options[0].price),
+          cost: cost ? Number(cost) : null,
+          image_url: imageUrl,
+          is_default: true,
+          sort_order: 0,
+        })
+        .eq("id", existingVariants[0].id);
+      if (error) throw error;
+      return;
+    }
+
+    const { error } = await supabase.from("product_variants").insert(
+      options.map((option, index) => ({
+        product_id: productId,
+        tenant_id: tenantId,
+        name: option.label,
+        price: Number(option.price),
+        cost: index === 0 && cost ? Number(cost) : null,
+        image_url: index === 0 ? imageUrl : null,
+        is_default: index === 0,
+        sort_order: index,
+      })),
+    );
+    if (error) throw error;
+  };
+
   const getProductKitchenOverride = (productId: string) => {
     const override = kitchenProducts.find((kp) => kp.product_id === productId);
     return override ? override.kitchen_id : "";
@@ -165,7 +292,8 @@ export default function ProductsPage() {
 
   const handleCreateProduct = async (e: any) => {
     e.preventDefault();
-    if (!tenantId || !branchId || !categoryId || !price) {
+    const options = normalizePriceOptions();
+    if (!tenantId || !branchId || !categoryId || options.length === 0) {
       alert("Completa los campos obligatorios");
       return;
     }
@@ -202,6 +330,7 @@ export default function ProductsPage() {
         is_hero: isHero,
         is_preparable: isPreparable,
         has_recipe: hasRecipe,
+        pricing_mode: pricingMode,
       })
       .select()
       .single();
@@ -211,15 +340,12 @@ export default function ProductsPage() {
       return;
     }
 
-    await supabase.from("product_variants").insert({
-      product_id: newProduct.id,
-      tenant_id: tenantId,
-      name: name,
-      price: Number(price),
-      cost: cost ? Number(cost) : null,
-      image_url: imageUrl,
-      is_default: true,
-    });
+    try {
+      await saveProductVariants({ productId: newProduct.id, imageUrl });
+    } catch (error: any) {
+      alert(error.message || "Error guardando precios");
+      return;
+    }
 
     const relations = selectedDayParts.map((partId) => ({
       product_id: newProduct.id,
@@ -242,7 +368,7 @@ export default function ProductsPage() {
     setShowForm(false);
     setName("");
     setDescription("");
-    setPrice("");
+    resetPricing();
     setCost("");
     setAllowHalf(false);
     setIsPreparable(true);
@@ -334,12 +460,24 @@ export default function ProductsPage() {
     setIsHero(product.is_hero);
     setIsPreparable(product.is_preparable !== false);
     setHasRecipe(product.has_recipe !== false);
+    setPricingMode(product.pricing_mode || "unit");
 
     // Obtener la variante principal (primera o default)
-    const mainVariant = product.product_variants?.[0];
+    const variants = sortVariants(product.product_variants || []);
+    const mainVariant = variants.find((variant: any) => variant.is_default) || variants[0];
     if (mainVariant) {
       setPrice(mainVariant.price.toString());
       setCost(mainVariant.cost ? mainVariant.cost.toString() : "");
+    }
+    if ((product.pricing_mode || "unit") !== "unit") {
+      setPriceOptions(
+        variants.map((variant: any) => ({
+          label: variant.name || "",
+          price: String(variant.price || ""),
+        })),
+      );
+    } else {
+      setPriceOptions([{ label: "1 kg", price: "" }]);
     }
   };
 
@@ -350,6 +488,7 @@ export default function ProductsPage() {
     setDescription("");
     setCategoryId(null);
     setHasRecipe(true);
+    resetPricing();
   };
 
   const handleDeleteProduct = async (product: any) => {
@@ -377,10 +516,13 @@ export default function ProductsPage() {
       !branchId ||
       !categoryId ||
       !name ||
-      !price ||
       !editingProduct
     ) {
       alert("Completa los campos obligatorios");
+      return;
+    }
+    if (normalizePriceOptions().length === 0) {
+      alert("Carga al menos una opcion de precio");
       return;
     }
     if (!hasRecipe && !cost) {
@@ -415,6 +557,7 @@ export default function ProductsPage() {
         is_hero: isHero,
         is_preparable: isPreparable,
         has_recipe: hasRecipe,
+        pricing_mode: pricingMode,
       })
       .eq("id", editingProduct.id);
 
@@ -423,30 +566,23 @@ export default function ProductsPage() {
       return;
     }
 
-    // Actualizar variante principal
+    try {
+      await saveProductVariants({
+        productId: editingProduct.id,
+        imageUrl,
+        existingVariants: editingProduct.product_variants || [],
+      });
+    } catch (error: any) {
+      alert(error.message || "Error guardando precios");
+      return;
+    }
+
     const mainVariant = editingProduct.product_variants?.[0];
-    if (mainVariant) {
-      const { error: variantError } = await supabase
-        .from("product_variants")
-        .update({
-          name,
-          price: Number(price),
-          cost: cost ? Number(cost) : null,
-          image_url: imageUrl,
-        })
-        .eq("id", mainVariant.id);
-
-      if (variantError) {
-        alert(variantError.message);
-        return;
-      }
-
-      if (!hasRecipe) {
-        await Promise.all([
-          supabase.from("product_recipes").delete().eq("variant_id", mainVariant.id),
-          supabase.from("product_packaging").delete().eq("variant_id", mainVariant.id),
-        ]);
-      }
+    if (!hasRecipe && mainVariant) {
+      await Promise.all([
+        supabase.from("product_recipes").delete().eq("variant_id", mainVariant.id),
+        supabase.from("product_packaging").delete().eq("variant_id", mainVariant.id),
+      ]);
     }
 
     // Actualizar day parts
@@ -672,27 +808,16 @@ export default function ProductsPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Precio *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                      $
-                    </span>
-                    <input
-                      type="number"
-                      className="w-full border border-gray-600 rounded-lg pl-8 pr-4 py-3 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
-                      placeholder="0.00"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      required
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                </div>
-
+                <PricingOptionsEditor
+                  mode={pricingMode}
+                  price={price}
+                  options={priceOptions}
+                  onModeChange={changePricingMode}
+                  onPriceChange={setPrice}
+                  onOptionChange={updatePriceOption}
+                  onAddOption={addPriceOption}
+                  onRemoveOption={removePriceOption}
+                />
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     {hasRecipe ? "Costo manual de respaldo" : "Costo manual *"}
@@ -996,20 +1121,17 @@ export default function ProductsPage() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Precio *
-                          </label>
-                          <input
-                            type="number"
-                            className="w-full border border-gray-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
-                            placeholder="0"
-                            value={price}
-                            onChange={(e) => setPrice(e.target.value)}
-                            required
-                          />
-                        </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <PricingOptionsEditor
+                          mode={pricingMode}
+                          price={price}
+                          options={priceOptions}
+                          onModeChange={changePricingMode}
+                          onPriceChange={setPrice}
+                          onOptionChange={updatePriceOption}
+                          onAddOption={addPriceOption}
+                          onRemoveOption={removePriceOption}
+                        />
                         <div>
                           <label className="block text-sm font-medium text-gray-300 mb-2">
                             {hasRecipe ? "Costo manual de respaldo" : "Costo manual *"}
@@ -1178,8 +1300,22 @@ export default function ProductsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <span className="text-2xl font-bold text-gray-100">
-                            ${product.product_variants?.[0]?.price || 0}
+                            {product.pricing_mode && product.pricing_mode !== "unit"
+                              ? pricingModeLabels[product.pricing_mode as PricingMode]
+                              : `$${product.product_variants?.[0]?.price || 0}`}
                           </span>
+                          {product.pricing_mode && product.pricing_mode !== "unit" && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {sortVariants(product.product_variants || []).map((variant: any) => (
+                                <span
+                                  key={variant.id}
+                                  className="rounded-full border border-gray-700 bg-gray-800 px-2.5 py-1 text-xs font-semibold text-gray-300"
+                                >
+                                  {variant.name} - ${Number(variant.price || 0).toLocaleString("es-AR")}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           {product.product_variants?.[0]?.cost != null && (
                             <span className="text-sm ml-2">
                               <span className="text-gray-400">
@@ -1376,6 +1512,132 @@ export default function ProductsPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function PricingOptionsEditor({
+  mode,
+  price,
+  options,
+  onModeChange,
+  onPriceChange,
+  onOptionChange,
+  onAddOption,
+  onRemoveOption,
+}: {
+  mode: PricingMode;
+  price: string;
+  options: PriceOption[];
+  onModeChange: (mode: PricingMode) => void;
+  onPriceChange: (value: string) => void;
+  onOptionChange: (
+    index: number,
+    field: keyof PriceOption,
+    value: string,
+  ) => void;
+  onAddOption: () => void;
+  onRemoveOption: (index: number) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Tipo de precio *
+        </label>
+        <div className="grid grid-cols-3 gap-2 rounded-lg bg-gray-800 p-1">
+          {(Object.keys(pricingModeLabels) as PricingMode[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onModeChange(item)}
+              className={`rounded-md px-2 py-2 text-xs font-semibold transition ${
+                mode === item
+                  ? "bg-gray-100 text-gray-950"
+                  : "text-gray-400 hover:text-gray-100"
+              }`}
+            >
+              {item === "unit" ? "Unidad" : item === "kg" ? "Kg" : "Porciones"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {mode === "unit" ? (
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Precio *
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+              $
+            </span>
+            <input
+              type="number"
+              className="w-full border border-gray-600 rounded-lg pl-8 pr-4 py-3 text-sm focus:ring-2 focus:ring-white focus:border-black transition"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => onPriceChange(e.target.value)}
+              required
+              min="0"
+              step="0.01"
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-100">
+                Opciones por {mode === "kg" ? "kg" : "porciones"}
+              </p>
+              <p className="text-xs text-gray-500">
+                Ej: 1 kg - $30000, 2 kg - $60000.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onAddOption}
+              className="rounded-lg border border-gray-600 bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-100 hover:bg-gray-950"
+            >
+              Agregar
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {options.map((option, index) => (
+              <div key={index} className="grid grid-cols-[1fr_120px_auto] gap-2">
+                <input
+                  className="min-w-0 rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100"
+                  placeholder={mode === "kg" ? "1 kg" : "8 porciones"}
+                  value={option.label}
+                  onChange={(e) =>
+                    onOptionChange(index, "label", e.target.value)
+                  }
+                />
+                <input
+                  type="number"
+                  className="rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100"
+                  placeholder="Precio"
+                  value={option.price}
+                  onChange={(e) =>
+                    onOptionChange(index, "price", e.target.value)
+                  }
+                  min="0"
+                  step="0.01"
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemoveOption(index)}
+                  className="rounded-lg border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/60"
+                >
+                  Quitar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
