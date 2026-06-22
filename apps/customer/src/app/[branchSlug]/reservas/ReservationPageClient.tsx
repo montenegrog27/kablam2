@@ -10,6 +10,7 @@ type Settings = {
   title?: string | null;
   reservation_type?: "standard" | "event" | null;
   no_time?: boolean | null;
+  time_mode?: "interval" | "single" | "none" | null;
   description?: string | null;
   hero_image_url?: string | null;
   location_name?: string | null;
@@ -65,6 +66,20 @@ function formatCurrency(value?: number | null) {
   return `$${new Intl.NumberFormat("es-AR").format(Math.round(value))}`;
 }
 
+function resolveTimeMode(settings: Settings): "interval" | "single" | "none" {
+  if (settings.time_mode === "interval" || settings.time_mode === "single" || settings.time_mode === "none") {
+    return settings.time_mode;
+  }
+  return settings.no_time ? "none" : "interval";
+}
+
+function formatDisplayTime(settings: Settings, fallback?: string) {
+  const mode = resolveTimeMode(settings);
+  if (mode === "none") return "Sin horario";
+  if (mode === "single") return normalizeTime(settings.start_time) || fallback || "Horario a confirmar";
+  return fallback || normalizeTime(settings.start_time) || "Horario a confirmar";
+}
+
 function normalizeArgPhone(input: string) {
   let digits = String(input || "").replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
@@ -116,7 +131,9 @@ export default function ReservationPageClient({
   const backgroundColor = branding?.background_color || "#F5F2EB";
   const fontFamily = getBrandFontFamily(branding);
   const title = settings.title || branchName;
-  const noTime = Boolean(settings.no_time);
+  const timeMode = resolveTimeMode(settings);
+  const noTime = timeMode === "none";
+  const singleTime = timeMode === "single";
   const reservationDate = settings.event_date || "";
   const maxPartySize = Number(settings.max_party_size || 20);
   const minPartySize = Number(settings.min_party_size || 1);
@@ -124,6 +141,23 @@ export default function ReservationPageClient({
 
   const slots = useMemo(() => {
     if (noTime) return [];
+    if (singleTime) {
+      const time = normalizeTime(settings.start_time);
+      if (!time) return [];
+      const reservedPeople = reservations
+        .filter(
+          (reservation) =>
+            reservation.reservation_date === reservationDate &&
+            normalizeTime(reservation.reservation_time) === time &&
+            !["cancelled", "no_show"].includes(reservation.status),
+        )
+        .reduce((sum, reservation) => sum + Number(reservation.party_size || 0), 0);
+
+      return [{
+        time,
+        remaining: capacityPerSlot ? Math.max(0, capacityPerSlot - reservedPeople) : null,
+      }];
+    }
     const start = normalizeTime(settings.start_time);
     const end = normalizeTime(settings.end_time);
     const interval = Number(settings.slot_interval_minutes || 30);
@@ -151,7 +185,7 @@ export default function ReservationPageClient({
     }
 
     return options;
-  }, [capacityPerSlot, noTime, reservationDate, reservations, settings.end_time, settings.slot_interval_minutes, settings.start_time]);
+  }, [capacityPerSlot, noTime, reservationDate, reservations, settings.end_time, settings.slot_interval_minutes, settings.start_time, singleTime]);
 
   const selectedSlot = slots.find((slot) => slot.time === selectedTime);
   const canSubmit =
@@ -217,7 +251,7 @@ export default function ReservationPageClient({
           <p className="mt-4 text-lg opacity-70">{settings.confirmation_message || "Te vamos a contactar por WhatsApp con los detalles."}</p>
           <div className="mt-8 rounded-2xl p-5 text-left" style={{ background: `${primaryColor}10` }}>
             <p className="font-bold capitalize">{formatDate(reservationDate)}</p>
-            <p className="mt-1 opacity-70">{noTime ? "Sin hora" : selectedTime} · {partySize} personas</p>
+            <p className="mt-1 opacity-70">{formatDisplayTime(settings, selectedTime)} · {partySize} personas</p>
           </div>
           <button
             onClick={() => {
@@ -302,10 +336,10 @@ export default function ReservationPageClient({
               </div>
 
               <div>
-                <h3 className="mb-3 text-2xl font-bold">Horario</h3>
+                <h3 className="mb-3 text-2xl font-bold">{singleTime ? "Horario de entrada" : "Horario"}</h3>
                 {noTime ? (
                   <div className="rounded-2xl border px-4 py-5 text-center font-bold" style={{ borderColor: `${primaryColor}25`, background: `${primaryColor}0D` }}>
-                    Este evento no requiere elegir horario
+                    Este evento no requiere horario
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 gap-2">
@@ -354,7 +388,7 @@ export default function ReservationPageClient({
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-3">
                 <Summary icon={Users} text={`${partySize} personas`} color={primaryColor} />
-                <Summary icon={Clock} text={noTime ? "Sin hora" : selectedTime} color={primaryColor} />
+                <Summary icon={Clock} text={formatDisplayTime(settings, selectedTime)} color={primaryColor} />
               </div>
 
               <Input label="Tu nombre" icon={Users}>
@@ -449,6 +483,14 @@ function EventRegistrationView({
   const darkColor = branding?.primary_color || "#0038a8";
   const eventName = settings.title || branchName;
   const eventDate = formatDate(settings.event_date);
+  const eventTimeMode = resolveTimeMode(settings);
+  const eventTime = eventTimeMode === "none" ? "00:00" : normalizeTime(settings.start_time) || "00:00";
+  const eventTimeLabel =
+    eventTimeMode === "none"
+      ? "Sin horario"
+      : eventTimeMode === "single"
+        ? `Entrada ${eventTime}`
+        : `${normalizeTime(settings.start_time)} a ${normalizeTime(settings.end_time)}`;
   const price = Number(settings.deposit_amount || 0);
   const capacity = Number(settings.capacity_per_slot || 0);
   const registrationCount = reservations
@@ -498,7 +540,7 @@ function EventRegistrationView({
         customerEmail: form.email,
         partySize: 1,
         reservationDate: settings.event_date,
-        reservationTime: "00:00",
+        reservationTime: eventTime,
         province,
         notes: `Provincia: ${province}`,
       }),
@@ -563,12 +605,15 @@ function EventRegistrationView({
             )}
           </div>
 
-          <div className="mt-8 grid gap-3 pb-2 text-sm font-semibold md:grid-cols-4">
+          <div className="mt-8 grid gap-3 pb-2 text-sm font-semibold md:grid-cols-5">
             <div className="border-t border-white/50 pt-3">
               Lugar: {settings.location_name || branchName}
             </div>
             <div className="border-t border-white/50 pt-3">
               {settings.location_address || "Direccion a confirmar"}
+            </div>
+            <div className="border-t border-white/50 pt-3">
+              {eventTimeLabel}
             </div>
             <div className="border-t border-white/50 pt-3">
               Entrada: {price ? formatCurrency(price) : "A confirmar"}

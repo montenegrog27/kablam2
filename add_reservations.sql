@@ -10,6 +10,8 @@ create table if not exists public.reservation_settings (
   location_name text,
   location_address text,
   event_date date,
+  time_mode text not null default 'interval'
+    check (time_mode in ('interval', 'single', 'none')),
   start_time time,
   end_time time,
   slot_interval_minutes integer not null default 30,
@@ -52,6 +54,7 @@ create table if not exists public.reservation_events (
   reservation_type text not null default 'standard',
   enabled boolean not null default true,
   no_time boolean not null default false,
+  time_mode text not null default 'interval',
   title text not null default 'Reservas',
   description text,
   hero_image_url text,
@@ -84,6 +87,7 @@ alter table public.reservations
 alter table public.reservation_events
   add column if not exists slug text,
   add column if not exists no_time boolean not null default false,
+  add column if not exists time_mode text not null default 'interval',
   add column if not exists reservation_type text not null default 'standard',
   add column if not exists event_badge text,
   add column if not exists event_subtitle text,
@@ -96,6 +100,33 @@ drop constraint if exists reservation_events_type_check;
 alter table public.reservation_events
 add constraint reservation_events_type_check
 check (reservation_type in ('standard', 'event'));
+
+alter table public.reservation_events
+drop constraint if exists reservation_events_time_mode_check;
+
+alter table public.reservation_events
+add constraint reservation_events_time_mode_check
+check (time_mode in ('interval', 'single', 'none'));
+
+alter table public.reservation_settings
+  add column if not exists time_mode text not null default 'interval';
+
+alter table public.reservation_settings
+drop constraint if exists reservation_settings_time_mode_check;
+
+alter table public.reservation_settings
+add constraint reservation_settings_time_mode_check
+check (time_mode in ('interval', 'single', 'none'));
+
+update public.reservation_events
+set time_mode = 'none'
+where no_time = true and time_mode = 'interval';
+
+update public.reservation_settings
+set time_mode = 'none'
+where coalesce(start_time, '00:00'::time) = '00:00'::time
+  and coalesce(end_time, '00:00'::time) = '00:00'::time
+  and time_mode = 'interval';
 
 create index if not exists reservations_branch_date_idx
   on public.reservations(branch_id, reservation_date, reservation_time);

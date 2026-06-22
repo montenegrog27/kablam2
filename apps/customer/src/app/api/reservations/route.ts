@@ -26,6 +26,13 @@ function formatCurrency(value?: number | string | null) {
   return `$${new Intl.NumberFormat("es-AR").format(Math.round(amount))}`;
 }
 
+function resolveTimeMode(settings: any): "interval" | "single" | "none" {
+  if (["interval", "single", "none"].includes(settings?.time_mode)) {
+    return settings.time_mode;
+  }
+  return settings?.no_time ? "none" : "interval";
+}
+
 function buildReservationCustomerMessage({
   branchName,
   settings,
@@ -53,7 +60,7 @@ function buildReservationCustomerMessage({
       : `Tu reserva en *${branchName}* quedo registrada.`,
     "",
     `Fecha: ${formatDate(reservationDate)}`,
-    settings.no_time ? null : `Horario: ${reservationTime.slice(0, 5)}`,
+    resolveTimeMode(settings) === "none" ? null : `Horario: ${reservationTime.slice(0, 5)}`,
     isEvent ? null : `Personas: ${partySize}`,
     settings.location_name ? `Lugar: ${settings.location_name}` : null,
     settings.location_address ? `Direccion: ${settings.location_address}` : null,
@@ -99,7 +106,7 @@ function buildReservationBranchMessage({
     `WhatsApp: ${customerPhone}`,
     customerEmail ? `Email: ${customerEmail}` : null,
     `Fecha: ${formatDate(reservationDate)}`,
-    settings.no_time ? null : `Horario: ${reservationTime.slice(0, 5)}`,
+    resolveTimeMode(settings) === "none" ? null : `Horario: ${reservationTime.slice(0, 5)}`,
     isEvent ? null : `Personas: ${partySize}`,
     province ? `Provincia: ${province}` : null,
     settings.deposit_amount ? `Sena: ${formatCurrency(settings.deposit_amount)}` : null,
@@ -251,7 +258,8 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Reservas no disponibles" }, { status: 404 });
     }
 
-    const finalReservationTime = settings.no_time ? "00:00" : reservationTime;
+    const timeMode = resolveTimeMode(settings);
+    const finalReservationTime = timeMode === "none" ? "00:00" : reservationTime;
 
     if (!finalReservationTime) {
       return Response.json({ success: false, error: "Horario requerido" }, { status: 400 });

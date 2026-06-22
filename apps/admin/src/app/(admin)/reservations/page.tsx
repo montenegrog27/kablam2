@@ -27,6 +27,7 @@ type ReservationEvent = {
   reservation_type?: "standard" | "event";
   enabled: boolean;
   no_time: boolean;
+  time_mode: "interval" | "single" | "none";
   title: string;
   description: string;
   hero_image_url: string;
@@ -71,6 +72,7 @@ const DEFAULT_EVENT: ReservationEvent = {
   enabled: true,
   reservation_type: "standard",
   no_time: false,
+  time_mode: "interval",
   slug: "",
   title: "Nuevo evento",
   description: "Elegí tu horario y guardá tu lugar.",
@@ -127,6 +129,21 @@ function formatReservationTime(value?: string, noTime?: boolean) {
   return formatTime(value);
 }
 
+function resolveTimeMode(event?: Partial<ReservationEvent> | null): "interval" | "single" | "none" {
+  if (!event) return "interval";
+  if (event.time_mode === "interval" || event.time_mode === "single" || event.time_mode === "none") {
+    return event.time_mode;
+  }
+  return event.no_time ? "none" : "interval";
+}
+
+function timeModeLabel(event?: Partial<ReservationEvent> | null) {
+  const mode = resolveTimeMode(event);
+  if (mode === "none") return "Sin horario";
+  if (mode === "single") return `Entrada ${formatTime(event?.start_time)}`;
+  return `${formatTime(event?.start_time)} a ${formatTime(event?.end_time)}`;
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -155,6 +172,8 @@ function cleanEvent(row: any): ReservationEvent {
     ...DEFAULT_EVENT,
     ...row,
     slug: row.slug || slugify(row.title || ""),
+    time_mode: row.time_mode || (row.no_time ? "none" : "interval"),
+    no_time: Boolean(row.no_time || row.time_mode === "none"),
     start_time: formatTime(row.start_time || DEFAULT_EVENT.start_time),
     end_time: formatTime(row.end_time || DEFAULT_EVENT.end_time),
     capacity_per_slot: row.capacity_per_slot ?? "",
@@ -313,10 +332,28 @@ export default function ReservationsPage() {
     );
   };
 
+  const updateTimeMode = (value: ReservationEvent["time_mode"]) => {
+    setEvents((current) =>
+      current.map((event) =>
+        event.id === selectedEvent?.id
+          ? {
+              ...event,
+              time_mode: value,
+              no_time: value === "none",
+              end_time: value === "single" ? event.start_time || "12:00" : event.end_time,
+            }
+          : event,
+      ),
+    );
+  };
+
   const saveEvent = async () => {
     if (!tenantId || !branchId || !selectedEvent) return;
     setSaving(true);
     setMessage("");
+    const timeMode = resolveTimeMode(selectedEvent);
+    const startTime = timeMode === "none" ? "00:00" : selectedEvent.start_time || "12:00";
+    const endTime = timeMode === "interval" ? selectedEvent.end_time || "15:00" : startTime;
 
     const payload: any = {
       tenant_id: tenantId,
@@ -324,15 +361,16 @@ export default function ReservationsPage() {
       slug: selectedEvent.slug || slugify(selectedEvent.title || "reservas"),
       reservation_type: selectedEvent.reservation_type || "standard",
       enabled: Boolean(selectedEvent.enabled),
-      no_time: Boolean(selectedEvent.no_time),
+      no_time: timeMode === "none",
+      time_mode: timeMode,
       title: selectedEvent.title || "Reservas",
       description: selectedEvent.description || null,
       hero_image_url: selectedEvent.hero_image_url || null,
       location_name: selectedEvent.location_name || selectedBranch?.name || null,
       location_address: selectedEvent.location_address || null,
       event_date: selectedEvent.event_date || today(),
-      start_time: selectedEvent.no_time ? "00:00" : selectedEvent.start_time || "12:00",
-      end_time: selectedEvent.no_time ? "00:00" : selectedEvent.end_time || "15:00",
+      start_time: startTime,
+      end_time: endTime,
       slot_interval_minutes: Number(selectedEvent.slot_interval_minutes || 30),
       min_party_size: Number(selectedEvent.min_party_size || 1),
       max_party_size: Number(selectedEvent.max_party_size || 20),
@@ -456,7 +494,7 @@ export default function ReservationsPage() {
                     {event.enabled ? "Activo" : "Oculto"}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">{formatDate(event.event_date)} · {formatTime(event.start_time)}</p>
+                <p className="mt-1 text-xs text-gray-500">{formatDate(event.event_date)} · {timeModeLabel(event)}</p>
                 </button>
                 <button
                   type="button"
@@ -510,21 +548,24 @@ export default function ReservationsPage() {
                 <Field label="Lugar"><input className="input" value={selectedEvent.location_name || ""} onChange={(e) => updateEvent("location_name", e.target.value)} /></Field>
                 <Field label="Direccion"><input className="input" value={selectedEvent.location_address || ""} onChange={(e) => updateEvent("location_address", e.target.value)} /></Field>
                 <Field label="Fecha"><input type="date" className="input" value={selectedEvent.event_date || ""} onChange={(e) => updateEvent("event_date", e.target.value)} /></Field>
-                <label className="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 md:col-span-1">
-                  <span>
-                    <span className="block text-sm font-medium text-gray-100">Sin hora</span>
-                    <span className="text-xs text-gray-500">La gente reserva el evento sin elegir horario.</span>
-                  </span>
-                  <input type="checkbox" checked={Boolean(selectedEvent.no_time)} onChange={(e) => updateEvent("no_time", e.target.checked)} className="h-5 w-5 accent-white" />
-                </label>
-                {!selectedEvent.no_time && (
+                <Field label="Modo de horario">
+                  <select className="input" value={resolveTimeMode(selectedEvent)} onChange={(e) => updateTimeMode(e.target.value as ReservationEvent["time_mode"])}>
+                    <option value="interval">Horarios con intervalos</option>
+                    <option value="single">Un solo horario de entrada</option>
+                    <option value="none">Sin horario</option>
+                  </select>
+                </Field>
+                {resolveTimeMode(selectedEvent) === "interval" && (
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Desde"><input type="time" className="input" value={selectedEvent.start_time || ""} onChange={(e) => updateEvent("start_time", e.target.value)} /></Field>
                     <Field label="Hasta"><input type="time" className="input" value={selectedEvent.end_time || ""} onChange={(e) => updateEvent("end_time", e.target.value)} /></Field>
                   </div>
                 )}
+                {resolveTimeMode(selectedEvent) === "single" && (
+                  <Field label="Horario de entrada"><input type="time" className="input" value={selectedEvent.start_time || ""} onChange={(e) => updateEvent("start_time", e.target.value)} /></Field>
+                )}
                 <div className="grid grid-cols-3 gap-3 md:col-span-2">
-                  {!selectedEvent.no_time && (
+                  {resolveTimeMode(selectedEvent) === "interval" && (
                     <Field label="Intervalo min"><input type="number" className="input" value={selectedEvent.slot_interval_minutes || 30} onChange={(e) => updateEvent("slot_interval_minutes", e.target.value)} /></Field>
                   )}
                   <Field label="Min personas"><input type="number" className="input" value={selectedEvent.min_party_size || 1} onChange={(e) => updateEvent("min_party_size", e.target.value)} /></Field>
@@ -573,7 +614,7 @@ export default function ReservationsPage() {
               <p className="mt-2 text-sm leading-6 text-gray-400">{selectedEvent?.description}</p>
               <div className="mt-5 grid grid-cols-2 gap-2 text-sm text-gray-300">
                 <div className="rounded-lg bg-white/5 p-3"><Calendar size={16} /> <span className="mt-2 block">{formatDate(selectedEvent?.event_date)}</span></div>
-                <div className="rounded-lg bg-white/5 p-3"><Clock size={16} /> <span className="mt-2 block">{formatReservationTime(selectedEvent?.start_time, selectedEvent?.no_time)}</span></div>
+                <div className="rounded-lg bg-white/5 p-3"><Clock size={16} /> <span className="mt-2 block">{timeModeLabel(selectedEvent)}</span></div>
               </div>
             </div>
           </div>
