@@ -122,19 +122,6 @@ export default function ReservationPageClient({
   const minPartySize = Number(settings.min_party_size || 1);
   const capacityPerSlot = Number(settings.capacity_per_slot || 0);
 
-  if (settings.reservation_type === "event") {
-    return (
-      <EventRegistrationView
-        branchSlug={branchSlug}
-        branchName={branchName}
-        eventId={eventId}
-        settings={settings}
-        branding={branding}
-        reservations={reservations}
-      />
-    );
-  }
-
   const slots = useMemo(() => {
     if (noTime) return [];
     const start = normalizeTime(settings.start_time);
@@ -172,6 +159,19 @@ export default function ReservationPageClient({
     customerPhone.replace(/\D/g, "").length >= 10 &&
     (noTime || selectedTime) &&
     (noTime || !selectedSlot?.remaining || selectedSlot.remaining >= partySize);
+
+  if (settings.reservation_type === "event") {
+    return (
+      <EventRegistrationView
+        branchSlug={branchSlug}
+        branchName={branchName}
+        eventId={eventId}
+        settings={settings}
+        branding={branding}
+        reservations={reservations}
+      />
+    );
+  }
 
   const submit = async () => {
     setError("");

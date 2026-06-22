@@ -72,7 +72,7 @@ export default async function ReservationEventPage({
       branchSlug={branchSlug}
       branchName={branch.name}
       eventId={event.id}
-      settings={JSON.parse(JSON.stringify(event))}
+      settings={JSON.parse(JSON.stringify({ ...event, reservation_type: event.reservation_type || "event" }))}
       branding={branding ? JSON.parse(JSON.stringify(branding)) : undefined}
       reservations={JSON.parse(JSON.stringify(reservations || []))}
     />
