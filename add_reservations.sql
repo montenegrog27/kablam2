@@ -49,6 +49,7 @@ create table if not exists public.reservation_events (
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   branch_id uuid not null references public.branches(id) on delete cascade,
   slug text,
+  reservation_type text not null default 'standard',
   enabled boolean not null default true,
   no_time boolean not null default false,
   title text not null default 'Reservas',
@@ -65,6 +66,10 @@ create table if not exists public.reservation_events (
   capacity_per_slot integer,
   deposit_amount numeric(12,2),
   deposit_alias text,
+  event_badge text,
+  event_subtitle text,
+  event_includes jsonb not null default '[]'::jsonb,
+  event_theme_color text,
   confirmation_title text,
   confirmation_message text,
   whatsapp_message_template text,
@@ -78,7 +83,19 @@ alter table public.reservations
 
 alter table public.reservation_events
   add column if not exists slug text,
-  add column if not exists no_time boolean not null default false;
+  add column if not exists no_time boolean not null default false,
+  add column if not exists reservation_type text not null default 'standard',
+  add column if not exists event_badge text,
+  add column if not exists event_subtitle text,
+  add column if not exists event_includes jsonb not null default '[]'::jsonb,
+  add column if not exists event_theme_color text;
+
+alter table public.reservation_events
+drop constraint if exists reservation_events_type_check;
+
+alter table public.reservation_events
+add constraint reservation_events_type_check
+check (reservation_type in ('standard', 'event'));
 
 create index if not exists reservations_branch_date_idx
   on public.reservations(branch_id, reservation_date, reservation_time);

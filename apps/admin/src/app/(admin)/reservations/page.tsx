@@ -6,6 +6,7 @@ import {
   Calendar,
   Check,
   Clock,
+  Edit3,
   Filter,
   Plus,
   RefreshCw,
@@ -23,6 +24,7 @@ type ReservationEvent = {
   tenant_id?: string;
   branch_id?: string;
   slug?: string;
+  reservation_type?: "standard" | "event";
   enabled: boolean;
   no_time: boolean;
   title: string;
@@ -39,6 +41,10 @@ type ReservationEvent = {
   capacity_per_slot: number | string;
   deposit_amount: number | string;
   deposit_alias: string;
+  event_badge: string;
+  event_subtitle: string;
+  event_includes: string[] | string;
+  event_theme_color: string;
   confirmation_title: string;
   confirmation_message: string;
   whatsapp_message_template: string;
@@ -63,6 +69,7 @@ type Reservation = {
 
 const DEFAULT_EVENT: ReservationEvent = {
   enabled: true,
+  reservation_type: "standard",
   no_time: false,
   slug: "",
   title: "Nuevo evento",
@@ -79,6 +86,10 @@ const DEFAULT_EVENT: ReservationEvent = {
   capacity_per_slot: "",
   deposit_amount: "",
   deposit_alias: "",
+  event_badge: "",
+  event_subtitle: "",
+  event_includes: [],
+  event_theme_color: "#75aadb",
   confirmation_title: "Reserva recibida",
   confirmation_message: "Te vamos a contactar por WhatsApp con los detalles.",
   whatsapp_message_template:
@@ -148,7 +159,20 @@ function cleanEvent(row: any): ReservationEvent {
     end_time: formatTime(row.end_time || DEFAULT_EVENT.end_time),
     capacity_per_slot: row.capacity_per_slot ?? "",
     deposit_amount: row.deposit_amount ?? "",
+    event_includes: Array.isArray(row.event_includes) ? row.event_includes : [],
+    event_theme_color: row.event_theme_color || DEFAULT_EVENT.event_theme_color,
   };
+}
+
+function eventIncludesText(value: string[] | string | undefined) {
+  return Array.isArray(value) ? value.join("\n") : String(value || "");
+}
+
+function cleanEventIncludes(value: string[] | string | undefined) {
+  return eventIncludesText(value)
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export default function ReservationsPage() {
@@ -298,6 +322,7 @@ export default function ReservationsPage() {
       tenant_id: tenantId,
       branch_id: branchId,
       slug: selectedEvent.slug || slugify(selectedEvent.title || "reservas"),
+      reservation_type: selectedEvent.reservation_type || "standard",
       enabled: Boolean(selectedEvent.enabled),
       no_time: Boolean(selectedEvent.no_time),
       title: selectedEvent.title || "Reservas",
@@ -314,6 +339,10 @@ export default function ReservationsPage() {
       capacity_per_slot: selectedEvent.capacity_per_slot ? Number(selectedEvent.capacity_per_slot) : null,
       deposit_amount: selectedEvent.deposit_amount ? Number(selectedEvent.deposit_amount) : null,
       deposit_alias: selectedEvent.deposit_alias || null,
+      event_badge: selectedEvent.event_badge || null,
+      event_subtitle: selectedEvent.event_subtitle || null,
+      event_includes: cleanEventIncludes(selectedEvent.event_includes),
+      event_theme_color: selectedEvent.event_theme_color || null,
       confirmation_title: selectedEvent.confirmation_title || null,
       confirmation_message: selectedEvent.confirmation_message || null,
       whatsapp_message_template: selectedEvent.whatsapp_message_template || null,
@@ -407,16 +436,20 @@ export default function ReservationsPage() {
               </div>
             )}
             {events.map((event) => (
-              <button
+              <div
                 key={event.id}
-                onClick={() => {
-                  setEventId(event.id || "");
-                  setDateFilter(event.event_date || "");
-                }}
-                className={`w-full rounded-lg border px-3 py-3 text-left transition ${
+                className={`overflow-hidden rounded-lg border transition ${
                   event.id === selectedEvent?.id ? "border-white bg-white/10" : "border-gray-800 bg-gray-950 hover:bg-gray-800"
                 }`}
               >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEventId(event.id || "");
+                    setDateFilter(event.event_date || "");
+                  }}
+                  className="w-full px-3 py-3 text-left"
+                >
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-sm font-semibold text-gray-100">{event.title}</p>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] ${event.enabled ? "bg-emerald-500/10 text-emerald-300" : "bg-gray-700 text-gray-400"}`}>
@@ -424,7 +457,19 @@ export default function ReservationsPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-gray-500">{formatDate(event.event_date)} · {formatTime(event.start_time)}</p>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEventId(event.id || "");
+                    setDateFilter(event.event_date || "");
+                  }}
+                  className="flex w-full items-center justify-center gap-2 border-t border-gray-800 px-3 py-2 text-xs font-semibold text-gray-300 hover:bg-white hover:text-gray-950"
+                >
+                  <Edit3 size={13} />
+                  Editar evento
+                </button>
+              </div>
             ))}
           </div>
         </aside>
@@ -436,8 +481,10 @@ export default function ReservationsPage() {
             <>
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="font-semibold text-gray-100">Configuracion del evento</h2>
-                  <p className="text-xs text-gray-500">Fecha, horarios, cupos, contenido y mensajes.</p>
+                  <h2 className="font-semibold text-gray-100">{selectedEvent._draft ? "Crear evento" : "Editar evento"}</h2>
+                  <p className="text-xs text-gray-500">
+                    {selectedEvent._draft ? "Configura la reserva antes de publicarla." : "Actualiza fecha, horarios, cupos, contenido y mensajes."}
+                  </p>
                 </div>
                 <label className="flex items-center gap-2 text-sm text-gray-300">
                   <input type="checkbox" checked={Boolean(selectedEvent.enabled)} onChange={(e) => updateEvent("enabled", e.target.checked)} className="h-4 w-4 accent-white" />
@@ -446,9 +493,20 @@ export default function ReservationsPage() {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Tipo"><select className="input" value={selectedEvent.reservation_type || "standard"} onChange={(e) => updateEvent("reservation_type", e.target.value)}>
+                  <option value="standard">Reserva normal</option>
+                  <option value="event">Evento / inscripcion</option>
+                </select></Field>
                 <Field label="Titulo"><input className="input" value={selectedEvent.title || ""} onChange={(e) => updateEvent("title", e.target.value)} /></Field>
                 <Field label="URL del evento"><input className="input" value={selectedEvent.slug || ""} onChange={(e) => updateEvent("slug", slugify(e.target.value))} placeholder="sobremesa-del-mediodia" /></Field>
                 <Field label="Imagen hero"><input className="input" value={selectedEvent.hero_image_url || ""} onChange={(e) => updateEvent("hero_image_url", e.target.value)} placeholder="https://..." /></Field>
+                {selectedEvent.reservation_type === "event" && (
+                  <>
+                    <Field label="Badge"><input className="input" value={selectedEvent.event_badge || ""} onChange={(e) => updateEvent("event_badge", e.target.value)} placeholder="5K participativo" /></Field>
+                    <Field label="Subtitulo destacado"><input className="input" value={selectedEvent.event_subtitle || ""} onChange={(e) => updateEvent("event_subtitle", e.target.value)} placeholder="Veni con outfit de Argentina" /></Field>
+                    <Field label="Color del evento"><input type="color" className="input h-11 p-1" value={selectedEvent.event_theme_color || "#75aadb"} onChange={(e) => updateEvent("event_theme_color", e.target.value)} /></Field>
+                  </>
+                )}
                 <Field label="Lugar"><input className="input" value={selectedEvent.location_name || ""} onChange={(e) => updateEvent("location_name", e.target.value)} /></Field>
                 <Field label="Direccion"><input className="input" value={selectedEvent.location_address || ""} onChange={(e) => updateEvent("location_address", e.target.value)} /></Field>
                 <Field label="Fecha"><input type="date" className="input" value={selectedEvent.event_date || ""} onChange={(e) => updateEvent("event_date", e.target.value)} /></Field>
@@ -478,13 +536,19 @@ export default function ReservationsPage() {
                   <Field label="Alias"><input className="input" value={selectedEvent.deposit_alias || ""} onChange={(e) => updateEvent("deposit_alias", e.target.value)} /></Field>
                 </div>
                 <Field label="Descripcion"><textarea className="input min-h-28 resize-none" value={selectedEvent.description || ""} onChange={(e) => updateEvent("description", e.target.value)} /></Field>
+                {selectedEvent.reservation_type === "event" && (
+                  <Field label="Que incluye (uno por linea)"><textarea className="input min-h-28 resize-none" value={eventIncludesText(selectedEvent.event_includes)} onChange={(e) => updateEvent("event_includes", e.target.value)} placeholder={"Kit con dorsal y regalos\nCafe libre post Run\nRegalos y sorteos"} /></Field>
+                )}
                 <Field label="Mensaje al confirmar"><textarea className="input min-h-28 resize-none" value={selectedEvent.confirmation_message || ""} onChange={(e) => updateEvent("confirmation_message", e.target.value)} /></Field>
                 <Field label="Template WhatsApp (pendiente)"><textarea className="input min-h-32 resize-none" value={selectedEvent.whatsapp_message_template || ""} onChange={(e) => updateEvent("whatsapp_message_template", e.target.value)} /></Field>
                 <Field label="Titulo de exito"><input className="input" value={selectedEvent.confirmation_title || ""} onChange={(e) => updateEvent("confirmation_title", e.target.value)} /></Field>
               </div>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                <button onClick={saveEvent} disabled={saving} className="button-primary"><Save size={16} /> Guardar evento</button>
+                <button onClick={saveEvent} disabled={saving} className="button-primary">
+                  <Save size={16} />
+                  {selectedEvent._draft ? "Crear evento" : "Guardar cambios"}
+                </button>
                 <button onClick={deleteEvent} disabled={saving} className="button-danger"><Trash2 size={16} /> Eliminar</button>
               </div>
             </>

@@ -27,6 +27,7 @@ export async function POST(req: Request) {
       partySize,
       reservationDate,
       reservationTime,
+      province,
       notes,
     } = body;
 
@@ -117,6 +118,7 @@ export async function POST(req: Request) {
         notes: notes?.trim() || null,
         status: "pending",
         source: "customer",
+        metadata: province ? { province } : {},
       })
       .select("id")
       .single();

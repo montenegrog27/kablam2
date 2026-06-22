@@ -8,6 +8,7 @@ import { getBrandFontFamily } from "@/lib/fonts";
 
 type Settings = {
   title?: string | null;
+  reservation_type?: "standard" | "event" | null;
   no_time?: boolean | null;
   description?: string | null;
   hero_image_url?: string | null;
@@ -22,6 +23,10 @@ type Settings = {
   capacity_per_slot?: number | null;
   deposit_amount?: number | null;
   deposit_alias?: string | null;
+  event_badge?: string | null;
+  event_subtitle?: string | null;
+  event_includes?: string[] | null;
+  event_theme_color?: string | null;
   confirmation_title?: string | null;
   confirmation_message?: string | null;
 };
@@ -58,6 +63,21 @@ function formatDate(value?: string | null) {
 function formatCurrency(value?: number | null) {
   if (!value) return "";
   return `$${new Intl.NumberFormat("es-AR").format(Math.round(value))}`;
+}
+
+function normalizeArgPhone(input: string) {
+  let digits = String(input || "").replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.startsWith("54")) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("9")) digits = digits.slice(1);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.startsWith("15")) digits = digits.slice(2);
+  if (digits.length !== 10) return null;
+  return `549${digits}`;
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function minutesFromTime(value: string) {
@@ -101,6 +121,19 @@ export default function ReservationPageClient({
   const maxPartySize = Number(settings.max_party_size || 20);
   const minPartySize = Number(settings.min_party_size || 1);
   const capacityPerSlot = Number(settings.capacity_per_slot || 0);
+
+  if (settings.reservation_type === "event") {
+    return (
+      <EventRegistrationView
+        branchSlug={branchSlug}
+        branchName={branchName}
+        eventId={eventId}
+        settings={settings}
+        branding={branding}
+        reservations={reservations}
+      />
+    );
+  }
 
   const slots = useMemo(() => {
     if (noTime) return [];
@@ -393,12 +426,280 @@ function Summary({ icon: Icon, text, color }: { icon: any; text: string; color: 
   );
 }
 
+function EventRegistrationView({
+  branchSlug,
+  branchName,
+  eventId,
+  settings,
+  branding,
+  reservations,
+}: Props) {
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    province: "corrientes",
+    provinceOther: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+
+  const themeColor = settings.event_theme_color || branding?.brand_color || "#75aadb";
+  const darkColor = branding?.primary_color || "#0038a8";
+  const eventName = settings.title || branchName;
+  const eventDate = formatDate(settings.event_date);
+  const price = Number(settings.deposit_amount || 0);
+  const capacity = Number(settings.capacity_per_slot || 0);
+  const registrationCount = reservations
+    .filter((reservation) => !["cancelled", "no_show"].includes(reservation.status))
+    .reduce((sum, reservation) => sum + Number(reservation.party_size || 0), 0);
+  const isFull = capacity > 0 && registrationCount >= capacity;
+  const includes = Array.isArray(settings.event_includes)
+    ? settings.event_includes
+    : [];
+  const province =
+    form.province === "otro" ? form.provinceOther.trim() : form.province;
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+
+    if (isFull) {
+      setError("Las inscripciones ya llegaron al cupo maximo.");
+      return;
+    }
+    if (!form.name.trim()) {
+      setError("Ingresa tu nombre completo.");
+      return;
+    }
+    if (!normalizeArgPhone(form.phone)) {
+      setError("Ingresa un WhatsApp argentino valido.");
+      return;
+    }
+    if (!isValidEmail(form.email.trim())) {
+      setError("Ingresa un email valido.");
+      return;
+    }
+    if (form.province === "otro" && !form.provinceOther.trim()) {
+      setError("Escribi tu provincia.");
+      return;
+    }
+
+    setSubmitting(true);
+    const response = await fetch("/api/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        branchSlug,
+        eventId,
+        customerName: form.name,
+        customerPhone: form.phone,
+        customerEmail: form.email,
+        partySize: 1,
+        reservationDate: settings.event_date,
+        reservationTime: "00:00",
+        province,
+        notes: `Provincia: ${province}`,
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    setSubmitting(false);
+
+    if (!response.ok || !result?.success) {
+      setError(result?.error || "No pudimos registrar la inscripcion.");
+      return;
+    }
+
+    setSuccess(true);
+    setForm({
+      name: "",
+      phone: "",
+      email: "",
+      province: "corrientes",
+      provinceOther: "",
+    });
+  };
+
+  return (
+    <main className="min-h-screen bg-[#f7f7f4] text-slate-950">
+      <FontLoader branding={branding} />
+
+      <section style={{ background: themeColor }}>
+        <div className="relative mx-auto aspect-[820/312] w-full max-w-6xl">
+          {settings.hero_image_url ? (
+            <img src={settings.hero_image_url} alt={eventName} className="h-full w-full object-contain" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center px-6 text-center text-5xl font-black uppercase text-white">
+              {eventName}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="text-white" style={{ background: themeColor }}>
+        <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
+          <div className="mb-7 flex items-center justify-between gap-4 text-sm font-semibold uppercase tracking-[0.2em]">
+            <span>{settings.location_name || branchName}</span>
+            <span>{eventDate}</span>
+          </div>
+
+          <div className="max-w-3xl">
+            {settings.event_badge && (
+              <p className="mb-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-bold" style={{ color: darkColor }}>
+                {settings.event_badge}
+              </p>
+            )}
+            <h1 className="text-5xl font-black uppercase leading-[0.95] md:text-7xl">
+              {eventName}
+            </h1>
+            {settings.description && (
+              <p className="mt-6 max-w-2xl text-xl font-medium leading-relaxed text-white/95">
+                {settings.description}
+              </p>
+            )}
+            {settings.event_subtitle && (
+              <p className="mt-5 text-2xl font-black">{settings.event_subtitle}</p>
+            )}
+          </div>
+
+          <div className="mt-8 grid gap-3 pb-2 text-sm font-semibold md:grid-cols-4">
+            <div className="border-t border-white/50 pt-3">
+              Lugar: {settings.location_name || branchName}
+            </div>
+            <div className="border-t border-white/50 pt-3">
+              {settings.location_address || "Direccion a confirmar"}
+            </div>
+            <div className="border-t border-white/50 pt-3">
+              Entrada: {price ? formatCurrency(price) : "A confirmar"}
+            </div>
+            <div className="border-t border-white/50 pt-3">
+              Cupos: {capacity ? `${registrationCount}/${capacity}` : registrationCount}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-6xl gap-8 px-5 py-10 md:grid-cols-[1fr_420px] md:px-8">
+        <div className="space-y-6">
+          {includes.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              <h2 className="text-2xl font-black">Que incluye</h2>
+              <ul className="mt-5 grid gap-3 text-base text-slate-700">
+                {includes.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+          )}
+
+          <div className="rounded-lg border bg-white p-6" style={{ borderColor: `${themeColor}66` }}>
+            <h2 className="text-2xl font-black">Pago</h2>
+            <p className="mt-3 text-slate-700">
+              Para confirmar tu lugar, transferi {price ? formatCurrency(price) : "el importe indicado"} y envia el comprobante por WhatsApp.
+            </p>
+            {settings.deposit_alias && (
+              <div className="mt-5 rounded-lg bg-slate-950 px-4 py-3 font-mono text-lg font-bold text-white">
+                {settings.deposit_alias}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <form onSubmit={submit} className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60">
+          <h2 className="text-2xl font-black">Inscripcion</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Te mandamos la info por WhatsApp para que respondas con el comprobante.
+          </p>
+
+          {isFull && (
+            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+              Las inscripciones ya llegaron al cupo maximo.
+            </p>
+          )}
+
+          <div className="mt-5 space-y-4">
+            <EventInput label="Nombre">
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="event-field" placeholder="Nombre y apellido" />
+            </EventInput>
+            <EventInput label="WhatsApp">
+              <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="event-field" placeholder="Ej: 3794123456" inputMode="tel" />
+            </EventInput>
+            <EventInput label="Email">
+              <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="event-field" placeholder="tu@email.com" inputMode="email" />
+            </EventInput>
+            <EventInput label="Provincia">
+              <select value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value, provinceOther: e.target.value === "otro" ? form.provinceOther : "" })} className="event-field bg-white">
+                <option value="corrientes">Corrientes</option>
+                <option value="chaco">Chaco</option>
+                <option value="otro">Otro</option>
+              </select>
+            </EventInput>
+            {form.province === "otro" && (
+              <EventInput label="Escribi tu provincia">
+                <input value={form.provinceOther} onChange={(e) => setForm({ ...form, provinceOther: e.target.value })} className="event-field" placeholder="Provincia" />
+              </EventInput>
+            )}
+          </div>
+
+          {error && (
+            <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+              {error}
+            </p>
+          )}
+
+          <button type="submit" disabled={submitting || isFull} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-4 text-lg font-black text-white disabled:opacity-60" style={{ background: darkColor }}>
+            {submitting && <Loader2 className="h-5 w-5 animate-spin" />}
+            {isFull ? "Cupos completos" : submitting ? "Registrando..." : "Inscribirme"}
+          </button>
+        </form>
+      </section>
+
+      {success && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-5">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-2xl">
+            <Check className="mx-auto h-12 w-12" style={{ color: darkColor }} />
+            <h2 className="mt-4 text-2xl font-black">{settings.confirmation_title || "Inscripcion registrada"}</h2>
+            <p className="mt-2 text-slate-600">
+              {settings.confirmation_message || "Te vamos a contactar por WhatsApp con los detalles."}
+            </p>
+            <button onClick={() => setSuccess(false)} className="mt-5 rounded-lg border px-4 py-2 font-semibold">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .event-field {
+          margin-top: 0.25rem;
+          width: 100%;
+          border-radius: 0.5rem;
+          border: 1px solid rgb(226 232 240);
+          padding: 0.75rem;
+          outline: none;
+        }
+        .event-field:focus {
+          border-color: ${darkColor};
+        }
+      `}</style>
+    </main>
+  );
+}
+
 function Input({ label, icon: Icon, children }: { label: string; icon: any; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest opacity-50">
         <Icon size={14} /> {label}
       </span>
+      {children}
+    </label>
+  );
+}
+
+function EventInput({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-semibold text-slate-700">{label}</span>
       {children}
     </label>
   );
