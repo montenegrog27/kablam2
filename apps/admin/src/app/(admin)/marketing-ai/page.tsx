@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Users, Target, Zap, TrendingUp, CalendarClock, MessageCircle, Brain, Award, AlertTriangle, Clock, Send, Download, Play, Pause, ChevronRight, Star, DollarSign, ShoppingBag, FileText } from "lucide-react";
+import { Users, Target, Zap, TrendingUp, CalendarClock, MessageCircle, Brain, Award, AlertTriangle, Clock, Send, Download, Play, Pause, ChevronRight, Star, DollarSign, ShoppingBag, FileText, Image as ImageIcon } from "lucide-react";
 
 const fmt = (n: number) => n.toLocaleString("es-AR");
 const currency = (n: number) => `$${Math.round(n).toLocaleString("es-AR")}`;
@@ -22,6 +22,56 @@ const normalize = (value: number, max: number) => (max > 0 ? clamp((value / max)
 const cleanPhone = (phone?: string) => String(phone || "").replace(/\D/g, "");
 const hasValidPhone = (phone?: string) => cleanPhone(phone).length >= 10;
 const dayLabels = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+type CampaignContentType = "text" | "image" | "image_text";
+
+const campaignTypeLabels: Record<CampaignContentType, string> = {
+  text: "Solo texto",
+  image: "Solo imagen",
+  image_text: "Imagen + texto",
+};
+
+function normalizeCampaignContentType(value?: string | null): CampaignContentType {
+  if (value === "image" || value === "image_text") return value;
+  return "text";
+}
+
+function buildCampaignWhatsAppBody({
+  branchSlug,
+  phone,
+  message,
+  imageUrl,
+  contentType,
+}: {
+  branchSlug: string;
+  phone: string;
+  message?: string | null;
+  imageUrl?: string | null;
+  contentType: CampaignContentType;
+}) {
+  const cleanMessage = String(message || "").trim();
+  const cleanImageUrl = String(imageUrl || "").trim();
+  const base = {
+    slug: "mordiscoburgers",
+    branchId: branchSlug,
+    phone,
+  };
+
+  if (contentType === "image" || contentType === "image_text") {
+    return {
+      ...base,
+      type: "image",
+      mediaUrl: cleanImageUrl,
+      imageUrl: cleanImageUrl,
+      caption: cleanMessage || undefined,
+      message: cleanMessage || undefined,
+    };
+  }
+
+  return {
+    ...base,
+    message: cleanMessage,
+  };
+}
 
 function mostCommon<T extends string | number>(items: T[]) {
   const counts = new Map<T, number>();
@@ -83,6 +133,8 @@ export default function MarketingAIPage() {
   const [campaignName, setCampaignName] = useState("");
   const [campaignSegment, setCampaignSegment] = useState("dormant_30");
   const [campaignMessage, setCampaignMessage] = useState("");
+  const [campaignContentType, setCampaignContentType] = useState<CampaignContentType>("text");
+  const [campaignImageUrl, setCampaignImageUrl] = useState("");
   const [campaignBatchSize, setCampaignBatchSize] = useState(30);
   const [testPhone, setTestPhone] = useState("");
   const [testing, setTesting] = useState(false);
@@ -558,11 +610,23 @@ export default function MarketingAIPage() {
 
   const launchCampaign = async () => {
     if (!tenantId || !campaignName) return;
+    const cleanMessage = campaignMessage.trim();
+    const cleanImageUrl = campaignImageUrl.trim();
+    const needsText = campaignContentType === "text" || campaignContentType === "image_text";
+    const needsImage = campaignContentType === "image" || campaignContentType === "image_text";
+    if ((needsText && !cleanMessage) || (needsImage && !cleanImageUrl)) {
+      alert("Completa el contenido de la campana antes de lanzarla.");
+      return;
+    }
     const segMap: Record<string, string> = { dormant_30: "Dormidos 30d", dormant_60: "Dormidos 60d", dormant_90: "Dormidos 90d", at_risk: "En riesgo", new: "Nuevos", frequent: "Frecuentes", vip: "VIP" };
     const target = customerData.filter((c) => c.segment === campaignSegment);
     const { data: camp } = await supabase.from("campaigns").insert({
       tenant_id: tenantId, name: campaignName, segment_name: segMap[campaignSegment] || campaignSegment,
-      target_count: target.length, message_template: campaignMessage || null, status: "draft",
+      target_count: target.length,
+      message_template: cleanMessage || null,
+      cta_text: campaignContentType,
+      cta_url: cleanImageUrl || null,
+      status: "draft",
     }).select().single();
     if (camp) {
       const batchSize = campaignBatchSize;
@@ -576,7 +640,7 @@ export default function MarketingAIPage() {
         batch++;
       }
     }
-    setShowNewCampaign(false); setCampaignName(""); load();
+    setShowNewCampaign(false); setCampaignName(""); setCampaignMessage(""); setCampaignImageUrl(""); setCampaignContentType("text"); load();
   };
 
   const sendCampaignBatch = async (campaign: any) => {
@@ -620,6 +684,8 @@ export default function MarketingAIPage() {
     if (!branch) { setSendingCampaign(false); return; }
 
     let sent = 0, failed = 0;
+    const contentType = normalizeCampaignContentType(campaign.cta_text);
+    const imageUrl = String(campaign.cta_url || "");
     for (const delivery of deliveries) {
       const customerName = customerNameById.get(delivery.customer_id) || "cliente";
       const personalizedMessage = (campaign.message_template || "").replace(/\{nombre\}/gi, customerName);
@@ -627,12 +693,13 @@ export default function MarketingAIPage() {
         const res = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            slug: "mordiscoburgers",
-            branchId: branch.slug,
+          body: JSON.stringify(buildCampaignWhatsAppBody({
+            branchSlug: branch.slug,
             phone: `549${delivery.phone}`,
             message: personalizedMessage,
-          }),
+            imageUrl,
+            contentType,
+          })),
         });
         if (res.ok) {
           await supabase.from("campaign_deliveries").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", delivery.id);
@@ -654,7 +721,11 @@ export default function MarketingAIPage() {
   };
 
   const testCampaign = async () => {
-    if (!testPhone || !campaignMessage) return;
+    const cleanMessage = campaignMessage.trim();
+    const cleanImageUrl = campaignImageUrl.trim();
+    const needsText = campaignContentType === "text" || campaignContentType === "image_text";
+    const needsImage = campaignContentType === "image" || campaignContentType === "image_text";
+    if (!testPhone || (needsText && !cleanMessage) || (needsImage && !cleanImageUrl)) return;
     setTesting(true);
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) { setTesting(false); return; }
@@ -665,17 +736,18 @@ export default function MarketingAIPage() {
 
     const phone = `549${testPhone.replace(/\D/g, "")}`;
     // Replace {nombre} with "test" for the test message
-    const personalizedMessage = campaignMessage.replace(/\{nombre\}/gi, "test");
+    const personalizedMessage = cleanMessage.replace(/\{nombre\}/gi, "test");
     try {
       const response = await fetch("https://whatsapp.mordiscoburgers.com.ar/api/whatsapp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug: "mordiscoburgers",
-          branchId: branch.slug,
+        body: JSON.stringify(buildCampaignWhatsAppBody({
+          branchSlug: branch.slug,
           phone,
           message: personalizedMessage,
-        }),
+          imageUrl: cleanImageUrl,
+          contentType: campaignContentType,
+        })),
       });
       const text = await response.text();
       if (response.ok) alert("✅ Mensaje de prueba enviado correctamente");
@@ -1239,12 +1311,51 @@ export default function MarketingAIPage() {
                   </select>
                 </div>
               </div>
+              <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4">
+                <div>
+                  <label className="block text-[10px] text-gray-500 uppercase mb-1">Contenido</label>
+                  <select value={campaignContentType} onChange={(e) => setCampaignContentType(e.target.value as CampaignContentType)}
+                    className="w-full border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-800 text-gray-100">
+                    <option value="text">Solo texto</option>
+                    <option value="image">Solo imagen</option>
+                    <option value="image_text">Imagen + texto</option>
+                  </select>
+                  <p className="mt-2 text-[11px] text-gray-500">Para ofertas visuales, usa Solo imagen y pega la URL de Mis imagenes.</p>
+                </div>
+                {(campaignContentType === "image" || campaignContentType === "image_text") && (
+                  <div>
+                    <label className="block text-[10px] text-gray-500 uppercase mb-1">URL de imagen</label>
+                    <input value={campaignImageUrl} onChange={(e) => setCampaignImageUrl(e.target.value)}
+                      className="w-full border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-800 text-gray-100 placeholder-gray-500"
+                      placeholder="https://res.cloudinary.com/.../oferta.jpg" />
+                  </div>
+                )}
+              </div>
+              {(campaignContentType === "image" || campaignContentType === "image_text") && (
+                <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4 rounded-xl border border-gray-700 bg-gray-950 p-3">
+                  <div className="aspect-[4/5] overflow-hidden rounded-lg border border-gray-800 bg-gray-900 flex items-center justify-center">
+                    {campaignImageUrl.trim() ? (
+                      <img src={campaignImageUrl.trim()} alt="Vista previa de campana" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="text-center text-gray-600">
+                        <ImageIcon size={28} className="mx-auto mb-2" />
+                        <p className="text-xs font-bold">Preview</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col justify-center">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-purple-300">{campaignTypeLabels[campaignContentType]}</p>
+                    <p className="mt-2 text-sm text-gray-300">WhatsApp recibira la imagen como pieza principal{campaignContentType === "image_text" ? " con el texto como caption." : "."}</p>
+                    <p className="mt-2 text-xs text-gray-500">Tip: usa imagen vertical 4:5 o cuadrada, texto grande y poco detalle para que se entienda rapido en mobile.</p>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-[10px] text-gray-500 uppercase mb-1">
                   Mensaje personalizado <span className="text-gray-600">(usá <code className="text-purple-400 bg-purple-900/30 px-1 rounded">{'{nombre}'}</code> para el nombre del cliente)</span>
                 </label>
                 <textarea value={campaignMessage} onChange={(e) => setCampaignMessage(e.target.value)} rows={3}
-                  className="w-full border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-800 text-gray-100 placeholder-gray-500" placeholder="Ej: Hola {nombre}! Vimos que hace tiempo no vienes. Te invitamos un 20% OFF." />
+                  className="w-full border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-800 text-gray-100 placeholder-gray-500" placeholder={campaignContentType === "image" ? "Opcional: texto que acompana la imagen" : "Ej: Hola {nombre}! Vimos que hace tiempo no vienes. Te invitamos un 20% OFF."} />
               </div>
               {/* Test send */}
               <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
@@ -1253,7 +1364,7 @@ export default function MarketingAIPage() {
                   <input value={testPhone} onChange={(e) => setTestPhone(e.target.value.replace(/\D/g, ""))}
                     className="flex-1 border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500"
                     placeholder="Tu número de WhatsApp (ej: 3794123456)" />
-                  <button onClick={testCampaign} disabled={!testPhone || !campaignMessage || testing}
+                  <button onClick={testCampaign} disabled={!testPhone || testing || ((campaignContentType === "text" || campaignContentType === "image_text") && !campaignMessage.trim()) || ((campaignContentType === "image" || campaignContentType === "image_text") && !campaignImageUrl.trim())}
                     className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold hover:bg-amber-500 transition disabled:opacity-40 flex items-center gap-2 whitespace-nowrap">
                     {testing ? "Enviando..." : "Enviar prueba"}
                   </button>
@@ -1263,7 +1374,7 @@ export default function MarketingAIPage() {
                 <p className="text-xs text-gray-500">Segmento: {segmentLabels[campaignSegment]} · {customerData.filter((c) => c.segment === campaignSegment).length} clientes</p>
                 <div className="flex gap-2">
                   <button onClick={() => setShowNewCampaign(false)} className="px-4 py-2 bg-gray-800 text-gray-400 rounded-lg text-sm hover:bg-gray-750 border border-gray-700">Cancelar</button>
-                  <button onClick={launchCampaign} disabled={!campaignName}
+                  <button onClick={launchCampaign} disabled={!campaignName || ((campaignContentType === "text" || campaignContentType === "image_text") && !campaignMessage.trim()) || ((campaignContentType === "image" || campaignContentType === "image_text") && !campaignImageUrl.trim())}
                     className="px-4 py-2 bg-purple-700 text-white rounded-lg text-sm font-bold hover:bg-purple-600 disabled:opacity-40 flex items-center gap-2">
                     <Send size={14} /> Lanzar campaña
                   </button>
@@ -1281,6 +1392,7 @@ export default function MarketingAIPage() {
               const sent = deliveries.filter((d: any) => d.status === "sent").length;
               const failed = deliveries.filter((d: any) => d.status === "failed").length;
               const total = deliveries.length;
+              const contentType = normalizeCampaignContentType(camp.cta_text);
               const recovered = customerData.filter((c) =>
                 deliveries.some((d: any) => d.customer_id === c.id) && c.daysSinceLast <= 7
               ).length;
@@ -1289,6 +1401,10 @@ export default function MarketingAIPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-semibold text-gray-100">{camp.name}</p>
+                      <p className="mt-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-purple-300">
+                        {contentType === "text" ? <FileText size={12} /> : <ImageIcon size={12} />}
+                        {campaignTypeLabels[contentType]}
+                      </p>
                       <p className="text-xs text-gray-500">{camp.segment_name} · {total} clientes</p>
                     </div>
                     <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${

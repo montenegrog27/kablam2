@@ -216,6 +216,13 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
     };
   }, [analytics]);
 
+  function openNewPromotionForm() {
+    setNotice("");
+    setEditingPromotionId(null);
+    setPromotionForm(emptyPromotionForm);
+    setShowPromotionForm(true);
+  }
+
   const analyticsByPromotion = useMemo(() => {
     const map = new Map<string, AnalyticsRow[]>();
     analytics.forEach((row) => {
@@ -403,6 +410,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
     }
 
     setPromotionForm(emptyPromotionForm);
+    setEditingPromotionId(null);
     setShowPromotionForm(false);
     loadData();
   }
@@ -456,6 +464,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
   }
 
   function editPromotion(promo: Promotion) {
+    const targets = promo.promotion_targets || [];
     setPromotionForm({
       name: promo.name || "",
       description: promo.description || "",
@@ -467,9 +476,9 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
       promotionType: promo.promotion_type || "visual",
       imageType: promo.image_type || "product",
       imageUrl: promo.image_url || "",
-      products: [],
-      combos: [],
-      categories: [],
+      products: targets.filter((target) => target.target_type === "product").map((target) => target.target_id),
+      combos: targets.filter((target) => target.target_type === "combo").map((target) => target.target_id),
+      categories: targets.filter((target) => target.target_type === "category").map((target) => target.target_id),
       additionalTriggerType: "none",
       additionalTriggerId: "",
       additionalRewardType: "none",
@@ -566,7 +575,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
                     <h2 className="text-lg font-bold">Promociones visibles</h2>
                     <p className="text-sm text-gray-400">Campañas para home, banners, productos y combos destacados.</p>
                   </div>
-                  <button onClick={() => setShowPromotionForm(true)} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-bold text-gray-950">
+                  <button onClick={openNewPromotionForm} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-bold text-gray-950">
                     <Plus size={16} />
                     Nueva Promoción
                   </button>
@@ -736,7 +745,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
       )}
 
       {showPromotionForm && (
-        <Modal title={editingPromotionId ? "Editar Promocion" : "Nueva Promocion"} subtitle={editingPromotionId ? "Modificá la promocion existente" : "Promocion visual para cliente"} onClose={() => { setShowPromotionForm(false); setEditingPromotionId(null); }}>
+        <Modal title={editingPromotionId ? "Editar Promocion" : "Nueva Promocion"} subtitle={editingPromotionId ? "Modificá la promocion existente" : "Promocion visual para cliente"} onClose={() => { setShowPromotionForm(false); setEditingPromotionId(null); setPromotionForm(emptyPromotionForm); }}>
           <form onSubmit={createPromotion} className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Nombre"><input className="input" value={promotionForm.name} onChange={(e) => setPromotionForm({ ...promotionForm, name: e.target.value })} /></Field>
@@ -783,7 +792,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
               </div>
             </div>
 
-            <FormActions onCancel={() => { setShowPromotionForm(false); setEditingPromotionId(null); }} submit={editingPromotionId ? "Guardar cambios" : "Crear promocion"} />
+            <FormActions onCancel={() => { setShowPromotionForm(false); setEditingPromotionId(null); setPromotionForm(emptyPromotionForm); }} submit={editingPromotionId ? "Guardar cambios" : "Crear promocion"} />
           </form>
         </Modal>
       )}
