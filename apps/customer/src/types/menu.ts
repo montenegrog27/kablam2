@@ -123,6 +123,7 @@ export type Branding = {
   instagram_url?: string;
   website_url?: string;
   web_open?: boolean;
+  customer_login_enabled?: boolean;
   web_closed_message?: string;
   web_closed_reason?: string;
   web_closed_until?: string;

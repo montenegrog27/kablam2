@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
+import { Pencil, X } from "lucide-react";
 
 export default function PaymentMethodsPage() {
   const [methods, setMethods] = useState<any[]>([]);
@@ -11,6 +12,7 @@ export default function PaymentMethodsPage() {
   const [type, setType] = useState("cash");
   const [affectsCash, setAffectsCash] = useState(false);
   const [requiresReference, setRequiresReference] = useState(false);
+  const [editingMethod, setEditingMethod] = useState<any | null>(null);
 
   useEffect(() => {
     loadData();
@@ -40,7 +42,23 @@ export default function PaymentMethodsPage() {
     setMethods(data || []);
   };
 
-  const handleCreate = async (e: any) => {
+  const resetForm = () => {
+    setName("");
+    setType("cash");
+    setAffectsCash(false);
+    setRequiresReference(false);
+    setEditingMethod(null);
+  };
+
+  const startEdit = (method: any) => {
+    setEditingMethod(method);
+    setName(method.name || "");
+    setType(method.type || "cash");
+    setAffectsCash(Boolean(method.affects_cash));
+    setRequiresReference(Boolean(method.requires_reference));
+  };
+
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
 
     if (!tenantId || !name) {
@@ -48,23 +66,28 @@ export default function PaymentMethodsPage() {
       return;
     }
 
-    const { error } = await supabase.from("payment_methods").insert({
+    const payload = {
       tenant_id: tenantId,
-      name,
+      name: name.trim(),
       type,
       affects_cash: affectsCash,
       requires_reference: requiresReference,
-    });
+    };
+
+    const { error } = editingMethod
+      ? await supabase
+          .from("payment_methods")
+          .update(payload)
+          .eq("id", editingMethod.id)
+          .eq("tenant_id", tenantId)
+      : await supabase.from("payment_methods").insert(payload);
 
     if (error) {
       alert(error.message);
       return;
     }
 
-    setName("");
-    setAffectsCash(false);
-    setRequiresReference(false);
-
+    resetForm();
     loadData();
   };
 
@@ -85,9 +108,30 @@ export default function PaymentMethodsPage() {
 
       {/* Formulario */}
       <form
-        onSubmit={handleCreate}
+        onSubmit={handleSubmit}
         className="bg-black p-6 rounded shadow mb-8 space-y-4"
       >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-100">
+              {editingMethod ? "Editar medio de pago" : "Nuevo medio de pago"}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Configura como aparece y como impacta en caja.
+            </p>
+          </div>
+          {editingMethod && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded-lg border border-gray-700 p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
+              title="Cancelar edición"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
         <input
           className="border border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-900 text-gray-100 placeholder-gray-500 w-full"
           placeholder="Nombre (Ej: Efectivo)"
@@ -130,7 +174,7 @@ export default function PaymentMethodsPage() {
         </label>
 
         <button className="bg-gray-900 text-white px-4 py-2 rounded">
-          Crear Medio de Pago
+          {editingMethod ? "Guardar cambios" : "Crear Medio de Pago"}
         </button>
       </form>
 
@@ -150,14 +194,24 @@ export default function PaymentMethodsPage() {
               </div>
             </div>
 
-            <button
-              onClick={() =>
-                toggleActive(method.id, method.is_active)
-              }
-              className="text-xs underline"
-            >
-              {method.is_active ? "Desactivar" : "Activar"}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => startEdit(method)}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-700 px-3 py-2 text-xs font-semibold text-gray-200 hover:bg-gray-700"
+              >
+                <Pencil size={13} />
+                Editar
+              </button>
+              <button
+                onClick={() =>
+                  toggleActive(method.id, method.is_active)
+                }
+                className="text-xs underline"
+              >
+                {method.is_active ? "Desactivar" : "Activar"}
+              </button>
+            </div>
           </div>
         ))}
       </div>

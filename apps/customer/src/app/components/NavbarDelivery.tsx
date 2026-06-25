@@ -26,6 +26,7 @@ export default function NavbarDelivery({
 }: Props) {
   const pathname = usePathname();
   const isAuthPage = pathname.includes("/auth/");
+  const showCustomerLogin = branding?.customer_login_enabled !== false;
 
   return (
     <nav
@@ -51,7 +52,7 @@ export default function NavbarDelivery({
       {/* Botones derecha */}
       <div className="flex items-center gap-2">
         {/* Botón de login/perfil */}
-        {branchSlug && !isAuthPage && (
+        {branchSlug && !isAuthPage && showCustomerLogin && (
           <>
             {customer ? (
               <Link

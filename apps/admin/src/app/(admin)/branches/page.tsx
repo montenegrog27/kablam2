@@ -252,6 +252,8 @@ export default function BranchesPage() {
           instagram_url: branchSettings.instagram_url,
           website_url: branchSettings.website_url,
           web_open: branchSettings.web_open,
+          customer_login_enabled:
+            branchSettings.customer_login_enabled ?? true,
           web_closed_message: branchSettings.web_closed_message,
           favicon_url: branchSettings.favicon_url,
           meta_title: branchSettings.meta_title,
@@ -299,6 +301,7 @@ export default function BranchesPage() {
             "Ejecuta el SQL en add_meta_fields_to_branch_settings.sql y add_catalog_orders.sql:\n\n" +
             "ALTER TABLE branch_settings\n" +
             "ADD COLUMN IF NOT EXISTS loading_icon_url TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS customer_login_enabled BOOLEAN DEFAULT TRUE,\n" +
             "ADD COLUMN IF NOT EXISTS favicon_url TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS meta_title TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS meta_pixel_id TEXT,\n" +
@@ -930,6 +933,14 @@ export default function BranchesPage() {
                   description="Permite que los clientes vean el menú y hagan pedidos"
                   checked={branchSettings.web_open ?? true}
                   onChange={(v) => updateLocalSettings(branch.id, "web_open", v)}
+                />
+                <ToggleSwitch
+                  label="Boton ingresar"
+                  description="Muestra login/perfil del cliente en la web"
+                  checked={branchSettings.customer_login_enabled ?? true}
+                  onChange={(v) =>
+                    updateLocalSettings(branch.id, "customer_login_enabled", v)
+                  }
                 />
                 <ToggleSwitch
                   label="Delivery habilitado"
