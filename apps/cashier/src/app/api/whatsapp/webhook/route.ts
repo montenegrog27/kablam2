@@ -72,7 +72,7 @@ async function uploadIncomingMedia(
 async function sendText(number: any, to: string, body: string) {
   const url = `https://graph.facebook.com/v18.0/${number.phone_number_id}/messages`;
 
-  await fetch(url, {
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${number.access_token}`,
@@ -85,6 +85,17 @@ async function sendText(number: any, to: string, body: string) {
       text: { body },
     }),
   });
+
+  const result = await response.json().catch(() => null);
+  if (!response.ok || result?.error) {
+    console.error("WhatsApp sendText error:", {
+      status: response.status,
+      error: result?.error || result,
+    });
+    return { ok: false, status: response.status, result };
+  }
+
+  return { ok: true, status: response.status, result };
 }
 
 async function downloadMedia(
@@ -158,6 +169,27 @@ function getButtonAction(payload?: string | null, title?: string | null) {
     return "cancel";
   }
   return null;
+}
+
+function normalizeCustomerPhone(input?: string | null) {
+  let digits = String(input || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("549")) digits = digits.slice(3);
+  else if (digits.startsWith("54")) digits = digits.slice(2);
+  if (digits.startsWith("9") && digits.length === 11) digits = digits.slice(1);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.startsWith("15")) digits = digits.slice(2);
+  return digits || null;
+}
+
+async function getBranchTransferAlias(branchId: string) {
+  const { data } = await supabase
+    .from("branch_settings")
+    .select("catalog_order_transfer_alias")
+    .eq("branch_id", branchId)
+    .maybeSingle();
+
+  return String(data?.catalog_order_transfer_alias || "").trim() || "MORDISCO.ARG";
 }
 
 // ===============================
@@ -238,14 +270,20 @@ export async function POST(req: Request) {
   // GET WHATSAPP NUMBER
   // ===============================
 
-  const { data: number } = await supabase
+  const { data: numbers, error: numberError } = await supabase
     .from("whatsapp_numbers")
     .select("*")
     .eq("phone_number_id", phoneNumberId)
-    .maybeSingle();
+    .limit(5);
+
+  const number = numbers?.[0] || null;
 
   if (!number) {
-    debugLog("whatsapp number not configured");
+    console.error("WhatsApp webhook number not configured:", {
+      phoneNumberId,
+      error: numberError?.message,
+      matches: numbers?.length || 0,
+    });
     return NextResponse.json({ ok: true });
   }
 
@@ -253,7 +291,7 @@ export async function POST(req: Request) {
   const branchId = number.branch_id;
 
   // Normalizar teléfono: quitar código de país 54 si existe
-  const phoneNormalized = phone.replace(/^549/, "54").replace(/^54/, "");
+  const phoneNormalized = normalizeCustomerPhone(phone) || phone.replace(/^549/, "54").replace(/^54/, "");
   const phoneWithCountry = phone.startsWith("54") ? phone : `54${phone}`;
 
   // ===============================
@@ -281,6 +319,7 @@ export async function POST(req: Request) {
           .from("orders")
           .select("*, order_payments(payment_methods(name))")
           .eq("whatsapp_message_id", originalMessageId)
+          .eq("branch_id", branchId)
           .maybeSingle()
       : { data: null };
 
@@ -288,7 +327,7 @@ export async function POST(req: Request) {
     const orderByPhone = !order ? await supabase
       .from("orders")
       .select("*, order_payments(payment_methods(name))")
-      .eq("customer_phone", phone.replace(/^549/, "").replace(/^54/, ""))
+      .eq("customer_phone", phoneNormalized)
       .eq("branch_id", branchId)
       .eq("status", "unconfirmed")
       .order("created_at", { ascending: false })
@@ -325,7 +364,10 @@ export async function POST(req: Request) {
       debugLog("CONFIRMING ORDER:", matchedOrder.id);
       const { error: updateError } = await supabase
         .from("orders")
-        .update({ status: "confirmed" })
+        .update({
+          status: "confirmed",
+          confirmed_at: new Date().toISOString(),
+        })
         .eq("id", matchedOrder.id);
 
       if (updateError) console.error("❌ Error updating order:", updateError);
@@ -379,7 +421,7 @@ export async function POST(req: Request) {
       await sendText(number, phone, msg);
 
       if (esTransfer) {
-        await sendText(number, phone, "MORDISCO.ARG");
+        await sendText(number, phone, await getBranchTransferAlias(branchId));
       }
     }
 
