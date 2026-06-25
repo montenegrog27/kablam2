@@ -17,6 +17,21 @@ function normalizeCustomerPhone(input?: string | null) {
   return digits || null;
 }
 
+function phoneLookupCandidates(input?: string | null) {
+  const digits = String(input || "").replace(/\D/g, "");
+  const local = normalizeCustomerPhone(input);
+  const candidates = new Set<string>();
+
+  if (digits) candidates.add(digits);
+  if (local) {
+    candidates.add(local);
+    candidates.add(`54${local}`);
+    candidates.add(`549${local}`);
+  }
+
+  return Array.from(candidates).filter(Boolean);
+}
+
 function getButtonAction(payload?: string | null, title?: string | null) {
   const value = `${payload || ""} ${title || ""}`.toLowerCase();
   if (
@@ -126,6 +141,7 @@ export async function POST(req: Request) {
   const tenantId = number.tenant_id;
   const branchId = number.branch_id;
   const phoneNormalized = normalizeCustomerPhone(phone);
+  const phoneCandidates = phoneLookupCandidates(phone);
 
   const isButton =
     (message.type === "interactive" && message.interactive?.type === "button_reply") ||
@@ -139,6 +155,18 @@ export async function POST(req: Request) {
   const buttonTitle = message.interactive?.button_reply?.title || message.button?.text;
   const buttonAction = getButtonAction(payload, buttonTitle);
   const originalMessageId = message.context?.id || null;
+
+  console.log("Customer WhatsApp button click received:", {
+    phoneNumberId,
+    branchId,
+    phone,
+    phoneCandidates,
+    payload,
+    buttonTitle,
+    buttonAction,
+    originalMessageId,
+    messageType: message.type,
+  });
 
   if (!buttonAction) {
     console.error("Customer WhatsApp webhook unknown button:", {
@@ -159,11 +187,11 @@ export async function POST(req: Request) {
     : { data: null };
 
   const { data: orderByPhone } =
-    !orderByMessage && phoneNormalized
+    !orderByMessage && phoneCandidates.length > 0
       ? await supabase
           .from("orders")
           .select("*, order_payments(payment_methods(name))")
-          .eq("customer_phone", phoneNormalized)
+          .in("customer_phone", phoneCandidates)
           .eq("branch_id", branchId)
           .eq("status", "unconfirmed")
           .order("created_at", { ascending: false })

@@ -182,6 +182,21 @@ function normalizeCustomerPhone(input?: string | null) {
   return digits || null;
 }
 
+function phoneLookupCandidates(input?: string | null) {
+  const digits = String(input || "").replace(/\D/g, "");
+  const local = normalizeCustomerPhone(input);
+  const candidates = new Set<string>();
+
+  if (digits) candidates.add(digits);
+  if (local) {
+    candidates.add(local);
+    candidates.add(`54${local}`);
+    candidates.add(`549${local}`);
+  }
+
+  return Array.from(candidates).filter(Boolean);
+}
+
 async function getBranchTransferAlias(branchId: string) {
   const { data } = await supabase
     .from("branch_settings")
@@ -293,6 +308,7 @@ export async function POST(req: Request) {
   // Normalizar teléfono: quitar código de país 54 si existe
   const phoneNormalized = normalizeCustomerPhone(phone) || phone.replace(/^549/, "54").replace(/^54/, "");
   const phoneWithCountry = phone.startsWith("54") ? phone : `54${phone}`;
+  const phoneCandidates = phoneLookupCandidates(phone);
 
   // ===============================
   // BUTTON CLICK (debe ir ANTES que rider)
@@ -307,6 +323,17 @@ export async function POST(req: Request) {
     const buttonAction = getButtonAction(payload, buttonTitle);
     const originalMessageId = message.context?.id;
 
+    console.log("WhatsApp button click received:", {
+      phoneNumberId,
+      branchId,
+      phone,
+      phoneCandidates,
+      payload,
+      buttonTitle,
+      buttonAction,
+      originalMessageId,
+      messageType: message.type,
+    });
     debugLog("BUTTON CLICK DETECTED", { payload, buttonTitle, buttonAction, originalMessageId, messageType: message.type });
 
     if (!buttonAction) {
@@ -324,10 +351,10 @@ export async function POST(req: Request) {
       : { data: null };
 
     // Fallback: buscar por teléfono y estado unconfirmed
-    const orderByPhone = !order ? await supabase
+    const orderByPhone = !order && phoneCandidates.length > 0 ? await supabase
       .from("orders")
       .select("*, order_payments(payment_methods(name))")
-      .eq("customer_phone", phoneNormalized)
+      .in("customer_phone", phoneCandidates)
       .eq("branch_id", branchId)
       .eq("status", "unconfirmed")
       .order("created_at", { ascending: false })
@@ -346,7 +373,14 @@ export async function POST(req: Request) {
     });
 
     if (!matchedOrder) {
-      debugLog("No order found for message ID or phone");
+      console.error("WhatsApp button order not found:", {
+        originalMessageId,
+        phone,
+        phoneNormalized,
+        phoneCandidates,
+        branchId,
+        buttonAction,
+      });
       return NextResponse.json({ ok: true });
     }
 
