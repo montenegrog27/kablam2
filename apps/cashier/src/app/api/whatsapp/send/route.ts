@@ -116,6 +116,17 @@ function isMediaType(type: string): type is WhatsAppMediaType {
   return ["image", "video", "audio", "document", "sticker"].includes(type);
 }
 
+function normalizeArgWhatsapp(input?: string | null) {
+  let digits = String(input || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("549") && digits.length >= 12) return digits;
+  if (digits.startsWith("54")) digits = digits.slice(2);
+  if (digits.startsWith("9") && digits.length === 11) digits = digits.slice(1);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.startsWith("15")) digits = digits.slice(2);
+  return digits.length === 10 ? `549${digits}` : null;
+}
+
 export async function POST(req: Request) {
 
   const supabase = createClient(
@@ -165,6 +176,11 @@ const {
     return NextResponse.json({ error: "customer not found" });
   }
 
+  const targetPhone = normalizeArgWhatsapp(customer.phone);
+  if (!targetPhone) {
+    return NextResponse.json({ error: "invalid customer whatsapp phone" }, { status: 400 });
+  }
+
   // =============================
   // buscar número whatsapp
   // =============================
@@ -192,7 +208,7 @@ const {
 
     payload = {
       messaging_product: "whatsapp",
-      to: customer.phone,
+      to: targetPhone,
       type: "text",
       text: { body: text }
     };
@@ -227,7 +243,7 @@ const {
 
     payload = {
       messaging_product: "whatsapp",
-      to: customer.phone,
+      to: targetPhone,
       type,
       [type]: mediaPayload,
     };
@@ -281,7 +297,7 @@ const {
 
     payload = {
       messaging_product: "whatsapp",
-      to: customer.phone,
+      to: targetPhone,
       type: "template",
       template: {
         name: templateName,

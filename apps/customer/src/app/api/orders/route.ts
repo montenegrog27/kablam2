@@ -83,6 +83,129 @@ function isCustomerAllowedPaymentMethod(method: { name?: string | null; type?: s
   return type === "cash" || type === "transfer" || name.includes("efectivo") || name.includes("transferencia");
 }
 
+function normalizeArgWhatsapp(input?: string | null) {
+  let digits = String(input || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("549") && digits.length >= 12) return digits;
+  if (digits.startsWith("54")) digits = digits.slice(2);
+  if (digits.startsWith("9") && digits.length === 11) digits = digits.slice(1);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.startsWith("15")) digits = digits.slice(2);
+  return digits.length === 10 ? `549${digits}` : null;
+}
+
+async function sendOrderConfirmationWhatsapp({
+  supabase,
+  tenantId,
+  branchId,
+  orderId,
+  conversationId,
+  customerPhone,
+  customerName,
+  orderText,
+  orderTotal,
+}: {
+  supabase: any;
+  tenantId: string;
+  branchId: string;
+  orderId: string;
+  conversationId: string;
+  customerPhone: string;
+  customerName: string;
+  orderText: string;
+  orderTotal: number;
+}) {
+  const targetPhone = normalizeArgWhatsapp(customerPhone);
+  if (!targetPhone) {
+    return { ok: false, status: 400, error: "invalid_customer_whatsapp_phone" };
+  }
+
+  const { data: numberRow, error: numberError } = await supabase
+    .from("whatsapp_numbers")
+    .select("phone_number_id, access_token")
+    .eq("branch_id", branchId)
+    .maybeSingle();
+  const number = numberRow as { phone_number_id?: string | null; access_token?: string | null } | null;
+
+  if (numberError || !number?.phone_number_id || !number?.access_token) {
+    return {
+      ok: false,
+      status: 400,
+      error: numberError?.message || "whatsapp_number_not_configured",
+    };
+  }
+
+  const components = [
+    {
+      type: "body",
+      parameters: [customerName, orderText, orderTotal.toString()].map((param) => ({
+        type: "text",
+        text: param || "-",
+      })),
+    },
+    {
+      type: "button",
+      sub_type: "quick_reply",
+      index: "0",
+      parameters: [{ type: "payload", payload: "confirmacion_pedido" }],
+    },
+    {
+      type: "button",
+      sub_type: "quick_reply",
+      index: "1",
+      parameters: [{ type: "payload", payload: "cancelar_pedido" }],
+    },
+  ];
+
+  const response = await fetch(`https://graph.facebook.com/v18.0/${number.phone_number_id}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${number.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: targetPhone,
+      type: "template",
+      template: {
+        name: "confirmacion_pedido_detallado",
+        language: { code: "es_AR" },
+        components,
+      },
+    }),
+  });
+
+  const result = await response.json().catch(() => null);
+  if (!response.ok || result?.error) {
+    return {
+      ok: false,
+      status: response.status,
+      error: result?.error?.message || `whatsapp_${response.status}`,
+      response: result,
+    };
+  }
+
+  const messageId = result?.messages?.[0]?.id || null;
+  if (messageId) {
+    await supabase
+      .from("orders")
+      .update({ whatsapp_message_id: messageId })
+      .eq("id", orderId);
+  }
+
+  await supabase.from("messages").insert({
+    tenant_id: tenantId,
+    branch_id: branchId,
+    conversation_id: conversationId,
+    sender_type: "cashier",
+    message: "confirmacion_pedido_detallado",
+    media_type: "template",
+    whatsapp_message_id: messageId,
+  });
+
+  return { ok: true, status: response.status, messageId };
+}
+
 export async function POST(req: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -548,6 +671,7 @@ export async function POST(req: Request) {
       .from("conversations")
       .select("*")
       .eq("customer_id", customerDB.id)
+      .eq("branch_id", branch.id)
       .maybeSingle();
 
     if (!conversation) {
@@ -766,26 +890,28 @@ export async function POST(req: Request) {
       .join(" • ");
 
     try {
-      const cashierUrl = process.env.NEXT_PUBLIC_CASHIER_APP_URL
-        || process.env.NEXT_PUBLIC_APP_URL
-        || "";
+      const whatsappResult = await sendOrderConfirmationWhatsapp({
+        supabase,
+        tenantId: branch.tenant_id,
+        branchId: branch.id,
+        orderId: order.id,
+        conversationId: conversation.id,
+        customerPhone: phoneNormalized,
+        customerName: customer.name || "Cliente",
+        orderText,
+        orderTotal,
+      });
 
-      if (!cashierUrl) {
-        console.error("WhatsApp URL not configured (NEXT_PUBLIC_CASHIER_APP_URL)");
-      } else {
-        // First contact after checkout: ask the customer to confirm/reject.kkkk
-        // The confirmation/alias message is sent later from the cashier webhook
-        // when the customer taps the WhatsApp template button.
-        await fetch(`${cashierUrl}/api/whatsapp/send`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            conversationId: conversation.id,
+      if (!whatsappResult.ok) {
+        await logAppError("customer", "WhatsApp order confirmation could not be sent", {
+          tenantId: branch.tenant_id,
+          branchId: branch.id,
+          code: String(whatsappResult.error || `whatsapp_${whatsappResult.status}`),
+          context: {
             orderId: order.id,
-            type: "template",
-            templateName: "confirmacion_pedido_detallado",
-            params: [customer.name, orderText, orderTotal.toString()],
-          }),
+            conversationId: conversation.id,
+            response: whatsappResult,
+          },
         });
       }
     } catch (e) {
