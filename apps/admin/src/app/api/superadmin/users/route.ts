@@ -174,3 +174,105 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const supabaseService = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      },
+    );
+
+    const authHeader = req.headers.get("authorization");
+    let userEmail: string | undefined;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      const { data: userData, error: userError } =
+        await supabaseService.auth.getUser(token);
+      if (!userError && userData?.user?.email) {
+        userEmail = userData.user.email;
+      }
+    }
+
+    if (userEmail !== SUPERADMIN_EMAIL) {
+      return NextResponse.json(
+        { error: "No autorizado. Solo SuperAdmin puede editar usuarios." },
+        { status: 403 },
+      );
+    }
+
+    const body = await req.json();
+    const userId = String(body.user_id || "").trim();
+    const tenantId = String(body.tenant_id || "").trim();
+    const branchId = String(body.branch_id || "").trim() || null;
+    const name = String(body.name || "").trim();
+    const role = String(body.role || "").trim();
+
+    if (!userId || !tenantId || !name || !role) {
+      return NextResponse.json(
+        { error: "Faltan campos requeridos: user_id, tenant_id, name, role" },
+        { status: 400 },
+      );
+    }
+
+    const validRoles = ["owner", "admin", "cashier"];
+    if (!validRoles.includes(role)) {
+      return NextResponse.json(
+        { error: "Rol invÃ¡lido. Debe ser: owner, admin, cashier" },
+        { status: 400 },
+      );
+    }
+
+    if (branchId) {
+      const { data: branch } = await supabaseService
+        .from("branches")
+        .select("id")
+        .eq("id", branchId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+
+      if (!branch) {
+        return NextResponse.json(
+          { error: "La sucursal seleccionada no pertenece al tenant." },
+          { status: 400 },
+        );
+      }
+    }
+
+    const { data, error } = await supabaseService
+      .from("users")
+      .update({
+        name,
+        role,
+        tenant_id: tenantId,
+        branch_id: branchId,
+      })
+      .eq("id", userId)
+      .select("*, tenants(name), branches(name)")
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { error: "Error al actualizar usuario", details: error.message },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Usuario actualizado exitosamente",
+      user: data,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: "Error interno del servidor", details: error.message },
+      { status: 500 },
+    );
+  }
+}
