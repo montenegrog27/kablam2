@@ -105,7 +105,7 @@ function buildReservationCustomerMessage({
       : null,
     settings.deposit_alias ? `Alias: ${settings.deposit_alias}` : null,
     "",
-    settings.confirmation_message || "Te vamos a contactar por WhatsApp para confirmar los detalles.",
+    settings.confirmation_message || "",
   ];
 
   return lines.filter(Boolean).join("\n");

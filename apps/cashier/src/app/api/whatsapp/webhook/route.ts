@@ -11,6 +11,30 @@ const debugLog = (...args: unknown[]) => {
   if (DEBUG_LOGS) console.log(...args);
 };
 
+async function logWebhookEvent(
+  message: string,
+  options: {
+    tenantId?: string | null;
+    branchId?: string | null;
+    code?: string;
+    context?: Record<string, unknown>;
+  } = {},
+) {
+  try {
+    await supabase.rpc("log_app_error", {
+      p_app: "cashier",
+      p_message: message,
+      p_severity: "error",
+      p_code: options.code || null,
+      p_context: options.context || {},
+      p_tenant_id: options.tenantId || null,
+      p_branch_id: options.branchId || null,
+    });
+  } catch {
+    // Observability must not break webhook processing.
+  }
+}
+
 const MEDIA_BUCKETS = ["whatsapp-media", "media", "uploads"];
 
 function extensionFromMime(mimeType: string, fallback = "bin") {
@@ -207,6 +231,20 @@ async function getBranchTransferAlias(branchId: string) {
   return String(data?.catalog_order_transfer_alias || "").trim() || "MORDISCO.ARG";
 }
 
+async function getOrderPaymentMethods(orderId: string) {
+  const { data, error } = await supabase
+    .from("order_payments")
+    .select("payment_methods(name)")
+    .eq("order_id", orderId);
+
+  if (error) {
+    console.error("Error loading order payment methods:", error);
+    return [];
+  }
+
+  return data || [];
+}
+
 // ===============================
 // VERIFY WEBHOOK
 // ===============================
@@ -334,26 +372,56 @@ export async function POST(req: Request) {
       originalMessageId,
       messageType: message.type,
     });
+    await logWebhookEvent("WhatsApp button click received", {
+      tenantId,
+      branchId,
+      code: "whatsapp_button_click",
+      context: {
+        phoneNumberId,
+        phone,
+        phoneCandidates,
+        payload,
+        buttonTitle,
+        buttonAction,
+        originalMessageId,
+        messageType: message.type,
+      },
+    });
     debugLog("BUTTON CLICK DETECTED", { payload, buttonTitle, buttonAction, originalMessageId, messageType: message.type });
 
     if (!buttonAction) {
-      debugLog("Unknown button payload, ignoring");
+      await logWebhookEvent("WhatsApp unknown button payload", {
+        tenantId,
+        branchId,
+        code: "whatsapp_unknown_button",
+        context: { payload, buttonTitle, originalMessageId, phoneNumberId },
+      });
       return NextResponse.json({ ok: true });
     }
 
-    const { data: order } = originalMessageId
+    const { data: order, error: orderByMessageError } = originalMessageId
       ? await supabase
           .from("orders")
-          .select("*, order_payments(payment_methods(name))")
+          .select("*")
           .eq("whatsapp_message_id", originalMessageId)
           .eq("branch_id", branchId)
           .maybeSingle()
       : { data: null };
 
+    if (orderByMessageError) {
+      console.error("WhatsApp order lookup by message failed:", orderByMessageError);
+      await logWebhookEvent("WhatsApp order lookup by message failed", {
+        tenantId,
+        branchId,
+        code: "whatsapp_order_lookup_message_failed",
+        context: { originalMessageId, error: orderByMessageError.message },
+      });
+    }
+
     // Fallback: buscar por teléfono y estado unconfirmed
     const orderByPhone = !order && phoneCandidates.length > 0 ? await supabase
       .from("orders")
-      .select("*, order_payments(payment_methods(name))")
+      .select("*")
       .in("customer_phone", phoneCandidates)
       .eq("branch_id", branchId)
       .eq("status", "unconfirmed")
@@ -381,6 +449,20 @@ export async function POST(req: Request) {
         branchId,
         buttonAction,
       });
+      await logWebhookEvent("WhatsApp button order not found", {
+        tenantId,
+        branchId,
+        code: "whatsapp_button_order_not_found",
+        context: {
+          originalMessageId,
+          phone,
+          phoneNormalized,
+          phoneCandidates,
+          buttonAction,
+          payload,
+          buttonTitle,
+        },
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -404,8 +486,16 @@ export async function POST(req: Request) {
         })
         .eq("id", matchedOrder.id);
 
-      if (updateError) console.error("❌ Error updating order:", updateError);
-      else {
+      if (updateError) {
+        console.error("Error updating order from WhatsApp button:", updateError);
+        await logWebhookEvent("WhatsApp confirm order update failed", {
+          tenantId,
+          branchId,
+          code: "whatsapp_confirm_update_failed",
+          context: { orderId: matchedOrder.id, error: updateError.message },
+        });
+        return NextResponse.json({ ok: true });
+      } else {
         debugLog("Order confirmed successfully:", matchedOrder.id);
         const { error: loyaltyError } = await supabase.rpc("process_loyalty_for_order", {
           p_order_id: matchedOrder.id,
@@ -424,11 +514,14 @@ export async function POST(req: Request) {
           sender_type: "customer",
           message: "✅ El cliente confirmó el pedido",
           media_type: "text",
+          whatsapp_message_id: message.id || null,
+          reply_to_whatsapp_message_id: originalMessageId || null,
         });
       }
 
       const esDelivery = matchedOrder.type === "delivery";
-      const esTransfer = (matchedOrder.order_payments || []).some((payment: any) => {
+      const orderPayments = await getOrderPaymentMethods(matchedOrder.id);
+      const esTransfer = orderPayments.some((payment: any) => {
         const name = payment.payment_methods?.name?.toLowerCase() || "";
         return (
           name.includes("transferencia") ||
