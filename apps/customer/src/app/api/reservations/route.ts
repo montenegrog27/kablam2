@@ -1,5 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
+const EVENT_DASHBOARD_ACCESS_PASSWORD = "clave123";
+const EVENT_DASHBOARD_PAID_PASSWORD = "pagado27";
+const EVENT_DASHBOARD_DELETE_PASSWORD = "eliminar27";
+
+type EventDashboardAction = "list" | "toggle_paid" | "delete";
+
 function normalizeArgPhone(input: string) {
   let digits = String(input || "").replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
@@ -31,6 +37,14 @@ function resolveTimeMode(settings: any): "interval" | "single" | "none" {
     return settings.time_mode;
   }
   return settings?.no_time ? "none" : "interval";
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function eventDashboardUnauthorized(message = "Clave invalida") {
+  return Response.json({ success: false, error: message }, { status: 401 });
 }
 
 function buildReservationCustomerMessage({
@@ -231,6 +245,132 @@ async function sendWhatsapp({
   }
 }
 
+async function handleEventDashboardAction(
+  supabase: any,
+  body: any,
+  action: EventDashboardAction,
+) {
+  const branchSlug = String(body.branchSlug || "").trim();
+  const eventId = String(body.eventId || "").trim();
+  const password = String(body.password || "");
+  const actionPassword = String(body.actionPassword || "");
+  const reservationId = String(body.reservationId || "").trim();
+
+  if (!branchSlug || !eventId) {
+    return Response.json({ success: false, error: "Faltan datos" }, { status: 400 });
+  }
+
+  if (password !== EVENT_DASHBOARD_ACCESS_PASSWORD) {
+    return eventDashboardUnauthorized();
+  }
+
+  const { data: branchRow } = await supabase
+    .from("branches")
+    .select("id,tenant_id,slug")
+    .eq("slug", branchSlug)
+    .or("active.is.null,active.eq.true")
+    .single();
+
+  const branch = branchRow as any;
+
+  if (!branch) {
+    return Response.json({ success: false, error: "Sucursal no encontrada" }, { status: 404 });
+  }
+
+  const eventQuery = supabase
+    .from("reservation_events")
+    .select("id,tenant_id,branch_id")
+    .eq("branch_id", branch.id)
+    .eq("enabled", true);
+
+  const { data: eventRow } = await (isUuid(eventId) ? eventQuery.eq("id", eventId) : eventQuery.eq("slug", eventId)).maybeSingle();
+  const event = eventRow as any;
+
+  if (!event) {
+    return Response.json({ success: false, error: "Evento no encontrado" }, { status: 404 });
+  }
+
+  if (action === "list") {
+    const { data, error } = await supabase
+      .from("reservations")
+      .select("id,customer_name,customer_phone,customer_email,party_size,reservation_date,reservation_time,notes,status,metadata,created_at")
+      .eq("tenant_id", branch.tenant_id)
+      .eq("branch_id", branch.id)
+      .eq("reservation_event_id", event.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return Response.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    return Response.json({ success: true, reservations: data || [] });
+  }
+
+  if (!reservationId) {
+    return Response.json({ success: false, error: "Falta la inscripcion" }, { status: 400 });
+  }
+
+  const { data: reservationRow, error: reservationError } = await supabase
+    .from("reservations")
+    .select("id,tenant_id,branch_id,reservation_event_id,metadata")
+    .eq("id", reservationId)
+    .eq("tenant_id", branch.tenant_id)
+    .eq("branch_id", branch.id)
+    .eq("reservation_event_id", event.id)
+    .single();
+
+  const reservation = reservationRow as any;
+
+  if (reservationError || !reservation) {
+    return Response.json({ success: false, error: "Inscripcion no encontrada" }, { status: 404 });
+  }
+
+  if (action === "toggle_paid") {
+    if (actionPassword !== EVENT_DASHBOARD_PAID_PASSWORD) {
+      return eventDashboardUnauthorized("Clave de pago invalida");
+    }
+
+    const paid = Boolean(body.paid);
+    const nextMetadata = {
+      ...((reservation.metadata as Record<string, any> | null) || {}),
+      event_dashboard_paid: paid,
+      event_dashboard_paid_at: paid ? new Date().toISOString() : null,
+    };
+
+    const { data: updated, error } = await supabase
+      .from("reservations")
+      .update({ metadata: nextMetadata, updated_at: new Date().toISOString() })
+      .eq("id", reservation.id)
+      .select("id,customer_name,customer_phone,customer_email,party_size,reservation_date,reservation_time,notes,status,metadata,created_at")
+      .single();
+
+    if (error) {
+      return Response.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    return Response.json({ success: true, reservation: updated });
+  }
+
+  if (action === "delete") {
+    if (actionPassword !== EVENT_DASHBOARD_DELETE_PASSWORD) {
+      return eventDashboardUnauthorized("Clave de eliminacion invalida");
+    }
+
+    const { error } = await supabase
+      .from("reservations")
+      .delete()
+      .eq("id", reservation.id);
+
+    if (error) {
+      return Response.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    return Response.json({ success: true });
+  }
+
+  return Response.json({ success: false, error: "Accion no soportada" }, { status: 400 });
+}
+
 export async function POST(req: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -239,6 +379,12 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
+    const dashboardAction = String(body.action || "") as EventDashboardAction;
+
+    if (["list", "toggle_paid", "delete"].includes(dashboardAction)) {
+      return handleEventDashboardAction(supabase, body, dashboardAction);
+    }
+
     const {
       branchSlug,
       eventId,
