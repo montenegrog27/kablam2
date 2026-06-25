@@ -185,54 +185,68 @@ export default function QrMenuAdminPage() {
       .filter((category) => category.parent_id === movingCategory.parent_id)
       .sort((a, b) => orderValue(a.qr_position, orderValue(a.position)) - orderValue(b.qr_position, orderValue(b.position)));
     const index = siblings.findIndex((category) => category.id === categoryId);
-    const target = siblings[index + direction];
-    const current = siblings[index];
-    if (!current || !target) return;
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= siblings.length) return;
 
-    const currentPosition = orderValue(current.qr_position, orderValue(current.position));
-    const targetPosition = orderValue(target.qr_position, orderValue(target.position));
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+    const updates = reordered.map((category, nextIndex) => ({
+      id: category.id,
+      qr_position: nextIndex,
+    }));
 
     setSavingId(categoryId);
-    await Promise.all([
-      supabase.from("categories").update({ qr_position: targetPosition }).eq("id", current.id),
-      supabase.from("categories").update({ qr_position: currentPosition }).eq("id", target.id),
-    ]);
-    setCategories((prev) =>
-      prev.map((category) =>
-        category.id === current.id
-          ? { ...category, qr_position: targetPosition }
-          : category.id === target.id
-            ? { ...category, qr_position: currentPosition }
-            : category,
-      ),
+    const results = await Promise.all(
+      updates.map((item) => supabase.from("categories").update({ qr_position: item.qr_position }).eq("id", item.id)),
     );
+    const error = results.find((result) => result.error)?.error;
+    if (error) {
+      alert(error.message);
+      setSavingId("");
+      return;
+    }
+    setCategories((prev) =>
+      prev.map((category) => {
+        const update = updates.find((item) => item.id === category.id);
+        return update ? { ...category, qr_position: update.qr_position } : category;
+      }),
+    );
+    setMessage("Orden del menu QR actualizado");
     setSavingId("");
   }
 
   async function moveProduct(productId: string, categoryId: string, direction: -1 | 1) {
     const list = sortedProductsByCategory.get(categoryId) || [];
     const index = list.findIndex((product) => product.id === productId);
-    const current = list[index];
-    const target = list[index + direction];
-    if (!current || !target) return;
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= list.length) return;
 
-    const currentPosition = orderValue(current.qr_position, index);
-    const targetPosition = orderValue(target.qr_position, index + direction);
+    const reordered = [...list];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+    const updates = reordered.map((product, nextIndex) => ({
+      id: product.id,
+      qr_position: nextIndex,
+    }));
 
     setSavingId(productId);
-    await Promise.all([
-      supabase.from("products").update({ qr_position: targetPosition }).eq("id", current.id),
-      supabase.from("products").update({ qr_position: currentPosition }).eq("id", target.id),
-    ]);
-    setProducts((prev) =>
-      prev.map((product) =>
-        product.id === current.id
-          ? { ...product, qr_position: targetPosition }
-          : product.id === target.id
-            ? { ...product, qr_position: currentPosition }
-            : product,
-      ),
+    const results = await Promise.all(
+      updates.map((item) => supabase.from("products").update({ qr_position: item.qr_position }).eq("id", item.id)),
     );
+    const error = results.find((result) => result.error)?.error;
+    if (error) {
+      alert(error.message);
+      setSavingId("");
+      return;
+    }
+    setProducts((prev) =>
+      prev.map((product) => {
+        const update = updates.find((item) => item.id === product.id);
+        return update ? { ...product, qr_position: update.qr_position } : product;
+      }),
+    );
+    setMessage("Orden del menu QR actualizado");
     setSavingId("");
   }
 
