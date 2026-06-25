@@ -40,6 +40,7 @@ function formatMatchDate(date: string) {
 async function sendProdeParticipationWhatsapp({
   phone,
   name,
+  tenantSlug,
   branchSlug,
   match,
   homeScore,
@@ -48,6 +49,7 @@ async function sendProdeParticipationWhatsapp({
 }: {
   phone?: string | null;
   name?: string | null;
+  tenantSlug?: string | null;
   branchSlug?: string | null;
   match: any;
   homeScore: number;
@@ -86,8 +88,8 @@ async function sendProdeParticipationWhatsapp({
         Authorization: `Bearer ${whatsappToken}`,
       },
       body: JSON.stringify({
-        slug: "mordiscoburgers",
-        branchId: branchSlug || "mordiscoburgers",
+        slug: tenantSlug || branchSlug || "mordiscoburgers",
+        branchId: branchSlug || tenantSlug || "mordiscoburgers",
         phone: whatsappPhone,
         message,
       }),
@@ -268,7 +270,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle(),
     supabase
       .from("branches")
-      .select("slug")
+      .select("slug, tenants(slug)")
       .eq("id", session.branchId)
       .maybeSingle(),
   ]);
@@ -276,6 +278,7 @@ export async function POST(req: NextRequest) {
   const whatsapp = await sendProdeParticipationWhatsapp({
     phone: customer?.phone || session.phone,
     name: customer?.name || session.name,
+    tenantSlug: (branch?.tenants as any)?.slug || null,
     branchSlug: branch?.slug || session.branchId,
     match: nextMatch,
     homeScore,

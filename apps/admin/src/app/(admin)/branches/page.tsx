@@ -179,15 +179,22 @@ export default function BranchesPage() {
   const saveBranch = async (branch: any) => {
     setSaving(true);
 
-    await supabase
+    const { error } = await supabase
       .from("branches")
       .update({
         name: branch.name,
         slug: branch.slug,
+        phone: branch.phone || null,
       })
       .eq("id", branch.id);
 
     setSaving(false);
+    if (error) {
+      console.error(error);
+      alert("No se pudo guardar la sucursal: " + error.message);
+      return;
+    }
+
     alert("Sucursal guardada");
   };
 
@@ -395,8 +402,34 @@ export default function BranchesPage() {
     return whatsapps.find((w) => w.branch_id === branchId);
   };
 
+  const getWhatsappForm = (branchId: string) => {
+    const whatsapp = getWhatsapp(branchId);
+    return {
+      phone_number_id:
+        waForm[branchId]?.phone_number_id ?? whatsapp?.phone_number_id ?? "",
+      access_token: waForm[branchId]?.access_token ?? whatsapp?.access_token ?? "",
+      phone_number: waForm[branchId]?.phone_number ?? whatsapp?.phone_number ?? "",
+      waba_id: waForm[branchId]?.waba_id ?? whatsapp?.waba_id ?? "",
+      verified: waForm[branchId]?.verified ?? whatsapp?.verified ?? false,
+    };
+  };
+
+  const updateWhatsappForm = (branchId: string, field: string, value: any) => {
+    setWaForm((prev: any) => ({
+      ...prev,
+      [branchId]: {
+        ...getWhatsappForm(branchId),
+        ...prev[branchId],
+        [field]: value,
+        ...(field === "phone_number_id" || field === "access_token"
+          ? { verified: false }
+          : {}),
+      },
+    }));
+  };
+
   const verifyWhatsapp = async (branchId: string) => {
-    const form = waForm[branchId];
+    const form = getWhatsappForm(branchId);
 
     if (!form?.phone_number_id || !form?.access_token) {
       alert("Completa los campos");
@@ -436,7 +469,7 @@ export default function BranchesPage() {
   };
 
   const saveWhatsapp = async (branchId: string) => {
-    const form = waForm[branchId];
+    const form = getWhatsappForm(branchId);
 
     if (!form?.verified) {
       alert("Primero verifica el número");
@@ -444,8 +477,9 @@ export default function BranchesPage() {
     }
 
     const branch = branches.find((b) => b.id === branchId);
+    const existing = getWhatsapp(branchId);
 
-    await supabase.from("whatsapp_numbers").upsert({
+    const payload = {
       tenant_id: branch.tenant_id,
       branch_id: branchId,
       phone_number: form.phone_number,
@@ -453,7 +487,17 @@ export default function BranchesPage() {
       access_token: form.access_token,
       waba_id: form.waba_id,
       verified: true,
-    });
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = existing?.id
+      ? await supabase.from("whatsapp_numbers").update(payload).eq("id", existing.id)
+      : await supabase.from("whatsapp_numbers").insert(payload);
+
+    if (error) {
+      alert("No se pudo guardar WhatsApp: " + error.message);
+      return;
+    }
 
     alert("WhatsApp conectado");
 
@@ -538,6 +582,18 @@ export default function BranchesPage() {
                   updateLocalBranch(branch.id, "slug", e.target.value)
                 }
               />
+
+              <input
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
+                value={branch.phone || ""}
+                placeholder="WhatsApp emisor, ej: 5493794094455"
+                onChange={(e) =>
+                  updateLocalBranch(branch.id, "phone", e.target.value)
+                }
+              />
+              <p className="text-xs text-gray-500">
+                Este numero identifica la sesion Baileys de la sucursal en el servidor WhatsApp nuevo.
+              </p>
 
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1210,58 +1266,58 @@ export default function BranchesPage() {
             <div className="border-t pt-4 space-y-3">
               <h3 className="font-semibold">WhatsApp</h3>
 
-              {whatsapp ? (
-                <div className="text-green-600">
-                  Conectado: {whatsapp.phone_number}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <input
-                    placeholder="Phone Number ID"
-                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
-                    onChange={(e) =>
-                      setWaForm({
-                        ...waForm,
-                        [branch.id]: {
-                          ...waForm[branch.id],
-                          phone_number_id: e.target.value,
-                        },
-                      })
-                    }
-                  />
-
-                  <input
-                    placeholder="Access Token"
-                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
-                    onChange={(e) =>
-                      setWaForm({
-                        ...waForm,
-                        [branch.id]: {
-                          ...waForm[branch.id],
-                          access_token: e.target.value,
-                        },
-                      })
-                    }
-                  />
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => verifyWhatsapp(branch.id)}
-                      disabled={verifying}
-                      className="bg-blue-600 text-white px-4 py-2 rounded"
-                    >
-                      Verificar
-                    </button>
-
-                    <button
-                      onClick={() => saveWhatsapp(branch.id)}
-                      className="bg-green-600 text-white px-4 py-2 rounded"
-                    >
-                      Guardar
-                    </button>
-                  </div>
+              {whatsapp && (
+                <div className="rounded-lg border border-emerald-900 bg-emerald-950/30 p-3 text-sm text-emerald-200">
+                  <p className="font-semibold">
+                    Conectado: {whatsapp.phone_number || "Numero verificado"}
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-300/70">
+                    Phone Number ID: {whatsapp.phone_number_id}
+                  </p>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <input
+                  placeholder="Phone Number ID"
+                  value={getWhatsappForm(branch.id).phone_number_id}
+                  className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
+                  onChange={(e) =>
+                    updateWhatsappForm(branch.id, "phone_number_id", e.target.value)
+                  }
+                />
+
+                <input
+                  placeholder="Access Token"
+                  type="password"
+                  value={getWhatsappForm(branch.id).access_token}
+                  className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
+                  onChange={(e) =>
+                    updateWhatsappForm(branch.id, "access_token", e.target.value)
+                  }
+                />
+
+                <p className="text-xs text-gray-500">
+                  Este Phone Number ID define con que numero de Meta salen plantillas, chats y webhooks de esta sucursal.
+                </p>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => verifyWhatsapp(branch.id)}
+                    disabled={verifying}
+                    className="bg-blue-600 text-white px-4 py-2 rounded"
+                  >
+                    Verificar
+                  </button>
+
+                  <button
+                    onClick={() => saveWhatsapp(branch.id)}
+                    className="bg-green-600 text-white px-4 py-2 rounded"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         );

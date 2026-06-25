@@ -19,6 +19,7 @@ import {
   BadgeDollarSign,
   Landmark,
   QrCode,
+  Camera,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -78,6 +79,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/riders", label: "Repartidores", icon: Bike },
       { href: "/reservations", label: "Reservas", icon: CalendarCheck },
       { href: "/day-parts", label: "Turnos", icon: Clock },
+      { href: "/cameras", label: "Camaras", icon: Camera },
       { href: "/kitchens", label: "Cocinas", icon: CookingPot },
       { href: "/printers", label: "Impresoras", icon: Printer },
       { href: "/flash-sales", label: "Ofertas Flash", icon: Zap },

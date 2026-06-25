@@ -28,7 +28,11 @@ type CustomerPromotion = {
   image_type?: string | null;
   image_url?: string | null;
   promotion_type?: string | null;
-  promotion_targets?: Array<{ target_type: string; target_id: string }>;
+  additional_product_config?: {
+    productQuantities?: Record<string, number>;
+    [key: string]: any;
+  } | null;
+  promotion_targets?: Array<{ target_type: string; target_id: string; quantity?: number | null }>;
   promotion_rules?: Array<{
     type?: string | null;
     discount_type?: string | null;
@@ -329,18 +333,24 @@ export default function ProfessionalMenu({
 
   const getPromotionProducts = (promotion: CustomerPromotion) => {
     const targets = promotion.promotion_targets || [];
+    const quantities = promotion.additional_product_config?.productQuantities || {};
     const items = targets
       .filter((target) => target.target_type === "combo" || target.target_type === "product")
-      .map((target) =>
-        allProductsInMenu.find((item) =>
+      .flatMap((target) => {
+        const item = allProductsInMenu.find((product) =>
           target.target_type === "combo"
-            ? item.comboId === target.target_id || item.id === target.target_id
-            : item.id === target.target_id,
-        ),
-      )
+            ? product.comboId === target.target_id || product.id === target.target_id
+            : product.id === target.target_id,
+        );
+        if (!item) return [];
+        const quantity = target.target_type === "product"
+          ? normalizePromotionQuantity(quantities[target.target_id] || target.quantity)
+          : 1;
+        return Array.from({ length: quantity }, () => item);
+      })
       .filter(Boolean) as Product[];
 
-    return items.filter((item, index, self) => self.findIndex((p) => p.id === item.id) === index);
+    return items;
   };
 
   const getPromotionCategoryTarget = (promotion: CustomerPromotion) => {
@@ -399,8 +409,13 @@ export default function ProfessionalMenu({
       finalTotal: Math.max(0, baseTotal - discountAmount),
       discountAmount,
       discountLabel,
-    };
   };
+};
+
+function normalizePromotionQuantity(value: unknown) {
+  const parsed = Math.floor(Number(value || 1));
+  return Math.min(99, Math.max(1, Number.isFinite(parsed) ? parsed : 1));
+}
 
   const createPromotionProduct = (promotion: CustomerPromotion, products: Product[]): Product => {
     const pricing = getPromotionPricing(promotion);
@@ -437,8 +452,8 @@ export default function ProfessionalMenu({
         originalPrice: pricing.baseTotal,
         discountAmount: pricing.discountAmount,
         finalPrice: pricing.finalTotal,
-        items: products.map((product) => ({
-          id: product.comboId || product.id,
+        items: products.map((product, index) => ({
+          id: `${product.comboId || product.id}-${index}`,
           name: product.name,
           itemType: product.itemType === "combo" ? "combo" : "product",
           price: getPrice(product),
@@ -978,11 +993,11 @@ function PromotionProductsModal({
         <div className="max-h-[65vh] overflow-y-auto p-4">
           <p className="mb-3 text-sm font-bold text-gray-700">Elegí qué querés agregar</p>
           <div className="space-y-3">
-            {products.map((product) => {
+            {products.map((product, index) => {
               const image = getImage(product);
               return (
                 <button
-                  key={product.id}
+                  key={`${product.id}-${index}`}
                   onClick={() => !disabled && onSelect(product)}
                   disabled={disabled}
                   className="grid w-full grid-cols-[72px_1fr_auto] items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-left shadow-sm transition enabled:hover:bg-white enabled:hover:shadow-md disabled:opacity-60"

@@ -23,6 +23,12 @@ export async function POST(req: NextRequest) {
       .single();
     if (!branch) return NextResponse.json({ error: "Sucursal no encontrada" }, { status: 404 });
 
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("slug, name")
+      .eq("id", branch.tenant_id)
+      .maybeSingle();
+
     // Find or create customer
     let { data: customer } = await supabase
       .from("customers")
@@ -70,10 +76,10 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${whatsappToken}` },
       body: JSON.stringify({
-        slug: "mordiscoburgers",
+        slug: tenant?.slug || branch.slug,
         branchId: branch.slug,
         phone: `549${phoneNormalized}`,
-        message: `Tu código de acceso a Mordisco es: ${code}. Nunca lo compartas.`,
+        message: `Tu código de acceso a ${tenant?.name || "Kablam"} es: ${code}. Nunca lo compartas.`,
       }),
     });
 

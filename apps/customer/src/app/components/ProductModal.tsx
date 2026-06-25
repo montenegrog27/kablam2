@@ -271,8 +271,8 @@ export default function ProductModal({
           {isPromotion && product.promotion && product.promotion.items.length > 0 && (
             <Section title="Incluye la promo" hint={`${product.promotion.items.length} items`}>
               <div className="space-y-1.5">
-                {product.promotion.items.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between rounded-xl bg-red-50 px-3.5 py-2.5">
+                {product.promotion.items.map((item, index) => (
+                  <div key={`${item.id}-${index}`} className="flex items-center justify-between rounded-xl bg-red-50 px-3.5 py-2.5">
                     <span className="text-sm font-semibold text-gray-800">{item.name}</span>
                     <span className="text-xs font-bold text-gray-500 line-through">
                       ${formatPrice(item.price)}

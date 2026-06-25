@@ -40,6 +40,10 @@ type Promotion = {
   usage_count?: number | null;
   generated_sales?: number | null;
   discount_granted?: number | null;
+  additional_product_config?: {
+    productQuantities?: Record<string, number>;
+    [key: string]: any;
+  } | null;
   promotion_targets?: Array<{ target_type: string; target_id: string }>;
 };
 type PromotionRule = {
@@ -126,6 +130,7 @@ const emptyPromotionForm = {
   imageType: "product",
   imageUrl: "",
   products: [] as string[],
+  productQuantities: {} as Record<string, number>,
   combos: [] as string[],
   categories: [] as string[],
   additionalTriggerType: "product",
@@ -172,6 +177,19 @@ function numberOrNull(value: string) {
 
 function dateOrNull(value: string) {
   return value ? new Date(value).toISOString() : null;
+}
+
+function normalizeQuantity(value: unknown) {
+  const parsed = Math.floor(Number(value || 1));
+  return Math.min(99, Math.max(1, Number.isFinite(parsed) ? parsed : 1));
+}
+
+function sanitizeProductQuantities(productIds: string[], quantities: Record<string, number>) {
+  return productIds.reduce((acc: Record<string, number>, productId) => {
+    const quantity = normalizeQuantity(quantities[productId]);
+    if (quantity > 1) acc[productId] = quantity;
+    return acc;
+  }, {});
 }
 
 function sum(rows: AnalyticsRow[], key: keyof Pick<AnalyticsRow, "subtotal_before_discount" | "discount_amount" | "final_total" | "extras_total">) {
@@ -365,6 +383,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
   async function createPromotion(event: React.FormEvent) {
     event.preventDefault();
     if (!tenantId || !promotionForm.name.trim()) return;
+    const productQuantities = sanitizeProductQuantities(promotionForm.products, promotionForm.productQuantities);
 
     const promotionData = {
       tenant_id: tenantId,
@@ -379,6 +398,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
       image_type: promotionForm.imageType,
       image_url: promotionForm.imageType === "custom" ? promotionForm.imageUrl || null : null,
       additional_product_config: {
+        productQuantities,
         triggerType: promotionForm.additionalTriggerType,
         triggerId: promotionForm.additionalTriggerId || null,
         rewardType: promotionForm.additionalRewardType,
@@ -465,6 +485,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
 
   function editPromotion(promo: Promotion) {
     const targets = promo.promotion_targets || [];
+    const config = promo.additional_product_config || {};
     setPromotionForm({
       name: promo.name || "",
       description: promo.description || "",
@@ -477,6 +498,7 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
       imageType: promo.image_type || "product",
       imageUrl: promo.image_url || "",
       products: targets.filter((target) => target.target_type === "product").map((target) => target.target_id),
+      productQuantities: config.productQuantities || {},
       combos: targets.filter((target) => target.target_type === "combo").map((target) => target.target_id),
       categories: targets.filter((target) => target.target_type === "category").map((target) => target.target_id),
       additionalTriggerType: "none",
@@ -769,7 +791,13 @@ export default function PromotionsPage({ initialTab = "promotions" }: { initialT
             )}
 
             <div className="grid gap-4 lg:grid-cols-3">
-              <MultiSelect label="Productos afectados" items={products} selected={promotionForm.products} onChange={(products) => setPromotionForm({ ...promotionForm, products })} />
+              <QuantityMultiSelect
+                label="Productos afectados"
+                items={products}
+                selected={promotionForm.products}
+                quantities={promotionForm.productQuantities}
+                onChange={(products, productQuantities) => setPromotionForm({ ...promotionForm, products, productQuantities })}
+              />
               <MultiSelect label="Combos afectados" items={combos} selected={promotionForm.combos} onChange={(combos) => setPromotionForm({ ...promotionForm, combos })} />
               <MultiSelect label="Categorias afectadas" items={categories} selected={promotionForm.categories} onChange={(categories) => setPromotionForm({ ...promotionForm, categories })} />
             </div>
@@ -970,6 +998,86 @@ function MultiSelect({ label, items, selected, onChange }: { label: string; item
   );
 }
 
+function QuantityMultiSelect({
+  label,
+  items,
+  selected,
+  quantities,
+  onChange,
+}: {
+  label: string;
+  items: CatalogItem[];
+  selected: string[];
+  quantities: Record<string, number>;
+  onChange: (values: string[], quantities: Record<string, number>) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const visible = items.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).slice(0, 80);
+
+  function toggle(id: string) {
+    if (selected.includes(id)) {
+      const nextQuantities = { ...quantities };
+      delete nextQuantities[id];
+      onChange(selected.filter((item) => item !== id), nextQuantities);
+      return;
+    }
+
+    onChange([...selected, id], { ...quantities, [id]: normalizeQuantity(quantities[id]) });
+  }
+
+  function setQuantity(id: string, value: number) {
+    if (!selected.includes(id)) return;
+    onChange(selected, { ...quantities, [id]: normalizeQuantity(value) });
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-800 bg-gray-950 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-bold">{label}</p>
+        <span className="rounded-full bg-gray-800 px-2 py-1 text-[11px] font-bold text-gray-400">
+          {selected.reduce((total, id) => total + normalizeQuantity(quantities[id]), 0)} u.
+        </span>
+      </div>
+      <div className="mt-3 flex items-center gap-2 rounded-xl border border-gray-800 bg-gray-900 px-3 py-2">
+        <Search size={15} className="text-gray-500" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..." className="w-full bg-transparent text-sm outline-none placeholder:text-gray-600" />
+      </div>
+      <div className="mt-3 max-h-64 space-y-1 overflow-y-auto pr-1">
+        {visible.map((item) => {
+          const active = selected.includes(item.id);
+          const quantity = normalizeQuantity(quantities[item.id]);
+          return (
+            <div key={item.id} className={`rounded-lg px-3 py-2 text-sm ${active ? "bg-white text-gray-950" : "text-gray-300 hover:bg-white/5"}`}>
+              <button type="button" onClick={() => toggle(item.id)} className="flex w-full items-center justify-between gap-3 text-left">
+                <span className="truncate">{item.name}</span>
+                {active && <Check size={15} />}
+              </button>
+              {active && (
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-gray-100 px-2 py-1.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Unidades</span>
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => setQuantity(item.id, quantity - 1)} className="flex h-7 w-7 items-center justify-center rounded-md bg-gray-950 text-sm font-black text-white">-</button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={quantity}
+                      onChange={(event) => setQuantity(item.id, Number(event.target.value))}
+                      className="h-7 w-12 rounded-md border border-gray-300 bg-white text-center text-sm font-black text-gray-950 outline-none"
+                    />
+                    <button type="button" onClick={() => setQuantity(item.id, quantity + 1)} className="flex h-7 w-7 items-center justify-center rounded-md bg-gray-950 text-sm font-black text-white">+</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {visible.length === 0 && <p className="py-4 text-center text-xs text-gray-500">Sin resultados</p>}
+      </div>
+    </div>
+  );
+}
+
 function PromotionPreview({
   form,
   products,
@@ -982,7 +1090,10 @@ function PromotionPreview({
   categories: CatalogItem[];
 }) {
   const selectedNames = [
-    ...products.filter((item) => form.products.includes(item.id)).map((item) => item.name),
+    ...products.filter((item) => form.products.includes(item.id)).map((item) => {
+      const quantity = normalizeQuantity(form.productQuantities[item.id]);
+      return quantity > 1 ? `${quantity}x ${item.name}` : item.name;
+    }),
     ...combos.filter((item) => form.combos.includes(item.id)).map((item) => item.name),
     ...categories.filter((item) => form.categories.includes(item.id)).map((item) => item.name),
   ];
