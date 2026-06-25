@@ -1,11 +1,21 @@
 import { headers } from "next/headers";
 import {
+  Bike,
+  CalendarDays,
+  Coffee,
+  Gift,
+  Globe,
   Instagram,
   Link as LinkIcon,
+  Mail,
   MapPin,
   MessageCircle,
   Phone,
   ShoppingBag,
+  Star,
+  Store,
+  Ticket,
+  Utensils,
 } from "lucide-react";
 import { createSupabaseServer } from "@kablam/supabase/server";
 import { getBrandFontFamily, getFontCss, getGoogleFontFamily } from "@/lib/fonts";
@@ -27,11 +37,21 @@ type HubLink = {
 };
 
 function getIcon(icon: string) {
+  if (icon === "calendar" || icon === "reservations" || icon === "reserva") return CalendarDays;
+  if (icon === "delivery" || icon === "moto") return Bike;
   if (icon === "whatsapp") return MessageCircle;
   if (icon === "order") return ShoppingBag;
-  if (icon === "contact") return Phone;
+  if (icon === "menu") return Utensils;
+  if (icon === "store") return Store;
+  if (icon === "coffee") return Coffee;
+  if (icon === "ticket" || icon === "event") return Ticket;
+  if (icon === "gift" || icon === "promo") return Gift;
   if (icon === "instagram") return Instagram;
   if (icon === "map") return MapPin;
+  if (icon === "contact") return Mail;
+  if (icon === "phone") return Phone;
+  if (icon === "web") return Globe;
+  if (icon === "featured") return Star;
   return LinkIcon;
 }
 

@@ -8,13 +8,25 @@ type PopupRow = {
   id: string;
   name: string;
   description?: string | null;
-  image_url: string;
+  image_url?: string | null;
   link_url?: string | null;
+  show_promotions?: boolean | null;
+  promotion_ids?: string[] | null;
   schedule_type?: "all_days" | "specific_days" | null;
   days_of_week?: number[] | null;
   starts_at?: string | null;
   ends_at?: string | null;
   priority?: number | null;
+};
+
+type PromotionRow = {
+  id: string;
+  name: string;
+  description?: string | null;
+  badge?: string | null;
+  image_url?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
 };
 
 export async function GET(req: Request) {
@@ -39,7 +51,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("customer_popups")
-    .select("id, name, description, image_url, link_url, schedule_type, days_of_week, starts_at, ends_at, priority")
+    .select("*")
     .eq("tenant_id", branch.tenant_id)
     .eq("active", true)
     .or(`branch_id.is.null,branch_id.eq.${branch.id}`)
@@ -57,8 +69,8 @@ export async function GET(req: Request) {
 
   const now = new Date();
   const argentinaDay = getArgentinaDay(now);
-  const activePopup = ((data || []) as PopupRow[]).find((popup) => {
-    if (!popup.image_url) return false;
+  const scheduledPopups = ((data || []) as PopupRow[]).filter((popup) => {
+    if (!popup.show_promotions && !popup.image_url) return false;
     if (popup.starts_at && new Date(popup.starts_at) > now) return false;
     if (popup.ends_at && new Date(popup.ends_at) < now) return false;
     if (popup.schedule_type === "specific_days") {
@@ -67,7 +79,47 @@ export async function GET(req: Request) {
     return true;
   });
 
-  return NextResponse.json({ popup: activePopup || null });
+  for (const popup of scheduledPopups) {
+    if (!popup.show_promotions) {
+      return NextResponse.json({ popup });
+    }
+
+    const promotionIds = (popup.promotion_ids || []).slice(0, 2);
+    if (promotionIds.length === 0) continue;
+
+    const { data: promotionRows, error: promotionsError } = await supabase
+      .from("promotions")
+      .select("id, name, description, badge, image_url, start_date, end_date")
+      .eq("tenant_id", branch.tenant_id)
+      .eq("active", true)
+      .in("id", promotionIds);
+
+    if (promotionsError) continue;
+
+    const activePromotions = ((promotionRows || []) as PromotionRow[])
+      .filter((promotion) => {
+        if (promotion.start_date && new Date(promotion.start_date) > now) return false;
+        if (promotion.end_date && new Date(promotion.end_date) < now) return false;
+        return true;
+      })
+      .sort((a, b) => promotionIds.indexOf(a.id) - promotionIds.indexOf(b.id));
+
+    if (activePromotions.length > 0) {
+      return NextResponse.json({
+        popup: {
+          ...popup,
+          promotions: activePromotions,
+        },
+      });
+    }
+
+    await supabase
+      .from("customer_popups")
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq("id", popup.id);
+  }
+
+  return NextResponse.json({ popup: null });
 }
 
 function getArgentinaDay(date: Date) {

@@ -5,23 +5,48 @@ import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import {
   ArrowDown,
   ArrowUp,
+  Bike,
+  CalendarDays,
+  Coffee,
   Eye,
+  Gift,
+  Globe,
+  Instagram,
   Link as LinkIcon,
+  Mail,
+  MapPin,
   MessageCircle,
   Plus,
   Save,
   ShoppingBag,
+  Star,
+  Store,
+  Ticket,
   Trash2,
+  Utensils,
 } from "lucide-react";
 
 const ICON_OPTIONS = [
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "order", label: "Pedido" },
-  { value: "contact", label: "Contacto" },
-  { value: "instagram", label: "Instagram" },
-  { value: "map", label: "Mapa" },
-  { value: "link", label: "Link" },
+  { value: "calendar", label: "Agenda / reservas", Icon: CalendarDays },
+  { value: "delivery", label: "Moto / delivery", Icon: Bike },
+  { value: "whatsapp", label: "WhatsApp", Icon: MessageCircle },
+  { value: "order", label: "Pedido", Icon: ShoppingBag },
+  { value: "menu", label: "Menu", Icon: Utensils },
+  { value: "store", label: "Local", Icon: Store },
+  { value: "coffee", label: "Cafe", Icon: Coffee },
+  { value: "ticket", label: "Evento / ticket", Icon: Ticket },
+  { value: "gift", label: "Promos / regalo", Icon: Gift },
+  { value: "instagram", label: "Instagram", Icon: Instagram },
+  { value: "map", label: "Mapa", Icon: MapPin },
+  { value: "contact", label: "Contacto", Icon: Mail },
+  { value: "web", label: "Web", Icon: Globe },
+  { value: "featured", label: "Destacado", Icon: Star },
+  { value: "link", label: "Link", Icon: LinkIcon },
 ];
+
+function getHubIcon(icon?: string) {
+  return ICON_OPTIONS.find((option) => option.value === icon)?.Icon || LinkIcon;
+}
 
 const DEFAULT_SETTINGS = {
   logo_url: "",
@@ -542,7 +567,7 @@ export default function CustomerHubPage() {
 
               {links.map((link, index) => (
                 <div key={link.id} className="rounded-lg border border-gray-800 bg-gray-950 p-4 space-y-3">
-                  <div className="grid gap-3 md:grid-cols-[1fr_1.6fr_130px]">
+                  <div className="grid gap-3 md:grid-cols-[1fr_1.6fr_220px]">
                     <input
                       value={link.label}
                       onChange={(e) => updateLink(link.id, "label", e.target.value)}
@@ -555,17 +580,25 @@ export default function CustomerHubPage() {
                       className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100"
                       placeholder="https://... o /sucursal/order"
                     />
-                    <select
-                      value={link.icon}
-                      onChange={(e) => updateLink(link.id, "icon", e.target.value)}
-                      className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100"
-                    >
-                      {ICON_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-900 text-gray-200">
+                        {(() => {
+                          const Icon = getHubIcon(link.icon);
+                          return <Icon size={18} />;
+                        })()}
+                      </div>
+                      <select
+                        value={link.icon || "link"}
+                        onChange={(e) => updateLink(link.id, "icon", e.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100"
+                      >
+                        {ICON_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between gap-3">
@@ -636,12 +669,15 @@ export default function CustomerHubPage() {
                     <ShoppingBag size={16} /> Pedir en {branch.name}
                   </div>
                 ))}
-              {links.filter((link) => link.is_active).slice(0, 4).map((link) => (
-                <div key={link.id} className="flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold" style={{ borderColor: `${settings.text_color}22` }}>
-                  {link.icon === "whatsapp" ? <MessageCircle size={16} /> : <LinkIcon size={16} />}
-                  {link.label || "Link"}
-                </div>
-              ))}
+              {links.filter((link) => link.is_active).slice(0, 4).map((link) => {
+                const Icon = getHubIcon(link.icon);
+                return (
+                  <div key={link.id} className="flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold" style={{ borderColor: `${settings.text_color}22` }}>
+                    <Icon size={16} />
+                    {link.label || "Link"}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </aside>

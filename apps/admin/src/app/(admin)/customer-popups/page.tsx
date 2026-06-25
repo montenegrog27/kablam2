@@ -10,15 +10,27 @@ type CustomerPopup = {
   branch_id?: string | null;
   name: string;
   description?: string | null;
-  image_url: string;
+  image_url?: string | null;
   link_url?: string | null;
   active: boolean;
+  show_promotions?: boolean | null;
+  promotion_ids?: string[] | null;
   schedule_type: "all_days" | "specific_days";
   days_of_week?: number[] | null;
   starts_at?: string | null;
   ends_at?: string | null;
   priority: number;
   created_at?: string;
+};
+
+type Promotion = {
+  id: string;
+  name: string;
+  description?: string | null;
+  badge?: string | null;
+  active: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
 };
 
 type Branch = {
@@ -44,6 +56,8 @@ const emptyForm = {
   link_url: "",
   branch_id: "",
   active: true,
+  show_promotions: false,
+  promotion_ids: [] as string[],
   schedule_type: "all_days" as "all_days" | "specific_days",
   days_of_week: [] as number[],
   starts_at: "",
@@ -54,6 +68,7 @@ const emptyForm = {
 export default function CustomerPopupsPage() {
   const [tenantId, setTenantId] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [popups, setPopups] = useState<CustomerPopup[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -92,9 +107,15 @@ export default function CustomerPopupsPage() {
 
     setTenantId(userRecord.tenant_id);
 
-    const [branchesRes, popupsRes] = await Promise.all([
+    const [branchesRes, popupsRes, promotionsRes] = await Promise.all([
       supabase.from("branches").select("id, name, slug").eq("tenant_id", userRecord.tenant_id).order("name"),
       supabase.from("customer_popups").select("*").eq("tenant_id", userRecord.tenant_id).order("priority", { ascending: true }).order("created_at", { ascending: false }),
+      supabase
+        .from("promotions")
+        .select("id, name, description, badge, active, start_date, end_date")
+        .eq("tenant_id", userRecord.tenant_id)
+        .eq("active", true)
+        .order("created_at", { ascending: false }),
     ]);
 
     if (popupsRes.error?.code === "42P01") {
@@ -104,6 +125,7 @@ export default function CustomerPopupsPage() {
     }
 
     setBranches((branchesRes.data || []) as Branch[]);
+    setPromotions((promotionsRes.data || []) as Promotion[]);
     setPopups((popupsRes.data || []) as CustomerPopup[]);
     setLoading(false);
   }
@@ -123,6 +145,8 @@ export default function CustomerPopupsPage() {
       link_url: popup.link_url || "",
       branch_id: popup.branch_id || "",
       active: popup.active,
+      show_promotions: Boolean(popup.show_promotions),
+      promotion_ids: popup.promotion_ids || [],
       schedule_type: popup.schedule_type || "all_days",
       days_of_week: popup.days_of_week || [],
       starts_at: toDatetimeLocal(popup.starts_at),
@@ -134,20 +158,44 @@ export default function CustomerPopupsPage() {
 
   async function savePopup(event: React.FormEvent) {
     event.preventDefault();
-    if (!tenantId || !form.name.trim() || !form.image_url.trim()) return;
+    if (!tenantId || !form.name.trim()) return;
+    if (!form.show_promotions && !form.image_url.trim()) return;
+
+    const selectedPromotions = promotions.filter((promotion) => form.promotion_ids.includes(promotion.id));
+    if (form.show_promotions && selectedPromotions.length === 0) {
+      setMessage("Selecciona al menos una promocion activa para mostrar en el popup.");
+      return;
+    }
+
+    const promotionStartDates = selectedPromotions
+      .map((promotion) => promotion.start_date)
+      .filter(Boolean)
+      .map((value) => new Date(value as string).getTime())
+      .filter((value) => !Number.isNaN(value));
+    const promotionEndDates = selectedPromotions
+      .map((promotion) => promotion.end_date)
+      .filter(Boolean)
+      .map((value) => new Date(value as string).getTime())
+      .filter((value) => !Number.isNaN(value));
 
     const payload = {
       tenant_id: tenantId,
       name: form.name.trim(),
       description: form.description.trim() || null,
-      image_url: form.image_url.trim(),
+      image_url: form.show_promotions ? null : form.image_url.trim(),
       link_url: form.link_url.trim() || null,
       branch_id: form.branch_id || null,
       active: form.active,
+      show_promotions: Boolean(form.show_promotions),
+      promotion_ids: form.show_promotions ? form.promotion_ids.slice(0, 2) : [],
       schedule_type: form.schedule_type,
       days_of_week: form.schedule_type === "specific_days" ? form.days_of_week : null,
-      starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
-      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+      starts_at: form.show_promotions && promotionStartDates.length
+        ? new Date(Math.min(...promotionStartDates)).toISOString()
+        : form.starts_at ? new Date(form.starts_at).toISOString() : null,
+      ends_at: form.show_promotions && promotionEndDates.length
+        ? new Date(Math.max(...promotionEndDates)).toISOString()
+        : form.ends_at ? new Date(form.ends_at).toISOString() : null,
       priority: Number(form.priority || 100),
       updated_at: new Date().toISOString(),
     };
@@ -184,6 +232,15 @@ export default function CustomerPopupsPage() {
         ? current.days_of_week.filter((value) => value !== day)
         : [...current.days_of_week, day],
     }));
+  }
+
+  function togglePromotion(promotionId: string) {
+    setForm((current) => {
+      const selected = current.promotion_ids.includes(promotionId)
+        ? current.promotion_ids.filter((id) => id !== promotionId)
+        : [...current.promotion_ids, promotionId].slice(0, 2);
+      return { ...current, promotion_ids: selected };
+    });
   }
 
   return (
@@ -263,9 +320,71 @@ export default function CustomerPopupsPage() {
                 <textarea className="input min-h-20" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Uso interno para identificar el popup." />
               </Field>
 
+              <label className="flex items-center justify-between gap-4 rounded-xl border border-gray-800 bg-gray-950 px-4 py-3">
+                <span>
+                  <span className="block text-sm font-black text-gray-100">Mostrar promociones activas</span>
+                  <span className="text-xs text-gray-500">El popup usa hasta 2 promociones seleccionadas y vence junto con ellas.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.show_promotions)}
+                  onChange={(event) => setForm({ ...form, show_promotions: event.target.checked })}
+                  className="h-5 w-5 accent-red-500"
+                />
+              </label>
+
+              {form.show_promotions && (
+                <div className="rounded-xl border border-red-950/60 bg-red-950/20 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-red-300">Promociones del popup</p>
+                      <p className="mt-1 text-xs text-gray-500">Selecciona 1 o 2 promociones activas.</p>
+                    </div>
+                    <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs font-black text-red-200">
+                      {form.promotion_ids.length}/2
+                    </span>
+                  </div>
+
+                  {promotions.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-gray-700 px-4 py-6 text-center text-sm text-gray-500">
+                      No hay promociones activas para seleccionar.
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {promotions.map((promotion) => {
+                        const selected = form.promotion_ids.includes(promotion.id);
+                        const disabled = !selected && form.promotion_ids.length >= 2;
+                        return (
+                          <button
+                            key={promotion.id}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => togglePromotion(promotion.id)}
+                            className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                              selected
+                                ? "border-red-500 bg-red-600/15 text-white"
+                                : "border-gray-800 bg-gray-950 text-gray-300 hover:border-gray-600"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-black">{promotion.name}</span>
+                              {promotion.badge && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-black">{promotion.badge}</span>}
+                            </div>
+                            <p className="mt-1 line-clamp-2 text-xs text-gray-500">{promotion.description || "Sin descripcion"}</p>
+                            <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                              {promotion.end_date ? `Vence ${toDatetimeLocal(promotion.end_date).replace("T", " ")}` : "Sin vencimiento"}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="URL de imagen">
-                  <input className="input" value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} placeholder="https://..." />
+                  <input className="input" value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} placeholder={form.show_promotions ? "Opcional en modo promociones" : "https://..."} disabled={form.show_promotions} />
                 </Field>
                 <Field label="Link al hacer click opcional">
                   <input className="input" value={form.link_url} onChange={(event) => setForm({ ...form, link_url: event.target.value })} placeholder="https://... o /santafe1583/reservas" />
@@ -341,6 +460,7 @@ export default function CustomerPopupsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="truncate text-base font-black text-gray-100">{popup.name}</h3>
                     <Badge>{popup.active ? "Activo" : "Pausado"}</Badge>
+                    {popup.show_promotions && <Badge>Promociones</Badge>}
                     <Badge>{popup.schedule_type === "all_days" ? "Todos los dias" : formatDays(popup.days_of_week)}</Badge>
                   </div>
                   <p className="mt-1 text-sm text-gray-500">{popup.description || "Sin descripcion"}</p>
@@ -417,7 +537,11 @@ function PreviewModal({ popup, onClose }: { popup: CustomerPopup; onClose: () =>
         <button onClick={onClose} className="absolute right-3 top-3 z-10 rounded-full bg-black/70 p-2 text-white hover:bg-black">
           <X size={18} />
         </button>
-        <img src={popup.image_url} alt={popup.name} className="max-h-[82vh] w-full object-contain" />
+        {popup.image_url ? (
+          <img src={popup.image_url} alt={popup.name} className="max-h-[82vh] w-full object-contain" />
+        ) : (
+          <div className="p-8 text-center text-sm font-bold text-gray-500">Popup de promociones</div>
+        )}
       </div>
     </div>
   );
