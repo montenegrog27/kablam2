@@ -222,13 +222,20 @@ function phoneLookupCandidates(input?: string | null) {
 }
 
 async function getBranchTransferAlias(branchId: string) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("branch_settings")
     .select("catalog_order_transfer_alias")
     .eq("branch_id", branchId)
     .maybeSingle();
 
-  return String(data?.catalog_order_transfer_alias || "").trim() || "MORDISCO.ARG";
+  if (error) {
+    console.error("WhatsApp transfer alias lookup failed:", {
+      branchId,
+      error: error.message,
+    });
+  }
+
+  return String(data?.catalog_order_transfer_alias || "").trim() || null;
 }
 
 async function getOrderPaymentMethods(orderId: string) {
@@ -533,22 +540,21 @@ export async function POST(req: Request) {
         );
       });
 
-      let msg = "";
+      const msg = esDelivery
+        ? "Pedido confirmado. Te avisaremos cuando salga el repartidor."
+        : "Pedido confirmado. Te avisaremos cuando este listo para retirar.";
 
       if (esTransfer) {
-        msg = esDelivery
-          ? "✅ Pedido confirmado. Te avisaremos cuando salga el repartidor.\nALIAS 👇"
-          : "✅ Pedido confirmado. Te avisaremos cuando esté listo para retirar.\nALIAS 👇";
+        const transferAlias = await getBranchTransferAlias(branchId);
+        await sendText(
+          number,
+          phone,
+          transferAlias
+            ? `${msg}\n\nAlias para transferir:\n${transferAlias}`
+            : `${msg}\n\nTe vamos a enviar los datos de transferencia por WhatsApp.`,
+        );
       } else {
-        msg = esDelivery
-          ? "✅ Pedido confirmado. Te avisaremos cuando salga el repartidor."
-          : "✅ Pedido confirmado. Te avisaremos cuando esté listo para retirar.";
-      }
-
-      await sendText(number, phone, msg);
-
-      if (esTransfer) {
-        await sendText(number, phone, await getBranchTransferAlias(branchId));
+        await sendText(number, phone, msg);
       }
     }
 

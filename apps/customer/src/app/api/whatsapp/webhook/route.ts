@@ -83,13 +83,20 @@ async function sendText(number: any, to: string, body: string) {
 }
 
 async function getBranchTransferAlias(branchId: string) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("branch_settings")
     .select("catalog_order_transfer_alias")
     .eq("branch_id", branchId)
     .maybeSingle();
 
-  return String(data?.catalog_order_transfer_alias || "").trim() || "MORDISCO.ARG";
+  if (error) {
+    console.error("Customer WhatsApp webhook alias lookup failed:", {
+      branchId,
+      error: error.message,
+    });
+  }
+
+  return String(data?.catalog_order_transfer_alias || "").trim() || null;
 }
 
 export async function GET(req: Request) {
@@ -260,9 +267,17 @@ export async function POST(req: Request) {
       ? "Pedido confirmado. Te avisaremos cuando salga el repartidor."
       : "Pedido confirmado. Te avisaremos cuando este listo para retirar.";
 
-    await sendText(number, phone, isTransfer ? `${messageText}\nALIAS:` : messageText);
     if (isTransfer) {
-      await sendText(number, phone, await getBranchTransferAlias(branchId));
+      const transferAlias = await getBranchTransferAlias(branchId);
+      await sendText(
+        number,
+        phone,
+        transferAlias
+          ? `${messageText}\n\nAlias para transferir:\n${transferAlias}`
+          : `${messageText}\n\nTe vamos a enviar los datos de transferencia por WhatsApp.`,
+      );
+    } else {
+      await sendText(number, phone, messageText);
     }
   }
 
