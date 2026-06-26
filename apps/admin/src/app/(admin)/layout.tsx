@@ -57,6 +57,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/categories", label: "Categorías", icon: Tags },
       { href: "/products", label: "Productos", icon: Package },
       { href: "/qr-menu", label: "Menu QR", icon: QrCode },
+      { href: "/delivery-menu", label: "Menu Delivery", icon: Truck },
+      { href: "/catalog-menu", label: "Menu Catalogo", icon: ShoppingBag },
       { href: "/variant-types", label: "Tipos de Variante", icon: Variable },
     ]},
     { section: "Ingredientes", items: [

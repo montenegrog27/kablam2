@@ -14,12 +14,16 @@ export type ProductRow = {
   is_featured?: boolean;
   is_suggestable?: boolean;
   show_in_menu?: boolean;
+  delivery_position?: number | null;
   featured_order?: number;
   categories: {
     id: string;
     name: string;
     parent_id: string | null;
     position?: number;
+    delivery_position?: number | null;
+    delivery_visible?: boolean | null;
+    active?: boolean | null;
   } | null;
   product_variants: Array<{
     id: string;
@@ -95,12 +99,16 @@ export async function loadMenu(
        is_featured,
         is_suggestable,
         show_in_menu,
+        delivery_position,
         featured_order,
       categories(
         id,
         name,
         parent_id,
-        position
+        position,
+        delivery_position,
+        delivery_visible,
+        active
       ),
       product_variants(
         id,
@@ -149,6 +157,7 @@ export async function loadMenu(
     .eq("branch_id", branch.id)
     .eq("is_active", true)
     .eq("show_in_menu", true)
+    .order("delivery_position", { ascending: true })
     .order("name");
 
   if (error) {
@@ -168,7 +177,9 @@ export async function loadMenu(
       : null,
   );
 
-  const menu: Product[] = ((data as unknown as ProductRow[]) || []).map(
+  const menu: Product[] = ((data as unknown as ProductRow[]) || [])
+    .filter((p) => p.categories?.active !== false && p.categories?.delivery_visible !== false)
+    .map(
     (p) => ({
       id: p.id,
       name: p.name,
@@ -186,7 +197,7 @@ export async function loadMenu(
               id: p.categories.id,
               name: p.categories.name,
               parent_id: p.categories.parent_id,
-              position: p.categories.position ?? 0,
+              position: p.categories.delivery_position ?? p.categories.position ?? 0,
             },
           ]
         : [],
@@ -273,6 +284,9 @@ export type ComboRow = {
     name: string;
     parent_id: string | null;
     position?: number;
+    delivery_position?: number | null;
+    delivery_visible?: boolean | null;
+    active?: boolean | null;
   } | null;
   combo_extras?: Array<{
     id: string;
@@ -349,7 +363,10 @@ export async function loadCombos(
         id,
         name,
         parent_id,
-        position
+        position,
+        delivery_position,
+        delivery_visible,
+        active
       ),
       combo_products(
         id,
@@ -404,7 +421,9 @@ export async function loadCombos(
 
   console.log("loadCombos: Raw data count:", data?.length || 0);
 
-  return ((data as unknown as ComboRow[]) || []).map((c) => {
+  return ((data as unknown as ComboRow[]) || [])
+    .filter((c) => c.categories?.active !== false && c.categories?.delivery_visible !== false)
+    .map((c) => {
     console.log("loadCombos price for", c.name, ":", c.price, typeof c.price);
     return {
       id: c.id,
@@ -418,11 +437,11 @@ export async function loadCombos(
       categories: c.categories
         ? [
             {
-              id: c.categories.id,
-              name: c.categories.name,
-              parent_id: c.categories.parent_id,
-              position: c.categories.position ?? 0,
-            },
+                id: c.categories.id,
+                name: c.categories.name,
+                parent_id: c.categories.parent_id,
+                position: c.categories.delivery_position ?? c.categories.position ?? 0,
+              },
           ]
         : [],
       product_extras: (c.combo_extras || [])

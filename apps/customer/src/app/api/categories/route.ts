@@ -25,9 +25,19 @@ export async function GET(req: Request) {
 
   const { data: categories } = await supabase
     .from("categories")
-    .select("id, name, parent_id, position")
+    .select("id, name, parent_id, position, delivery_position, delivery_visible, active")
     .eq("tenant_id", branch.tenant_id)
+    .eq("delivery_visible", true)
+    .or("active.is.null,active.eq.true")
+    .order("delivery_position")
     .order("position");
 
-  return Response.json(categories || []);
+  return Response.json(
+    (categories || []).map((category) => ({
+      id: category.id,
+      name: category.name,
+      parent_id: category.parent_id,
+      position: category.delivery_position ?? category.position ?? 0,
+    })),
+  );
 }

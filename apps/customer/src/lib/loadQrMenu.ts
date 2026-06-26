@@ -7,6 +7,8 @@ type CategoryRow = {
   position: number | null;
   qr_position: number | null;
   qr_visible: boolean | null;
+  catalog_position: number | null;
+  catalog_visible: boolean | null;
   active: boolean | null;
 };
 
@@ -18,6 +20,7 @@ type ProductRow = {
   pricing_mode: "unit" | "kg" | "portion" | null;
   qr_position: number | null;
   qr_visible: boolean | null;
+  catalog_position: number | null;
   catalog_visible: boolean | null;
   product_variants: Array<{
     id: string;
@@ -91,11 +94,28 @@ function orderValue(value: number | null | undefined, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+function getMenuFields(mode: "qr" | "catalog") {
+  return mode === "catalog"
+    ? {
+        categoryPosition: "catalog_position" as const,
+        categoryVisible: "catalog_visible" as const,
+        productPosition: "catalog_position" as const,
+        productVisible: "catalog_visible" as const,
+      }
+    : {
+        categoryPosition: "qr_position" as const,
+        categoryVisible: "qr_visible" as const,
+        productPosition: "qr_position" as const,
+        productVisible: "qr_visible" as const,
+      };
+}
+
 export async function loadQrMenu(
   branchSlug: string,
   mode: "qr" | "catalog" = "qr",
 ): Promise<QrMenuData | null> {
   const supabase = await createSupabaseServer();
+  const fields = getMenuFields(mode);
 
   const { data: branch } = await supabase
     .from("branches")
@@ -113,9 +133,9 @@ export async function loadQrMenu(
       .maybeSingle(),
     supabase
       .from("categories")
-      .select("id, name, parent_id, position, qr_position, qr_visible, active")
+      .select("id, name, parent_id, position, qr_position, qr_visible, catalog_position, catalog_visible, active")
       .eq("tenant_id", branch.tenant_id)
-      .order("qr_position", { ascending: true })
+      .order(fields.categoryPosition, { ascending: true })
       .order("position", { ascending: true }),
     supabase
       .from("products")
@@ -128,31 +148,34 @@ export async function loadQrMenu(
           pricing_mode,
           qr_position,
           qr_visible,
+          catalog_position,
           catalog_visible,
           product_variants(id, name, price, image_url, is_default, sort_order)
         `,
       )
       .eq("branch_id", branch.id)
       .eq("is_active", true)
-      .order("qr_position", { ascending: true })
+      .order(fields.productPosition, { ascending: true })
       .order("name", { ascending: true }),
   ]);
 
   const visibleCategories = ((categories || []) as CategoryRow[])
-    .filter((category) => category.active !== false && category.qr_visible !== false)
-    .sort((a, b) => orderValue(a.qr_position, orderValue(a.position)) - orderValue(b.qr_position, orderValue(b.position)));
+    .filter((category) => category.active !== false && category[fields.categoryVisible] !== false)
+    .sort(
+      (a, b) =>
+        orderValue(a[fields.categoryPosition], orderValue(a.position)) -
+        orderValue(b[fields.categoryPosition], orderValue(b.position)),
+    );
 
   const categoryById = new Map(visibleCategories.map((category) => [category.id, category]));
   const productsByCategory = new Map<string, QrMenuProduct[]>();
 
   ((products || []) as ProductRow[])
     .filter((product) => {
-      const visibleForMode = mode === "catalog"
-        ? product.catalog_visible !== false
-        : product.qr_visible !== false;
+      const visibleForMode = product[fields.productVisible] !== false;
       return visibleForMode && product.category_id && categoryById.has(product.category_id);
     })
-    .sort((a, b) => orderValue(a.qr_position) - orderValue(b.qr_position) || a.name.localeCompare(b.name))
+    .sort((a, b) => orderValue(a[fields.productPosition]) - orderValue(b[fields.productPosition]) || a.name.localeCompare(b.name))
     .forEach((product) => {
       const variant = getVariant(product);
       if (!variant || !product.category_id) return;

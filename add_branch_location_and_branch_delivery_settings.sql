@@ -6,6 +6,11 @@ alter table public.branches
 alter table public.delivery_settings
   add column if not exists branch_id uuid references public.branches(id) on delete cascade;
 
+alter table public.delivery_settings
+  drop constraint if exists delivery_settings_tenant_id_key;
+
+drop index if exists delivery_settings_tenant_id_key;
+
 create index if not exists idx_delivery_settings_tenant_branch
   on public.delivery_settings(tenant_id, branch_id);
 
