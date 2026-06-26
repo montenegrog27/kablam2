@@ -18,6 +18,8 @@ type BranchForm = {
   slug: string;
   address: string;
   phone: string;
+  lat: string;
+  lng: string;
   active: boolean;
   delivery_enabled: boolean;
   pickup_enabled: boolean;
@@ -31,6 +33,8 @@ const emptyBranch: BranchForm = {
   slug: "",
   address: "",
   phone: "",
+  lat: "",
+  lng: "",
   active: true,
   delivery_enabled: true,
   pickup_enabled: true,
@@ -75,6 +79,8 @@ export default function EditBranchPage() {
         slug: branchData.slug || "",
         address: branchData.address || "",
         phone: branchData.phone || "",
+        lat: branchData.lat ?? "",
+        lng: branchData.lng ?? "",
         active: branchData.active ?? true,
         delivery_enabled: branchData.delivery_enabled ?? true,
         pickup_enabled: branchData.pickup_enabled ?? true,
@@ -210,6 +216,39 @@ export default function EditBranchPage() {
               className="w-full rounded-lg border p-3 text-gray-950"
               placeholder="Ej: San Juan 633"
             />
+          </div>
+
+          <div className="rounded-lg border border-gray-600 bg-gray-800 p-4">
+            <p className="mb-3 text-sm font-medium text-gray-100">
+              Ubicacion para calcular delivery
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium">Latitud</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.lat}
+                  onChange={(event) => updateForm("lat", event.target.value)}
+                  className="w-full rounded-lg border p-3 text-gray-950"
+                  placeholder="-27.4699"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium">Longitud</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.lng}
+                  onChange={(event) => updateForm("lng", event.target.value)}
+                  className="w-full rounded-lg border p-3 text-gray-950"
+                  placeholder="-58.8306"
+                />
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-gray-300">
+              Si faltan estos valores, customer no puede calcular el costo de envio.
+            </p>
           </div>
 
           <div>

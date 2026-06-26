@@ -32,6 +32,12 @@ async function isSuperAdmin(req: NextRequest, supabaseService: any) {
   return userEmail === SUPERADMIN_EMAIL;
 }
 
+function numberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabaseService = createServiceClient();
@@ -44,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { tenant_id, name, slug } = body;
+    const { tenant_id, name, slug, address, phone, lat, lng } = body;
 
     if (!tenant_id || !name || !slug) {
       return NextResponse.json(
@@ -55,7 +61,15 @@ export async function POST(req: NextRequest) {
 
     const { data: branch, error } = await supabaseService
       .from("branches")
-      .insert({ tenant_id, name, slug })
+      .insert({
+        tenant_id,
+        name,
+        slug,
+        address: address || null,
+        phone: phone || null,
+        lat: numberOrNull(lat),
+        lng: numberOrNull(lng),
+      })
       .select()
       .single();
 
@@ -100,6 +114,8 @@ export async function PUT(req: NextRequest) {
       slug,
       address,
       phone,
+      lat,
+      lng,
       active,
       delivery_enabled,
       pickup_enabled,
@@ -121,6 +137,8 @@ export async function PUT(req: NextRequest) {
         slug,
         address: address || null,
         phone: phone || null,
+        lat: numberOrNull(lat),
+        lng: numberOrNull(lng),
         active: active ?? true,
         delivery_enabled: delivery_enabled ?? true,
         pickup_enabled: pickup_enabled ?? true,

@@ -184,7 +184,16 @@ export default function BranchesPage() {
       .update({
         name: branch.name,
         slug: branch.slug,
+        address: branch.address || null,
         phone: branch.phone || null,
+        lat:
+          branch.lat === "" || branch.lat === null || branch.lat === undefined
+            ? null
+            : Number(branch.lat),
+        lng:
+          branch.lng === "" || branch.lng === null || branch.lng === undefined
+            ? null
+            : Number(branch.lng),
       })
       .eq("id", branch.id);
 
@@ -597,6 +606,55 @@ export default function BranchesPage() {
               <p className="text-xs text-gray-500">
                 Este numero identifica la sesion Baileys de la sucursal en el servidor WhatsApp nuevo.
               </p>
+
+              <div className="rounded-lg border border-gray-700 bg-gray-950/50 p-4 space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-100">
+                    Ubicacion para delivery
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Es el punto de origen para calcular distancia y costo de envio en customer.
+                  </p>
+                </div>
+
+                <input
+                  className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
+                  value={branch.address || ""}
+                  placeholder="Direccion de la sucursal"
+                  onChange={(e) =>
+                    updateLocalBranch(branch.id, "address", e.target.value)
+                  }
+                />
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input
+                    type="number"
+                    step="any"
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
+                    value={branch.lat ?? ""}
+                    placeholder="Latitud, ej: -27.4699"
+                    onChange={(e) =>
+                      updateLocalBranch(branch.id, "lat", e.target.value)
+                    }
+                  />
+                  <input
+                    type="number"
+                    step="any"
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-white/10 focus:border-gray-500 transition"
+                    value={branch.lng ?? ""}
+                    placeholder="Longitud, ej: -58.8306"
+                    onChange={(e) =>
+                      updateLocalBranch(branch.id, "lng", e.target.value)
+                    }
+                  />
+                </div>
+
+                {(!branch.lat || !branch.lng) && (
+                  <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+                    Falta latitud o longitud. El checkout no podra calcular envio para esta sucursal.
+                  </p>
+                )}
+              </div>
 
               <div className="flex flex-wrap gap-2">
                 <button

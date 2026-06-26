@@ -138,6 +138,7 @@ export default function CheckoutForm({
   const [deliveryOutOfZone, setDeliveryOutOfZone] = useState(false);
   const [shippingPending, setShippingPending] = useState(false);
   const [shippingUnavailable, setShippingUnavailable] = useState(false);
+  const [branchLocationMissing, setBranchLocationMissing] = useState(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<any>(null);
@@ -317,8 +318,11 @@ export default function CheckoutForm({
   async function loadDeliveryData() {
     const { data: branch } = await supabase.from("branches").select("id, tenant_id, lat, lng").eq("slug", branchSlug).single();
     if (!branch) return;
-    setBranchLat(branch.lat ? Number(branch.lat) : null);
-    setBranchLng(branch.lng ? Number(branch.lng) : null);
+    const nextBranchLat = branch.lat ? Number(branch.lat) : null;
+    const nextBranchLng = branch.lng ? Number(branch.lng) : null;
+    setBranchLat(nextBranchLat);
+    setBranchLng(nextBranchLng);
+    setBranchLocationMissing(!nextBranchLat || !nextBranchLng);
 
     const { data: settings } = await supabase
       .from("delivery_settings")
@@ -376,13 +380,15 @@ export default function CheckoutForm({
       setShippingCost(0);
       setDeliveryOutOfZone(false);
       setShippingUnavailable(false);
+      setBranchLocationMissing(false);
       return;
     }
 
     if (!customerLat || !customerLng || !branchLat || !branchLng || !deliverySettings) {
       setShippingCost(0);
       setDeliveryOutOfZone(false);
-      setShippingUnavailable(Boolean(customer.address && !shippingPending));
+      setBranchLocationMissing(Boolean(deliverySettings?.enabled && (!branchLat || !branchLng)));
+      setShippingUnavailable(Boolean(customer.address && !shippingPending && branchLat && branchLng));
       return;
     }
 
@@ -391,6 +397,7 @@ export default function CheckoutForm({
     setDeliveryOutOfZone(cost === null);
     setShippingCost(cost ?? 0);
     setShippingUnavailable(false);
+    setBranchLocationMissing(false);
   }, [customerLat, customerLng, branchLat, branchLng, deliverySettings, orderMode, customer.address, shippingPending]);
 
   // Google Maps Autocomplete
@@ -487,6 +494,7 @@ export default function CheckoutForm({
     if (!customer.name || !customer.phone) return false;
     if (orderMode === "delivery" && !customer.address) return false;
     if (orderMode === "delivery" && !customerLat && !mapLat && !customer.address) return false;
+    if (orderMode === "delivery" && deliverySettings?.enabled && branchLocationMissing) return false;
     if (orderMode === "delivery" && deliverySettings?.enabled && (shippingPending || shippingUnavailable || !customerLat || !customerLng)) return false;
     if (orderMode === "delivery" && deliveryOutOfZone) return false;
     if (!selectedPaymentMethod) return false;
@@ -803,7 +811,13 @@ export default function CheckoutForm({
                         <span className="font-medium text-gray-600">Calculando envio...</span>
                       </div>
                     )}
-                    {!shippingPending && shippingUnavailable && customer.address && (
+                    {!shippingPending && branchLocationMissing && (
+                      <div className="text-sm flex items-center gap-2 bg-red-50 border border-red-200 px-3.5 py-2.5 rounded-xl">
+                        <AlertCircle size={15} className="text-red-600" />
+                        <span className="font-medium text-red-700">Esta sucursal todavia no tiene ubicacion configurada para calcular el envio.</span>
+                      </div>
+                    )}
+                    {!shippingPending && !branchLocationMissing && shippingUnavailable && customer.address && (
                       <div className="text-sm flex items-center gap-2 bg-amber-50 border border-amber-200 px-3.5 py-2.5 rounded-xl">
                         <AlertCircle size={15} className="text-amber-600" />
                         <span className="font-medium text-amber-700">Selecciona la direccion del autocompletado o marcala en el mapa para calcular el envio.</span>
@@ -1079,6 +1093,8 @@ export default function CheckoutForm({
                   <span className="font-medium text-gray-900 tabular-nums">
                     {shippingPending
                       ? <span className="text-gray-500">Calculando...</span>
+                      : branchLocationMissing
+                      ? <span className="text-red-600">Sucursal sin ubicacion</span>
                       : shippingUnavailable || (deliverySettings?.enabled && customer.address && (!customerLat || !customerLng))
                       ? <span className="text-amber-600">Elegí ubicación</span>
                       : deliveryOutOfZone
@@ -1156,6 +1172,7 @@ export default function CheckoutForm({
                     {!customer.name && <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400" /> Nombre</li>}
                     {!customer.phone && <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400" /> Teléfono</li>}
                     {orderMode === "delivery" && !customer.address && <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400" /> Dirección</li>}
+                    {orderMode === "delivery" && branchLocationMissing && <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400" /> La sucursal no tiene ubicacion para delivery</li>}
                     {!selectedPaymentMethod && <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400" /> Método de pago</li>}
                     {selectedMethod?.requires_reference && !paymentReference.trim() && <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400" /> Referencia de pago</li>}
                   </ul>

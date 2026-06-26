@@ -16,6 +16,10 @@ export default function NewBranchPage() {
   const [tenantId, setTenantId] = useState("");
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingTenants, setLoadingTenants] = useState(true);
   const router = useRouter();
@@ -67,6 +71,10 @@ export default function NewBranchPage() {
           tenant_id: tenantId,
           name,
           slug,
+          address,
+          phone,
+          lat,
+          lng,
         }),
       });
 
@@ -191,6 +199,61 @@ export default function NewBranchPage() {
             <p className="text-sm text-gray-500 mt-1">
               Se usará en las URLs del cliente (ej: https://app.kablam.com/
               {tenants.find((t) => t.id === tenantId)?.slug}/{slug})
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Direccion</label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className="w-full border rounded-lg p-3 text-gray-950"
+              placeholder="Ej: San Juan 633, Corrientes"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Telefono / WhatsApp</label>
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full border rounded-lg p-3 text-gray-950"
+              placeholder="Ej: 5493794054555"
+            />
+          </div>
+
+          <div className="rounded-lg border border-gray-600 bg-gray-800 p-4">
+            <p className="mb-3 text-sm font-medium text-gray-100">
+              Ubicacion para calcular delivery
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium mb-2">Latitud</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={lat}
+                  onChange={(e) => setLat(e.target.value)}
+                  className="w-full border rounded-lg p-3 text-gray-950"
+                  placeholder="-27.4699"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Longitud</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={lng}
+                  onChange={(e) => setLng(e.target.value)}
+                  className="w-full border rounded-lg p-3 text-gray-950"
+                  placeholder="-58.8306"
+                />
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-gray-300">
+              Estos datos se usan como punto de origen del envio.
             </p>
           </div>
 
