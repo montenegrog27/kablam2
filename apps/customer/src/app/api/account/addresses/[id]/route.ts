@@ -21,7 +21,7 @@ export async function PUT(
     const resolvedParams = await params;
     const addressId = resolvedParams.id;
     const body = await req.json();
-    const { alias, address, apartment, floor, notes, is_default } = body;
+    const { alias, address, apartment, floor, notes, latitude, longitude, is_default } = body;
 
     // Validaciones
     if (!alias || !address) {
@@ -63,6 +63,8 @@ export async function PUT(
         apartment: apartment || null,
         floor: floor || null,
         notes: notes || null,
+        latitude: Number.isFinite(Number(latitude)) ? Number(latitude) : null,
+        longitude: Number.isFinite(Number(longitude)) ? Number(longitude) : null,
         is_default: is_default || false,
         updated_at: new Date().toISOString(),
       })

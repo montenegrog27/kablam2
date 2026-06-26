@@ -136,6 +136,8 @@ export default function CheckoutForm({
   const [deliverySettings, setDeliverySettings] = useState<any>(null);
   const [shippingCost, setShippingCost] = useState(0);
   const [deliveryOutOfZone, setDeliveryOutOfZone] = useState(false);
+  const [shippingPending, setShippingPending] = useState(false);
+  const [shippingUnavailable, setShippingUnavailable] = useState(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<any>(null);
@@ -255,6 +257,42 @@ export default function CheckoutForm({
       .join(", ");
   }
 
+  function geocodeSavedAddress(address: SavedAddress, retries = 8) {
+    if (orderMode !== "delivery") return;
+
+    if (!(window as any).google?.maps?.Geocoder) {
+      if (retries > 0) {
+        setShippingPending(true);
+        window.setTimeout(() => geocodeSavedAddress(address, retries - 1), 400);
+        return;
+      }
+      setShippingPending(false);
+      setShippingUnavailable(true);
+      return;
+    }
+
+    setShippingPending(true);
+    setShippingUnavailable(false);
+    const geocoder = new (window as any).google.maps.Geocoder();
+    geocoder.geocode(
+      {
+        address: address.address,
+        componentRestrictions: { country: "AR" },
+      },
+      (results: any[], status: string) => {
+        setShippingPending(false);
+        const location = results?.[0]?.geometry?.location;
+        if (status === "OK" && location) {
+          setCustomerLat(location.lat());
+          setCustomerLng(location.lng());
+          setShippingUnavailable(false);
+          return;
+        }
+        setShippingUnavailable(true);
+      },
+    );
+  }
+
   function selectSavedAddress(address: SavedAddress) {
     setSelectedAddressId(address.id);
     setAddressKind(address.floor || address.apartment ? "apartment" : "house");
@@ -268,6 +306,11 @@ export default function CheckoutForm({
     if (address.latitude && address.longitude) {
       setCustomerLat(Number(address.latitude));
       setCustomerLng(Number(address.longitude));
+      setShippingUnavailable(false);
+    } else {
+      setCustomerLat(null);
+      setCustomerLng(null);
+      geocodeSavedAddress(address);
     }
   }
 
@@ -329,16 +372,26 @@ export default function CheckoutForm({
   }, [branchSlug, loadPaymentMethods]);
 
   useEffect(() => {
-    if (orderMode !== "delivery" || !customerLat || !customerLng || !branchLat || !branchLng || !deliverySettings) {
+    if (orderMode !== "delivery") {
       setShippingCost(0);
       setDeliveryOutOfZone(false);
+      setShippingUnavailable(false);
       return;
     }
+
+    if (!customerLat || !customerLng || !branchLat || !branchLng || !deliverySettings) {
+      setShippingCost(0);
+      setDeliveryOutOfZone(false);
+      setShippingUnavailable(Boolean(customer.address && !shippingPending));
+      return;
+    }
+
     const distance = calculateDistanceKm(branchLat, branchLng, customerLat, customerLng);
     const cost = calculateShippingCost(distance, deliverySettings);
     setDeliveryOutOfZone(cost === null);
     setShippingCost(cost ?? 0);
-  }, [customerLat, customerLng, branchLat, branchLng, deliverySettings, orderMode]);
+    setShippingUnavailable(false);
+  }, [customerLat, customerLng, branchLat, branchLng, deliverySettings, orderMode, customer.address, shippingPending]);
 
   // Google Maps Autocomplete
   useEffect(() => {
@@ -434,6 +487,7 @@ export default function CheckoutForm({
     if (!customer.name || !customer.phone) return false;
     if (orderMode === "delivery" && !customer.address) return false;
     if (orderMode === "delivery" && !customerLat && !mapLat && !customer.address) return false;
+    if (orderMode === "delivery" && deliverySettings?.enabled && (shippingPending || shippingUnavailable || !customerLat || !customerLng)) return false;
     if (orderMode === "delivery" && deliveryOutOfZone) return false;
     if (!selectedPaymentMethod) return false;
     if (selectedMethod?.requires_reference && !paymentReference.trim())
@@ -665,7 +719,13 @@ export default function CheckoutForm({
                         ref={addressInputRef}
                         placeholder="Calle, número, ciudad..."
                         value={customer.address}
-                        onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); setSelectedAddressId(""); }}
+                        onChange={(e) => {
+                          setCustomer((prev) => ({ ...prev, address: e.target.value }));
+                          setSelectedAddressId("");
+                          setCustomerLat(null);
+                          setCustomerLng(null);
+                          setShippingUnavailable(Boolean(e.target.value.trim()));
+                        }}
                         className="w-full bg-white border border-gray-200 rounded-xl pl-4 pr-4 py-3.5 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-gray-900/20 focus:border-gray-400 transition-all text-base hover:border-gray-300"
                       />
                     </div>
@@ -725,27 +785,43 @@ export default function CheckoutForm({
                       </div>
                     )}
 
-                    {/* <button
+                    <button
                       type="button"
-                      onClick={() => { setShowMapModal(true); if (branchLat && branchLng) { setMapLat(branchLat); setMapLng(branchLng); } }}
+                      onClick={() => {
+                        setShowMapModal(true);
+                        setMapLat(customerLat);
+                        setMapLng(customerLng);
+                      }}
                       className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
                     >
                       <MapIcon size={15} /> Indicar en el mapa
-                    </button> */}
+                    </button>
 
-                    {customerLat && customerLng && shippingCost > 0 && (
+                    {shippingPending && (
+                      <div className="text-sm text-gray-600 flex items-center gap-2 bg-gray-50 border border-gray-200 px-3.5 py-2.5 rounded-xl">
+                        <Truck size={15} className="text-gray-500" />
+                        <span className="font-medium text-gray-600">Calculando envio...</span>
+                      </div>
+                    )}
+                    {!shippingPending && shippingUnavailable && customer.address && (
+                      <div className="text-sm flex items-center gap-2 bg-amber-50 border border-amber-200 px-3.5 py-2.5 rounded-xl">
+                        <AlertCircle size={15} className="text-amber-600" />
+                        <span className="font-medium text-amber-700">Selecciona la direccion del autocompletado o marcala en el mapa para calcular el envio.</span>
+                      </div>
+                    )}
+                    {!shippingPending && customerLat && customerLng && shippingCost > 0 && (
                       <div className="text-sm text-gray-600 flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 rounded-xl">
                         <Truck size={15} className="text-emerald-600" />
                         <span className="font-medium text-emerald-700">Envío: ${shippingCost.toLocaleString("es-AR")}</span>
                       </div>
                     )}
-                    {customerLat && customerLng && deliveryOutOfZone && (
+                    {!shippingPending && customerLat && customerLng && deliveryOutOfZone && (
                       <div className="text-sm flex items-center gap-2 bg-red-50 border border-red-200 px-3.5 py-2.5 rounded-xl">
                         <AlertCircle size={15} className="text-red-600" />
                         <span className="font-medium text-red-700">Direccion fuera de zona de entrega</span>
                       </div>
                     )}
-                    {customerLat && customerLng && shippingCost === 0 && deliverySettings?.free_shipping_radius && (
+                    {!shippingPending && customerLat && customerLng && shippingCost === 0 && deliverySettings?.free_shipping_radius && (
                       <div className="text-sm flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 rounded-xl">
                         <Truck size={15} className="text-emerald-600" />
                         <span className="font-medium text-emerald-700">Envío gratis</span>
@@ -1001,7 +1077,11 @@ export default function CheckoutForm({
                     Envío
                   </span>
                   <span className="font-medium text-gray-900 tabular-nums">
-                    {deliveryOutOfZone
+                    {shippingPending
+                      ? <span className="text-gray-500">Calculando...</span>
+                      : shippingUnavailable || (deliverySettings?.enabled && customer.address && (!customerLat || !customerLng))
+                      ? <span className="text-amber-600">Elegí ubicación</span>
+                      : deliveryOutOfZone
                       ? <span className="text-red-600">Fuera de zona</span>
                       : shipping === 0 && deliverySettings?.free_shipping_radius
                       ? <span className="text-emerald-600">Gratis</span>
@@ -1119,6 +1199,7 @@ export default function CheckoutForm({
                   if (mapLat && mapLng) {
                     setCustomerLat(mapLat);
                     setCustomerLng(mapLng);
+                    setShippingUnavailable(false);
                     setCustomer((c) => ({ ...c, address: `📍 ${mapLat.toFixed(6)}, ${mapLng.toFixed(6)}` }));
                     setShowMapModal(false);
                   }
