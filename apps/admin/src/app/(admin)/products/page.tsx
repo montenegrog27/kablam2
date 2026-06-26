@@ -42,6 +42,8 @@ export default function ProductsPage() {
   const [allowHalf, setAllowHalf] = useState(false);
   const [isSuggestable, setIsSuggestable] = useState(false);
   const [showInMenu, setShowInMenu] = useState(true);
+  const [qrVisible, setQrVisible] = useState(true);
+  const [catalogVisible, setCatalogVisible] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
   const [isHero, setIsHero] = useState(false);
   const [isPreparable, setIsPreparable] = useState(true);
@@ -326,6 +328,8 @@ export default function ProductsPage() {
         allow_half: allowHalf,
         is_suggestable: isSuggestable,
         show_in_menu: showInMenu,
+        qr_visible: qrVisible,
+        catalog_visible: catalogVisible,
         is_featured: isFeatured,
         is_hero: isHero,
         is_preparable: isPreparable,
@@ -373,6 +377,9 @@ export default function ProductsPage() {
     setAllowHalf(false);
     setIsPreparable(true);
     setHasRecipe(true);
+    setShowInMenu(true);
+    setQrVisible(true);
+    setCatalogVisible(true);
     setImageFile(null);
 
     const { data: prods } = await supabase
@@ -454,7 +461,9 @@ export default function ProductsPage() {
     setDescription(product.description || "");
     setCategoryId(product.category_id);
     setAllowHalf(product.allow_half);
-    setShowInMenu(product.show_in_menu);
+    setShowInMenu(product.show_in_menu !== false);
+    setQrVisible(product.qr_visible !== false);
+    setCatalogVisible(product.catalog_visible !== false);
     setIsSuggestable(product.is_suggestable);
     setIsFeatured(product.is_featured);
     setIsHero(product.is_hero);
@@ -488,6 +497,9 @@ export default function ProductsPage() {
     setDescription("");
     setCategoryId(null);
     setHasRecipe(true);
+    setShowInMenu(true);
+    setQrVisible(true);
+    setCatalogVisible(true);
     resetPricing();
   };
 
@@ -553,6 +565,8 @@ export default function ProductsPage() {
         allow_half: allowHalf,
         is_suggestable: isSuggestable,
         show_in_menu: showInMenu,
+        qr_visible: qrVisible,
+        catalog_visible: catalogVisible,
         is_featured: isFeatured,
         is_hero: isHero,
         is_preparable: isPreparable,
@@ -912,7 +926,31 @@ export default function ProductsPage() {
                         onChange={(e) => setShowInMenu(e.target.checked)}
                       />
                       <span className="text-sm text-gray-300">
-                        Visible en menú
+                        Mostrar en delivery (/order)
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
+                        checked={qrVisible}
+                        onChange={(e) => setQrVisible(e.target.checked)}
+                      />
+                      <span className="text-sm text-gray-300">
+                        Mostrar en local QR (/qr)
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
+                        checked={catalogVisible}
+                        onChange={(e) => setCatalogVisible(e.target.checked)}
+                      />
+                      <span className="text-sm text-gray-300">
+                        Mostrar en catalogo (/catalogo)
                       </span>
                     </label>
 
@@ -1215,7 +1253,29 @@ export default function ProductsPage() {
                             onChange={(e) => setShowInMenu(e.target.checked)}
                           />
                           <span className="text-sm text-gray-300">
-                            Visible en menú
+                            Mostrar en delivery (/order)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
+                            checked={qrVisible}
+                            onChange={(e) => setQrVisible(e.target.checked)}
+                          />
+                          <span className="text-sm text-gray-300">
+                            Mostrar en local QR (/qr)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 text-black rounded border-gray-600 focus:ring-white"
+                            checked={catalogVisible}
+                            onChange={(e) => setCatalogVisible(e.target.checked)}
+                          />
+                          <span className="text-sm text-gray-300">
+                            Mostrar en catalogo (/catalogo)
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
@@ -1359,7 +1419,17 @@ export default function ProductsPage() {
                         <div className="flex gap-2">
                           {!product.show_in_menu && (
                             <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-                              Solo sugerencias
+                              Oculto delivery
+                            </span>
+                          )}
+                          {product.qr_visible === false && (
+                            <span className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-full">
+                              Oculto QR
+                            </span>
+                          )}
+                          {product.catalog_visible === false && (
+                            <span className="text-xs bg-pink-100 text-pink-700 px-2 py-1 rounded-full">
+                              Oculto catalogo
                             </span>
                           )}
                           {product.is_featured && (

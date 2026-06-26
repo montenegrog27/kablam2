@@ -10,7 +10,7 @@ export async function generateMetadata({
   params: Promise<{ branchSlug: string }>;
 }) {
   const { branchSlug } = await params;
-  const data = await loadQrMenu(branchSlug);
+  const data = await loadQrMenu(branchSlug, "catalog");
 
   if (!data) {
     return buildCustomerMetadata({ fallbackTitle: "Catalogo" });
@@ -33,7 +33,7 @@ export default async function CatalogPage({
   params: Promise<{ branchSlug: string }>;
 }) {
   const { branchSlug } = await params;
-  const data = await loadQrMenu(branchSlug);
+  const data = await loadQrMenu(branchSlug, "catalog");
 
   if (!data) notFound();
 

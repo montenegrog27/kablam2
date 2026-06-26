@@ -18,6 +18,7 @@ type ProductRow = {
   pricing_mode: "unit" | "kg" | "portion" | null;
   qr_position: number | null;
   qr_visible: boolean | null;
+  catalog_visible: boolean | null;
   product_variants: Array<{
     id: string;
     name: string;
@@ -90,7 +91,10 @@ function orderValue(value: number | null | undefined, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
-export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null> {
+export async function loadQrMenu(
+  branchSlug: string,
+  mode: "qr" | "catalog" = "qr",
+): Promise<QrMenuData | null> {
   const supabase = await createSupabaseServer();
 
   const { data: branch } = await supabase
@@ -124,6 +128,7 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
           pricing_mode,
           qr_position,
           qr_visible,
+          catalog_visible,
           product_variants(id, name, price, image_url, is_default, sort_order)
         `,
       )
@@ -141,7 +146,12 @@ export async function loadQrMenu(branchSlug: string): Promise<QrMenuData | null>
   const productsByCategory = new Map<string, QrMenuProduct[]>();
 
   ((products || []) as ProductRow[])
-    .filter((product) => product.qr_visible !== false && product.category_id && categoryById.has(product.category_id))
+    .filter((product) => {
+      const visibleForMode = mode === "catalog"
+        ? product.catalog_visible !== false
+        : product.qr_visible !== false;
+      return visibleForMode && product.category_id && categoryById.has(product.category_id);
+    })
     .sort((a, b) => orderValue(a.qr_position) - orderValue(b.qr_position) || a.name.localeCompare(b.name))
     .forEach((product) => {
       const variant = getVariant(product);

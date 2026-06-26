@@ -281,11 +281,12 @@ export async function POST(req: Request) {
         supabase
           .from("products")
           .select(
-            "id, name, branch_id, is_active, product_variants(id, name, price, is_default)",
+            "id, name, branch_id, is_active, catalog_visible, product_variants(id, name, price, is_default)",
           )
           .eq("id", productId)
           .eq("branch_id", branch.id)
           .eq("is_active", true)
+          .neq("catalog_visible", false)
           .maybeSingle(),
       ]);
 
