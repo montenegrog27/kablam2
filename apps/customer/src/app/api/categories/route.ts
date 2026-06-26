@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const slug = url.searchParams.get("slug");
@@ -32,12 +35,21 @@ export async function GET(req: Request) {
     .order("delivery_position")
     .order("position");
 
-  return Response.json(
-    (categories || []).map((category) => ({
+  const payload = (categories || [])
+    .map((category) => ({
       id: category.id,
       name: category.name,
       parent_id: category.parent_id,
       position: category.delivery_position ?? category.position ?? 0,
-    })),
-  );
+    }))
+    .sort((a, b) => {
+      if (a.position !== b.position) return a.position - b.position;
+      return a.name.localeCompare(b.name, "es");
+    });
+
+  return Response.json(payload, {
+    headers: {
+      "Cache-Control": "no-store, max-age=0",
+    },
+  });
 }

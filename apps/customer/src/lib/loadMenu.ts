@@ -190,6 +190,7 @@ export async function loadMenu(
       is_featured: p.is_featured || false,
       featured_order: p.featured_order || 0,
       is_suggestable: p.is_suggestable || false,
+      delivery_position: p.delivery_position ?? 0,
       show_in_menu: p.show_in_menu !== undefined ? p.show_in_menu : true,
       categories: p.categories
         ? [

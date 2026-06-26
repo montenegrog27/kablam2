@@ -83,6 +83,13 @@ export default function ProfessionalMenu({
       if (posA !== posB) return posA - posB;
       return a.name.localeCompare(b.name, "es");
     });
+  const sortProducts = (items: Product[]) =>
+    [...items].sort((a, b) => {
+      const posA = Number((a as any).delivery_position ?? 9999);
+      const posB = Number((b as any).delivery_position ?? 9999);
+      if (posA !== posB) return posA - posB;
+      return a.name.localeCompare(b.name, "es");
+    });
   
   // Merge product categories with API categories (API has the definitive order by position)
   let mergedCategories: Category[] = [];
@@ -201,7 +208,7 @@ export default function ProfessionalMenu({
   useEffect(() => {
     const slug = window.location.pathname.split("/")[1];
     if (!slug) return;
-    fetch(`/api/categories?slug=${slug}`)
+    fetch(`/api/categories?slug=${slug}`, { cache: "no-store" })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -246,9 +253,11 @@ export default function ProfessionalMenu({
   });
 
   // Deduplicate products by id
-  const uniqueProducts = filteredProducts.filter(
-    (product, index, self) =>
-      self.findIndex((p) => p.id === product.id) === index,
+  const uniqueProducts = sortProducts(
+    filteredProducts.filter(
+      (product, index, self) =>
+        self.findIndex((p) => p.id === product.id) === index,
+    ),
   );
 
   // Get featured products - buscar SIEMPRE desde todos los productos, no solo los filtrados
@@ -256,8 +265,8 @@ export default function ProfessionalMenu({
   const featuredProducts = uniqueProducts
     .filter((p) => p.is_featured && !p.is_hero)
     .sort((a, b) => ((a as any).featured_order || 999) - ((b as any).featured_order || 999));
-  const normalProducts = uniqueProducts.filter(
-    (p) => !p.is_featured && !p.is_hero,
+  const normalProducts = sortProducts(
+    uniqueProducts.filter((p) => !p.is_featured && !p.is_hero),
   );
 
   const getPrice = (product: Product) => {
@@ -728,7 +737,7 @@ function normalizePromotionQuantity(value: unknown) {
             // "Todos" tab: iterate all root categories
             if (activeTab === null) {
               return rootCategories.map((rootCat) => {
-                const rootProducts = uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === rootCat.id || c.parent_id === rootCat.id));
+                const rootProducts = sortProducts(uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === rootCat.id || c.parent_id === rootCat.id)));
                 if (rootProducts.length === 0) return null;
                 const subs = sortCategories(uniqueCategories.filter((c) => c.parent_id === rootCat.id));
                 return (
@@ -738,7 +747,7 @@ function normalizePromotionQuantity(value: unknown) {
                       {rootCat.name}
                     </h4>
                     {subs.length > 0 ? subs.map((sub) => {
-                      const subProducts = rootProducts.filter((p) => (p.categories || []).some((c) => c.id === sub.id));
+                      const subProducts = sortProducts(rootProducts.filter((p) => (p.categories || []).some((c) => c.id === sub.id)));
                       if (subProducts.length === 0) return null;
                       return (
                         <div key={sub.id} id={`sub-${sub.id}`} className="mb-4 ml-4">
@@ -757,7 +766,7 @@ function normalizePromotionQuantity(value: unknown) {
             // Specific category: show subcategory groups
             if (!activeSubcategory && currentSubcategories.length > 0) {
               return currentSubcategories.map((sub) => {
-                const subProducts = uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === sub.id));
+                const subProducts = sortProducts(uniqueProducts.filter((p) => (p.categories || []).some((c) => c.id === sub.id)));
                 if (subProducts.length === 0) return null;
                 return (
                   <div key={sub.id} id={`sub-${sub.id}`}>

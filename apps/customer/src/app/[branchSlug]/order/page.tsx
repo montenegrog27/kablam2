@@ -6,6 +6,9 @@ import { buildCustomerMetadata } from "@/lib/metadata";
 import { getBranchAvailability } from "@/lib/branchAvailability";
 import type { Product } from "@/types/menu";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function generateMetadata({
   params,
 }: {
