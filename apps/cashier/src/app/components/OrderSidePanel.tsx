@@ -35,12 +35,114 @@ const DEBUG_LOGS = process.env.NEXT_PUBLIC_DEBUG_LOGS === "true";
 const debugLog = (...args: unknown[]) => {
   if (DEBUG_LOGS) console.log(...args);
 };
+const PROMOTIONS_CATEGORY_ID = "__promotions__";
 
 const ORDER_TYPES = [
   { id: "delivery", label: "Delivery", description: "Con direccion y envio", icon: Bike },
   { id: "takeaway", label: "Takeaway", description: "Retira por el local", icon: Store },
   { id: "pedidosya", label: "PedidosYa", description: "Canal externo", icon: ShoppingBag },
 ];
+
+function getProductPrice(product: any) {
+  const defaultVariant =
+    product.product_variants?.find((variant: any) => variant.is_default) ||
+    product.product_variants?.[0];
+  return Number(product.price ?? defaultVariant?.price ?? 0);
+}
+
+function normalizePromotionQuantity(value: unknown) {
+  const parsed = Math.floor(Number(value || 1));
+  return Math.min(99, Math.max(1, Number.isFinite(parsed) ? parsed : 1));
+}
+
+function getPromotionPricing(promotion: any, items: any[]) {
+  const baseTotal = items.reduce((sum: number, item: any) => sum + getProductPrice(item), 0);
+  const rule = promotion.promotion_rules?.[0];
+  const discountType = rule?.discount_type || rule?.type || promotion.additional_product_config?.discountType;
+  const discountValue = Number(rule?.discount_value || promotion.additional_product_config?.discountValue || 0);
+  const percentFromBadge = Number(String(promotion.badge || "").match(/(\d+(?:[.,]\d+)?)\s*%/)?.[1]?.replace(",", ".") || 0);
+  let discountAmount = 0;
+  let discountLabel = promotion.badge || "PROMO";
+
+  if (discountType === "percentage" && discountValue > 0) {
+    discountAmount = baseTotal * (discountValue / 100);
+    discountLabel = `${discountValue}% OFF`;
+  } else if (discountType === "fixed" && discountValue > 0) {
+    discountAmount = discountValue;
+    discountLabel = `$${discountValue.toLocaleString("es-AR")} OFF`;
+  } else if (percentFromBadge > 0) {
+    discountAmount = baseTotal * (percentFromBadge / 100);
+    discountLabel = `${percentFromBadge}% OFF`;
+  }
+
+  discountAmount = Math.min(baseTotal, Math.max(0, Math.round(discountAmount)));
+  return {
+    baseTotal,
+    discountAmount,
+    discountLabel,
+    finalTotal: Math.max(0, baseTotal - discountAmount),
+  };
+}
+
+function buildPromotionProducts(promotions: any[], products: any[]) {
+  return promotions.flatMap((promotion) => {
+    const quantities = promotion.additional_product_config?.productQuantities || {};
+    const promoItems = (promotion.promotion_targets || [])
+      .filter((target: any) => target.target_type === "combo" || target.target_type === "product")
+      .flatMap((target: any) => {
+        const item = products.find((product) =>
+          target.target_type === "combo"
+            ? product.is_combo && product.id === target.target_id
+            : !product.is_combo && product.id === target.target_id,
+        );
+        if (!item) return [];
+        const quantity = target.target_type === "product"
+          ? normalizePromotionQuantity(quantities[target.target_id] || target.quantity)
+          : 1;
+        return Array.from({ length: quantity }, () => item);
+      });
+
+    if (!promoItems.length) return [];
+    const pricing = getPromotionPricing(promotion, promoItems);
+    const image =
+      promotion.image_type === "custom" && promotion.image_url
+        ? promotion.image_url
+        : promoItems[0]?.product_variants?.[0]?.image_url;
+
+    return [{
+      id: `promotion-${promotion.id}`,
+      product_id: null,
+      category_id: PROMOTIONS_CATEGORY_ID,
+      name: promotion.name,
+      description: promotion.description || promoItems.map((item: any) => item.name).join(" + "),
+      is_active: true,
+      show_in_menu: true,
+      item_type: "promotion",
+      is_promotion: true,
+      product_variants: [{
+        id: `promotion-${promotion.id}-variant`,
+        name: "Promo",
+        price: pricing.finalTotal,
+        image_url: image,
+        is_default: true,
+      }],
+      promotion: {
+        id: promotion.id,
+        name: promotion.name,
+        badge: pricing.discountLabel,
+        originalPrice: pricing.baseTotal,
+        discountAmount: pricing.discountAmount,
+        finalPrice: pricing.finalTotal,
+        items: promoItems.map((item: any, index: number) => ({
+          id: `${item.id}-${index}`,
+          name: item.name,
+          itemType: item.is_combo ? "combo" : "product",
+          price: getProductPrice(item),
+        })),
+      },
+    }];
+  });
+}
 
 export default function OrderSidePanel({
   selectedOrder,
@@ -259,9 +361,18 @@ export default function OrderSidePanel({
 
   const loadProducts = async () => {
     if (!branchId || !tenantId) return;
-    const [{ data: prods }, { data: combos }] = await Promise.all([
-      supabase.from("products").select("*, product_variants(*)").eq("branch_id", branchId),
-      supabase.from("combos").select("*, categories(name)").eq("tenant_id", tenantId).eq("is_active", true),
+    const now = new Date().toISOString();
+    const [{ data: prods }, { data: combos }, { data: promotions }] = await Promise.all([
+      supabase.from("products").select("*, categories(*), product_variants(*)").eq("branch_id", branchId).eq("is_active", true),
+      supabase.from("combos").select("*, categories(*)").eq("branch_id", branchId).eq("is_active", true),
+      supabase
+        .from("promotions")
+        .select("*, promotion_targets(target_type, target_id), promotion_rules(*)")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .eq("show_in_home", true)
+        .or(`start_date.is.null,start_date.lte.${now}`)
+        .or(`end_date.is.null,end_date.gte.${now}`),
     ]);
     // Convert combos to product-like objects with a generated variant
     const comboProducts = (combos || []).map((combo: any) => ({
@@ -273,7 +384,9 @@ export default function OrderSidePanel({
       is_combo: true,
       product_variants: [{ id: combo.id + "-variant", name: "Combo", price: combo.price, is_default: true }],
     }));
-    setProducts([...(prods || []), ...comboProducts]);
+    const baseProducts = [...(prods || []), ...comboProducts];
+    const promotionProducts = buildPromotionProducts(promotions || [], baseProducts);
+    setProducts([...baseProducts, ...promotionProducts]);
   };
 
   const loadCategories = async () => {
@@ -777,18 +890,32 @@ export default function OrderSidePanel({
 
     const itemsToInsert = cart.map((item) => {
       const isCombo = item.variant.is_combo === true;
+      const isPromotion = item.variant.item_type === "promotion" || item.variant.is_promotion === true;
       const itemId = item.variant.product_id || item.variant.id;
+      const promotion = item.variant.promotion;
 
       return {
         order_id: orderId,
-        item_type: isCombo ? "combo" : "product",
-        product_id: isCombo ? null : itemId,
+        item_type: isPromotion ? "promotion" : isCombo ? "combo" : "product",
+        product_id: isCombo || isPromotion ? null : itemId,
         combo_id: isCombo ? itemId : null,
-        variant_id: isCombo ? null : item.variant.variant_id || null,
+        variant_id: isCombo || isPromotion ? null : item.variant.variant_id || null,
         quantity: item.quantity,
         unit_price: item.variant.price,
         total: item.variant.price * item.quantity,
         note: item.note || "",
+        extras: isPromotion && promotion
+          ? [
+              { type: "promotion", id: promotion.id, name: promotion.name, price: promotion.finalPrice },
+              ...((promotion.items || []).map((promoItem: any) => ({
+                type: "incluye",
+                id: promoItem.id,
+                itemType: promoItem.itemType,
+                name: promoItem.name,
+                price: promoItem.price,
+              }))),
+            ]
+          : [],
       };
     });
 
@@ -988,10 +1115,40 @@ export default function OrderSidePanel({
     0,
   );
   const normalizedSearch = productSearch.trim().toLowerCase();
-  const searchResults = products
+  const categoryById = new Map(categories.map((category: any) => [category.id, category]));
+  const isDeliveryOrder = orderType === "delivery";
+  const filteredProducts = products
+    .filter((product) => {
+      if (product.is_active === false) return false;
+      const category = categoryById.get(product.category_id) as any;
+      if (isDeliveryOrder && product.item_type !== "promotion") {
+        if (product.show_in_menu === false) return false;
+        if (category?.delivery_visible === false) return false;
+      }
+      if (selectedCategory && selectedCategory !== "all") {
+        return product.category_id === selectedCategory;
+      }
+      return true;
+    });
+  const visibleCategories = categories
+    .filter((category: any) => {
+      if (category.active === false) return false;
+      if (isDeliveryOrder && category.delivery_visible === false) return false;
+      return filteredProducts.some((product) => product.category_id === category.id);
+    })
+    .sort((a: any, b: any) => {
+      const aOrder = isDeliveryOrder ? a.delivery_position ?? a.position ?? 9999 : a.position ?? 9999;
+      const bOrder = isDeliveryOrder ? b.delivery_position ?? b.position ?? 9999 : b.position ?? 9999;
+      return aOrder - bOrder || a.name?.localeCompare(b.name);
+    });
+  const hasPromotions = products.some((product) => product.item_type === "promotion");
+  const menuCategories = hasPromotions
+    ? [{ id: PROMOTIONS_CATEGORY_ID, name: "Promos", icon: "PROMO" }, ...visibleCategories]
+    : visibleCategories;
+  const searchResults = filteredProducts
     .filter((product) => {
       if (!normalizedSearch) return true;
-      const category = categories.find((cat: any) => cat.id === product.category_id);
+      const category = categoryById.get(product.category_id) as any;
       return [product.name, product.description, category?.name]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
@@ -1002,7 +1159,7 @@ export default function OrderSidePanel({
       const bStarts = b.name?.toLowerCase().startsWith(normalizedSearch) ? 0 : 1;
       return aStarts - bStarts || a.name?.localeCompare(b.name);
     })
-    .slice(0, normalizedSearch ? 12 : 8);
+    .slice(0, normalizedSearch ? 16 : 30);
 
   const orderTypeMeta =
     ORDER_TYPES.find((type) => type.id === orderType) || ORDER_TYPES[1];
@@ -1072,7 +1229,10 @@ export default function OrderSidePanel({
                 return (
                 <button
                   key={type.id}
-                  onClick={() => setOrderType(type.id)}
+                  onClick={() => {
+                    setOrderType(type.id);
+                    setSelectedCategory(null);
+                  }}
                   className={`rounded-xl border px-3 py-2 text-left transition ${
                     active
                       ? "border-slate-950 bg-white shadow-sm"
@@ -1123,6 +1283,33 @@ export default function OrderSidePanel({
                 <p className="mt-1.5 text-[11px] font-medium text-slate-400">
                   Enter agrega el primer resultado. Click agrega directo.
                 </p>
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(null)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase transition ${
+                      !selectedCategory || selectedCategory === "all"
+                        ? "bg-slate-950 text-white"
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  {menuCategories.map((category: any) => (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase transition ${
+                        selectedCategory === category.id
+                          ? "bg-slate-950 text-white"
+                          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      }`}
+                    >
+                      {category.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="mt-3 max-h-[46vh] overflow-y-auto rounded-xl border border-slate-200 bg-white">
@@ -1137,7 +1324,8 @@ export default function OrderSidePanel({
                         product.product_variants?.find((variant: any) => variant.is_default) ||
                         product.product_variants?.[0];
                       const price = Number(product.price ?? defaultVariant?.price ?? 0);
-                      const category = categories.find((cat: any) => cat.id === product.category_id);
+                      const category = categoryById.get(product.category_id) as any;
+                      const isPromotion = product.item_type === "promotion";
 
                       return (
                         <button
@@ -1153,8 +1341,8 @@ export default function OrderSidePanel({
                             <p className="truncate text-sm font-bold text-slate-950">
                               {product.name}
                             </p>
-                            {category?.name && (
-                              <p className="truncate text-[11px] font-medium text-slate-400">{category.name}</p>
+                            {(category?.name || isPromotion) && (
+                              <p className="truncate text-[11px] font-medium text-slate-400">{isPromotion ? product.promotion?.badge || "Promo" : category.name}</p>
                             )}
                           </div>
                           <div className="flex items-center gap-3">
