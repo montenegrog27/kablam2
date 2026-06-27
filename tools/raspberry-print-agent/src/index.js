@@ -134,7 +134,9 @@ async function sendToPrinter(buffer, printer) {
   await writeToDevice(buffer);
 }
 
-async function printOrder(orderId, reason = "realtime") {
+async function printOrder(orderId, reason = "realtime", options = {}) {
+  const force = options.force === true;
+  const dedupeSuffix = options.dedupeSuffix || "";
   const order = await fetchOrder(orderId);
   if (!order) {
     console.warn(`[print-agent] Order ${orderId} not found for branch ${branchId}`);
@@ -157,8 +159,8 @@ async function printOrder(orderId, reason = "realtime") {
     }
 
     for (const printer of printers) {
-      const key = markKey(order.id, jobType, printer.id);
-      if (printed.has(key)) continue;
+      const key = `${markKey(order.id, jobType, printer.id)}${dedupeSuffix}`;
+      if (!force && printed.has(key)) continue;
 
       const items = jobType === "comanda" ? await filterItemsForPrinter(order, printer) : order.order_items || [];
       if (jobType === "comanda" && items.length === 0) {
@@ -201,10 +203,21 @@ function subscribeRealtime() {
       async (payload) => {
         const oldStatus = payload.old?.status;
         const nextStatus = payload.new?.status;
-        if (oldStatus !== "confirmed" || nextStatus !== "preparing") return;
+        const oldReprintAt = payload.old?.reprint_at || null;
+        const nextReprintAt = payload.new?.reprint_at || null;
+        const shouldAutoPrint = nextStatus === "preparing" && oldStatus !== "preparing";
+        const shouldReprint = nextReprintAt && nextReprintAt !== oldReprintAt;
+        if (!shouldAutoPrint && !shouldReprint) return;
 
         try {
-          await printOrder(payload.new.id, "realtime");
+          if (shouldReprint) {
+            await printOrder(payload.new.id, "reprint", {
+              force: true,
+              dedupeSuffix: `:${nextReprintAt}`,
+            });
+          } else {
+            await printOrder(payload.new.id, "realtime");
+          }
         } catch (error) {
           console.error(`[print-agent] Print failed for ${payload.new.id}:`, error);
         }

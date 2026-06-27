@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { CalendarDays, Clock3, RefreshCw, UserPlus, Users } from "lucide-react";
+import { CalendarDays, Clock3, Pencil, RefreshCw, UserPlus, Users, X } from "lucide-react";
 
 type Employee = {
   id?: string;
@@ -91,6 +91,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -186,6 +187,35 @@ export default function EmployeesPage() {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const resetForm = () => {
+    setEditingEmployeeId(null);
+    setForm({
+      name: "",
+      email: "",
+      access_code: "",
+      salary: "",
+      salary_frequency: "MONTHLY",
+      role_id: roles[0]?.id || "",
+      branch_id: branches[0]?.id || "",
+    });
+  };
+
+  const editEmployee = (employee: Employee) => {
+    if (!employee.id) return;
+    setEditingEmployeeId(employee.id);
+    setMessage("");
+    setTab("employees");
+    setForm({
+      name: employee.name || "",
+      email: employee.email || "",
+      access_code: employee.access_code || "",
+      salary: employee.salary ? String(employee.salary) : "",
+      salary_frequency: employee.salary_frequency || "MONTHLY",
+      role_id: employee.role_id || "",
+      branch_id: employee.branch_id || "",
+    });
+  };
+
   const saveEmployee = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!tenantId || !form.name.trim() || !form.access_code.trim()) {
@@ -210,23 +240,17 @@ export default function EmployeesPage() {
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from("employees").upsert(payload, { onConflict: "tenant_id,access_code" });
+    const { error } = editingEmployeeId
+      ? await supabase.from("employees").update(payload).eq("id", editingEmployeeId).eq("tenant_id", tenantId)
+      : await supabase.from("employees").upsert(payload, { onConflict: "tenant_id,access_code" });
     setSaving(false);
     if (error) {
       setMessage(error.message);
       return;
     }
 
-    setForm({
-      name: "",
-      email: "",
-      access_code: "",
-      salary: "",
-      salary_frequency: "MONTHLY",
-      role_id: roles[0]?.id || "",
-      branch_id: branches[0]?.id || "",
-    });
-    setMessage("Empleado guardado.");
+    resetForm();
+    setMessage(editingEmployeeId ? "Empleado actualizado." : "Empleado guardado.");
     await load();
   };
 
@@ -267,7 +291,7 @@ export default function EmployeesPage() {
           <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
             <div className="mb-4 flex items-center gap-2">
               <UserPlus size={18} className="text-gray-400" />
-              <h2 className="font-black text-gray-100">Nuevo empleado</h2>
+              <h2 className="font-black text-gray-100">{editingEmployeeId ? "Editar empleado" : "Nuevo empleado"}</h2>
             </div>
             <form onSubmit={saveEmployee} className="space-y-3">
               <input className={inputClass} value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="Nombre" />
@@ -290,8 +314,14 @@ export default function EmployeesPage() {
                 </select>
               </div>
               <button disabled={saving} className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-gray-950 disabled:opacity-50">
-                {saving ? "Guardando..." : "Guardar empleado"}
+                {saving ? "Guardando..." : editingEmployeeId ? "Guardar cambios" : "Guardar empleado"}
               </button>
+              {editingEmployeeId && (
+                <button type="button" onClick={resetForm} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-700 px-4 py-2.5 text-sm font-bold text-gray-300 hover:bg-gray-800">
+                  <X size={16} />
+                  Cancelar edicion
+                </button>
+              )}
             </form>
           </section>
 
@@ -308,9 +338,15 @@ export default function EmployeesPage() {
                     <p className="mt-1 text-xs text-gray-500">{employee.email || "Sin email"} · {roleName(employee)} · codigo {employee.access_code}</p>
                     <p className="mt-1 text-xs text-gray-400">{money(Number(employee.salary || 0))} · {employee.salary_frequency} · {money(hourlyRate(employee))}/h estimado</p>
                   </div>
-                  <button onClick={() => toggleEmployee(employee)} className={`rounded-xl border px-3 py-2 text-xs font-bold ${employee.is_active === false ? "border-gray-700 text-gray-400" : "border-emerald-700 text-emerald-300"}`}>
-                    {employee.is_active === false ? "Inactivo" : "Activo"}
-                  </button>
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    <button onClick={() => editEmployee(employee)} className="inline-flex items-center gap-2 rounded-xl border border-gray-700 px-3 py-2 text-xs font-bold text-gray-300 hover:bg-gray-800">
+                      <Pencil size={14} />
+                      Editar
+                    </button>
+                    <button onClick={() => toggleEmployee(employee)} className={`rounded-xl border px-3 py-2 text-xs font-bold ${employee.is_active === false ? "border-gray-700 text-gray-400" : "border-emerald-700 text-emerald-300"}`}>
+                      {employee.is_active === false ? "Inactivo" : "Activo"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
+import { printOrder } from "@/lib/printOrder";
+import { Printer } from "lucide-react";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-AR").format(value || 0);
@@ -50,6 +52,7 @@ export default function OrderCard({
   const [showRiderSelect, setShowRiderSelect] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   const paid = order.paid_amount || 0;
   const remaining = order.total - paid;
@@ -198,6 +201,32 @@ ${customerWhatsappUrl}`;
   const handleDelete = async () => {
     if (!confirm("¿Eliminar este pedido permanentemente? Esta acción no se puede deshacer.")) return;
     await supabase.from("orders").delete().eq("id", order.id);
+  };
+
+  const handleReprintComanda = async () => {
+    if (printing) return;
+    setPrinting(true);
+
+    try {
+      await supabase
+        .from("orders")
+        .update({ reprint_at: new Date().toISOString() })
+        .eq("id", order.id);
+
+      const logs = await printOrder({
+        orderId: order.id,
+        type: "comanda",
+        branchId: order.branch_id,
+      });
+
+      console.log("[REPRINT COMANDA]", logs);
+      alert("Solicitud de impresion enviada.");
+    } catch (error: any) {
+      console.error("Reprint error:", error);
+      alert(`No se pudo solicitar la impresion: ${error?.message || "error desconocido"}`);
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const canDelete = userRecord && ["owner", "admin"].includes(userRecord.role);
@@ -451,13 +480,12 @@ ${customerWhatsappUrl}`;
 
         {order.status === "confirmed" || order.status === "preparing" || order.status === "ready" || order.status === "sent" ? (
           <button
-            onClick={async () => {
-              await supabase.from("orders").update({ reprint_at: new Date().toISOString() }).eq("id", order.id);
-            }}
-            className="px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition"
-            title="Reimprimir"
+            onClick={handleReprintComanda}
+            disabled={printing}
+            className="px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition disabled:opacity-50"
+            title="Reimprimir comanda"
           >
-            🖨️
+            {printing ? "..." : <Printer size={15} />}
           </button>
         ) : null}
 
