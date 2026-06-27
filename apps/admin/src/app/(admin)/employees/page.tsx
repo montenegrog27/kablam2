@@ -242,10 +242,10 @@ export default function EmployeesPage() {
 
     const { error } = editingEmployeeId
       ? await supabase.from("employees").update(payload).eq("id", editingEmployeeId).eq("tenant_id", tenantId)
-      : await supabase.from("employees").upsert(payload, { onConflict: "tenant_id,access_code" });
+      : await supabase.from("employees").insert(payload);
     setSaving(false);
     if (error) {
-      setMessage(error.message);
+      setMessage(error.code === "23505" ? "Ya existe un empleado con ese codigo de acceso." : error.message);
       return;
     }
 
