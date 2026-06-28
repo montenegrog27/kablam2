@@ -51,12 +51,10 @@ const loadRegisters = async () => {
 
   if (error) {
     console.error("REGISTER ERROR:", error);
-    setLoading(false);
-    return;
   }
 
   const relationRegisters =
-    data?.map((r: any) => r.cash_registers).filter(Boolean) || [];
+    error ? [] : data?.map((r: any) => r.cash_registers).filter(Boolean) || [];
 
   const byId = new Map<string, any>();
   [...assignedRegisters, ...relationRegisters].forEach((register) => {

@@ -114,6 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/delivery-settings", label: "Delivery", icon: Truck },
       { href: "/delivery-zones", label: "Zonas Delivery", icon: MapPin },
       { href: "/payment-methods", label: "Métodos de Pago", icon: CreditCard },
+      { href: "/cash_registers", label: "Cajas", icon: Calculator },
       { href: "/settings/financial", label: "Finanzas", icon: Calculator },
       { href: "/media-library", label: "Mis Imagenes", icon: Upload },
       { href: "/customer-hub", label: "Hub Cliente", icon: LinkIcon },
