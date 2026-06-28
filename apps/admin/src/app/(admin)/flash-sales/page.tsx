@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Plus, Trash2, Clock, Percent, Tag } from "lucide-react";
+import { Clock, Percent, Pencil, Plus, Trash2, X } from "lucide-react";
 
 export default function FlashSalesPage() {
   const [sales, setSales] = useState<any[]>([]);
@@ -19,8 +19,29 @@ export default function FlashSalesPage() {
   const [showInQr, setShowInQr] = useState(true);
   const [showInCatalog, setShowInCatalog] = useState(true);
   const [showInOrder, setShowInOrder] = useState(true);
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
 
   useEffect(() => { loadData(); }, []);
+
+  const formatDateTimeLocal = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  const resetForm = () => {
+    setDiscountPct(20);
+    setDisplayType("percentage");
+    setDisplayLabel("SALE");
+    setStartAt("");
+    setEndAt("");
+    setSelectedCategories([]);
+    setShowInQr(true);
+    setShowInCatalog(true);
+    setShowInOrder(true);
+    setEditingSaleId(null);
+  };
 
   const loadData = async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -37,9 +58,9 @@ export default function FlashSalesPage() {
     setCategories(c || []);
   };
 
-  const createSale = async () => {
+  const saveSale = async () => {
     if (!tenantId || !startAt || !endAt) return;
-    const { data: sale, error } = await supabase.from("flash_sales").insert({
+    const payload = {
       tenant_id: tenantId,
       branch_id: branchId,
       discount_percentage: discountPct,
@@ -50,13 +71,41 @@ export default function FlashSalesPage() {
       show_in_qr: showInQr,
       show_in_catalog: showInCatalog,
       show_in_order: showInOrder,
-    }).select().single();
+    };
+
+    const { data: sale, error } = editingSaleId
+      ? await supabase.from("flash_sales").update(payload).eq("id", editingSaleId).select().single()
+      : await supabase.from("flash_sales").insert(payload).select().single();
+
     if (error || !sale) { alert(error?.message); return; }
-    if (selectedCategories.length > 0) {
-      await supabase.from("flash_sale_categories").insert(selectedCategories.map((catId) => ({ flash_sale_id: sale.id, category_id: catId })));
+
+    if (editingSaleId) {
+      const { error: deleteError } = await supabase.from("flash_sale_categories").delete().eq("flash_sale_id", editingSaleId);
+      if (deleteError) { alert(deleteError.message); return; }
     }
-    setDiscountPct(20); setStartAt(""); setEndAt(""); setSelectedCategories([]); setShowInQr(true); setShowInCatalog(true); setShowInOrder(true);
+
+    if (selectedCategories.length > 0) {
+      const { error: categoriesError } = await supabase
+        .from("flash_sale_categories")
+        .insert(selectedCategories.map((catId) => ({ flash_sale_id: sale.id, category_id: catId })));
+      if (categoriesError) { alert(categoriesError.message); return; }
+    }
+    resetForm();
     loadData();
+  };
+
+  const editSale = (sale: any) => {
+    setEditingSaleId(sale.id);
+    setDiscountPct(Number(sale.discount_percentage || 20));
+    setDisplayType(sale.display_type === "label" ? "label" : "percentage");
+    setDisplayLabel(sale.display_label || "SALE");
+    setStartAt(formatDateTimeLocal(sale.start_at));
+    setEndAt(formatDateTimeLocal(sale.end_at));
+    setSelectedCategories((sale.flash_sale_categories || []).map((item: any) => item.category_id).filter(Boolean));
+    setShowInQr(sale.show_in_qr !== false);
+    setShowInCatalog(sale.show_in_catalog !== false);
+    setShowInOrder(sale.show_in_order !== false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const deleteSale = async (id: string) => {
@@ -77,6 +126,18 @@ export default function FlashSalesPage() {
       <p className="text-sm text-gray-400 mb-6">Creá ofertas flash aplicables a categorías o subcategorías</p>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-100">{editingSaleId ? "Editar oferta flash" : "Nueva oferta flash"}</h2>
+            <p className="text-xs text-gray-500">{editingSaleId ? "Actualizá los datos y guardá los cambios." : "Definí el descuento, vigencia, canales y categorías."}</p>
+          </div>
+          {editingSaleId && (
+            <button onClick={resetForm} className="inline-flex items-center gap-1 rounded-lg border border-gray-700 px-3 py-2 text-xs font-bold text-gray-300 hover:bg-gray-800">
+              <X size={14} />
+              Cancelar
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs text-gray-400 mb-1">% Descuento</label>
@@ -139,7 +200,10 @@ export default function FlashSalesPage() {
             ))}
           </div>
         </div>
-        <button onClick={createSale} disabled={!startAt || !endAt || selectedCategories.length === 0} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-black disabled:opacity-50 flex items-center gap-1"><Plus size={16} /> Crear oferta</button>
+        <button onClick={saveSale} disabled={!startAt || !endAt || selectedCategories.length === 0} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-black disabled:opacity-50 flex items-center gap-1">
+          {editingSaleId ? <Pencil size={16} /> : <Plus size={16} />}
+          {editingSaleId ? "Guardar cambios" : "Crear oferta"}
+        </button>
       </div>
 
       <div className="space-y-2">
@@ -169,6 +233,7 @@ export default function FlashSalesPage() {
               <button onClick={() => toggleActive(sale)} className={`px-2 py-1 rounded text-xs font-medium ${sale.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400"}`}>
                 {sale.is_active ? "Activa" : "Inactiva"}
               </button>
+              <button onClick={() => editSale(sale)} className="p-1.5 rounded hover:bg-gray-800 text-gray-300"><Pencil size={14} /></button>
               <button onClick={() => deleteSale(sale.id)} className="p-1.5 rounded hover:bg-red-50 text-red-400"><Trash2 size={14} /></button>
             </div>
           </div>
