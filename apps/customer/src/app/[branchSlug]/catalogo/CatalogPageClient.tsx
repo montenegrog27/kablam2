@@ -308,13 +308,19 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                           {product.name}
                         </h3>
                         <div className="mt-3 flex items-center justify-between gap-2">
-                          <span className="text-base font-black" style={{ color: accentColor }}>
+                          <span className="text-base font-black" style={{ color: product.originalPrice ? "#dc2626" : accentColor }}>
                             {product.pricingMode && product.pricingMode !== "unit"
                               ? (product.variants || [])
                                   .slice(0, 2)
-                                  .map((variant) => `${variant.name} - ${money(variant.price)}`)
+                                  .map((variant) => `${variant.name} - ${variant.originalPrice && variant.originalPrice > variant.price ? `${money(variant.originalPrice)} -> ` : ""}${money(variant.price)}`)
                                   .join(" | ")
-                              : money(product.price)}
+                              : (
+                                <span className="flex flex-col">
+                                  {product.saleBadge && <span className="text-[10px] font-black uppercase text-red-600">{product.saleBadge}</span>}
+                                  {product.originalPrice && product.originalPrice > product.price && <span className="text-xs text-stone-400 line-through">{money(product.originalPrice)}</span>}
+                                  <span>{money(product.price)}</span>
+                                </span>
+                              )}
                           </span>
                           <span className="rounded-full bg-stone-100 px-2 py-1 text-[10px] font-black text-stone-600">
                             Ver
@@ -364,7 +370,14 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   )}
                 </div>
                 <p className="whitespace-nowrap text-xl font-black" style={{ color: accentColor }}>
-                  {money(selectedPrice)}
+                  {selectedVariant?.originalPrice && selectedVariant.originalPrice > selectedPrice ? (
+                    <span className="flex flex-col items-end">
+                      <span className="text-sm font-bold text-stone-400 line-through">{money(selectedVariant.originalPrice)}</span>
+                      <span className="text-xl font-black text-red-600">{money(selectedPrice)}</span>
+                    </span>
+                  ) : (
+                    money(selectedPrice)
+                  )}
                 </p>
               </div>
 
@@ -404,7 +417,12 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                           }`}
                         >
                           <span>{variant.name}</span>
-                          <span style={{ color: accentColor }}>{money(variant.price)}</span>
+                          <span className="text-right">
+                            {variant.originalPrice && variant.originalPrice > variant.price && (
+                              <span className="block text-xs text-stone-400 line-through">{money(variant.originalPrice)}</span>
+                            )}
+                            <span style={{ color: variant.originalPrice ? "#dc2626" : accentColor }}>{money(variant.price)}</span>
+                          </span>
                         </button>
                       ))}
                     </div>

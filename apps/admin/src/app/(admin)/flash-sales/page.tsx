@@ -16,6 +16,9 @@ export default function FlashSalesPage() {
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [showInQr, setShowInQr] = useState(true);
+  const [showInCatalog, setShowInCatalog] = useState(true);
+  const [showInOrder, setShowInOrder] = useState(true);
 
   useEffect(() => { loadData(); }, []);
 
@@ -44,12 +47,15 @@ export default function FlashSalesPage() {
       display_label: displayLabel,
       start_at: new Date(startAt).toISOString(),
       end_at: new Date(endAt).toISOString(),
+      show_in_qr: showInQr,
+      show_in_catalog: showInCatalog,
+      show_in_order: showInOrder,
     }).select().single();
     if (error || !sale) { alert(error?.message); return; }
     if (selectedCategories.length > 0) {
       await supabase.from("flash_sale_categories").insert(selectedCategories.map((catId) => ({ flash_sale_id: sale.id, category_id: catId })));
     }
-    setDiscountPct(20); setStartAt(""); setEndAt(""); setSelectedCategories([]);
+    setDiscountPct(20); setStartAt(""); setEndAt(""); setSelectedCategories([]); setShowInQr(true); setShowInCatalog(true); setShowInOrder(true);
     loadData();
   };
 
@@ -100,6 +106,20 @@ export default function FlashSalesPage() {
         </div>
         <div>
           <label className="block text-xs text-gray-400 mb-1">Categorías / Subcategorías</label>
+          <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <label className="flex items-center gap-2 rounded-xl border border-gray-800 bg-gray-950 px-3 py-2 text-sm font-bold text-gray-300">
+              <input type="checkbox" checked={showInQr} onChange={(e) => setShowInQr(e.target.checked)} />
+              Menu QR
+            </label>
+            <label className="flex items-center gap-2 rounded-xl border border-gray-800 bg-gray-950 px-3 py-2 text-sm font-bold text-gray-300">
+              <input type="checkbox" checked={showInCatalog} onChange={(e) => setShowInCatalog(e.target.checked)} />
+              Catalogo
+            </label>
+            <label className="flex items-center gap-2 rounded-xl border border-gray-800 bg-gray-950 px-3 py-2 text-sm font-bold text-gray-300">
+              <input type="checkbox" checked={showInOrder} onChange={(e) => setShowInOrder(e.target.checked)} />
+              Delivery / Order
+            </label>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto">
             {categories.filter((c) => !c.parent_id).map((cat) => (
               <div key={cat.id}>
@@ -135,6 +155,13 @@ export default function FlashSalesPage() {
                   <Clock size={11} />
                   {new Date(sale.start_at).toLocaleDateString()} → {new Date(sale.end_at).toLocaleDateString()}
                   {" · "}{(sale.flash_sale_categories || []).length} categoría(s)
+                </p>
+                <p className="mt-1 text-[11px] font-bold uppercase text-gray-500">
+                  {[
+                    sale.show_in_qr !== false ? "QR" : null,
+                    sale.show_in_catalog !== false ? "Catalogo" : null,
+                    sale.show_in_order !== false ? "Order" : null,
+                  ].filter(Boolean).join(" / ") || "Sin canales"}
                 </p>
               </div>
             </div>

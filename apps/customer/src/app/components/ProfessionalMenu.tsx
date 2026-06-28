@@ -173,9 +173,12 @@ export default function ProfessionalMenu({
 
   // Fetch flash sales
   useEffect(() => {
-    const slug = window.location.pathname.split("/")[1];
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    const slug = parts[0];
+    const view = parts[1] || "order";
+    const channel = view === "qr" ? "qr" : view === "catalogo" ? "catalog" : "order";
     if (!slug) return;
-    fetch(`/api/flash-sales?branchSlug=${slug}`)
+    fetch(`/api/flash-sales?branchSlug=${slug}&channel=${channel}`)
       .then((r) => r.json())
       .then((data) => setFlashSales(Array.isArray(data) ? data : []))
       .catch(() => {});
@@ -284,7 +287,18 @@ export default function ProfessionalMenu({
 
   const handleAddProduct = (product: Product) => {
     if (disabled) return;
-    onAgregar(product);
+    const sale = getProductSale(product);
+    if (!sale) {
+      onAgregar(product);
+      return;
+    }
+    onAgregar({
+      ...product,
+      product_variants: (product.product_variants || []).map((variant) => ({
+        ...variant,
+        price: getSalePrice(Number(variant.price || 0), sale),
+      })),
+    });
   };
 
   const getImage = (product: Product) => {
@@ -325,6 +339,12 @@ export default function ProfessionalMenu({
     const s = getProductSale(product);
     if (!s) return null;
     return s.display_type === "label" ? s.display_label : `-${s.discount_percentage}%`;
+  };
+
+  const getSalePrice = (price: number, sale: any) => {
+    if (!sale) return price;
+    const discount = Math.min(100, Math.max(0, Number(sale.discount_percentage || 0)));
+    return Math.max(0, Math.round(price * (1 - discount / 100)));
   };
 
   const scrollToTab = (tabId: string | null) => {
@@ -752,11 +772,11 @@ function normalizePromotionQuantity(value: unknown) {
                       return (
                         <div key={sub.id} id={`sub-${sub.id}`} className="mb-4 ml-4">
                           <h5 className="text-sm font-semibold text-gray-500 mb-2">{sub.name}</h5>
-                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} loyalty={loyalty} disabled={disabled} />))}</div>
+                          <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} sale={getProductSale(product)} getSalePrice={getSalePrice} loyalty={loyalty} disabled={disabled} />))}</div>
                         </div>
                       );
                     }) : (
-                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} loyalty={loyalty} disabled={disabled} />))}</div>
+                      <div className="space-y-3 ml-4">{rootProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} sale={getProductSale(product)} getSalePrice={getSalePrice} loyalty={loyalty} disabled={disabled} />))}</div>
                     )}
                   </div>
                 );
@@ -774,12 +794,12 @@ function normalizePromotionQuantity(value: unknown) {
                       <span className="w-1 h-5 rounded-full" style={{ backgroundColor: brandColor }} />
                       {sub.name}
                     </h4>
-                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} loyalty={loyalty} disabled={disabled} />))}</div>
+                    <div className="space-y-3">{subProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} sale={getProductSale(product)} getSalePrice={getSalePrice} loyalty={loyalty} disabled={disabled} />))}</div>
                   </div>
                 );
               });
             }
-            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} loyalty={loyalty} disabled={disabled} />));
+            return normalProducts.map((product) => (<NormalProductCard key={product.id} product={product} onAgregar={handleAddProduct} brandColor={brandColor} fontFamily={fontFamily} getPrice={getPrice} getImage={getImage} formatPrice={formatPrice} saleBadge={getProductSaleBadge(product)} sale={getProductSale(product)} getSalePrice={getSalePrice} loyalty={loyalty} disabled={disabled} />));
           })()}
         </div>
       </div>
@@ -1160,6 +1180,8 @@ function NormalProductCard({
   getImage,
   formatPrice,
   saleBadge,
+  sale,
+  getSalePrice,
   loyalty,
   disabled = false,
 }: {
@@ -1171,10 +1193,15 @@ function NormalProductCard({
   getImage: (p: Product) => string | undefined;
   formatPrice: (p: number) => string;
   saleBadge?: string | null;
+  sale?: any;
+  getSalePrice: (price: number, sale: any) => number;
   loyalty?: LoyaltyProgram;
   disabled?: boolean;
 }) {
   const image = getImage(product);
+  const regularPrice = getPrice(product);
+  const salePrice = sale ? getSalePrice(regularPrice, sale) : regularPrice;
+  const hasSalePrice = Boolean(sale) && salePrice < regularPrice;
   const loyaltyEstimate = loyalty?.authenticated ? getProductLoyaltyEstimate(product, loyalty.rules) : { points: 0, extrasHint: false, extrasPointsPerExtra: 0 };
 
   return (
@@ -1240,11 +1267,13 @@ function NormalProductCard({
 
       {/* Price - 2 cols */}
       <div className="col-span-2 flex flex-col items-end justify-center">
-        <span
-          className="text-sm font-bold whitespace-nowrap"
-          style={{ color: brandColor }}
-        >
-          ${formatPrice(getPrice(product))}
+        {hasSalePrice && (
+          <span className="text-[11px] font-bold text-gray-400 line-through whitespace-nowrap">
+            ${formatPrice(regularPrice)}
+          </span>
+        )}
+        <span className="text-sm font-bold whitespace-nowrap" style={{ color: hasSalePrice ? "#dc2626" : brandColor }}>
+          ${formatPrice(hasSalePrice ? salePrice : regularPrice)}
         </span>
       </div>
 

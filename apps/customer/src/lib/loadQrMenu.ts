@@ -37,12 +37,17 @@ export type QrMenuProduct = {
   name: string;
   description?: string;
   price: number;
+  originalPrice?: number;
+  salePrice?: number;
+  saleBadge?: string;
   imageUrl?: string;
   pricingMode?: "unit" | "kg" | "portion";
   variants: Array<{
     id: string;
     name: string;
     price: number;
+    originalPrice?: number;
+    salePrice?: number;
     imageUrl?: string;
     isDefault: boolean;
   }>;
@@ -110,6 +115,17 @@ function getMenuFields(mode: "qr" | "catalog") {
       };
 }
 
+function getSalePrice(price: number, sale: any) {
+  if (!sale) return price;
+  const discount = Math.min(100, Math.max(0, Number(sale.discount_percentage || 0)));
+  return Math.max(0, Math.round(Number(price || 0) * (1 - discount / 100)));
+}
+
+function getSaleBadge(sale: any) {
+  if (!sale) return undefined;
+  return sale.display_type === "label" ? sale.display_label : `-${sale.discount_percentage}%`;
+}
+
 export async function loadQrMenu(
   branchSlug: string,
   mode: "qr" | "catalog" = "qr",
@@ -125,7 +141,9 @@ export async function loadQrMenu(
 
   if (!branch) return null;
 
-  const [{ data: branding }, { data: categories }, { data: products }] = await Promise.all([
+  const saleChannelColumn = mode === "catalog" ? "show_in_catalog" : "show_in_qr";
+  const now = new Date().toISOString();
+  const [{ data: branding }, { data: categories }, { data: products }, { data: flashSales }] = await Promise.all([
     supabase
       .from("branch_settings")
       .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days")
@@ -157,6 +175,14 @@ export async function loadQrMenu(
       .eq("is_active", true)
       .order(fields.productPosition, { ascending: true })
       .order("name", { ascending: true }),
+    supabase
+      .from("flash_sales")
+      .select("*, flash_sale_categories!left(category_id)")
+      .eq("tenant_id", branch.tenant_id)
+      .eq("is_active", true)
+      .eq(saleChannelColumn, true)
+      .lte("start_at", now)
+      .gte("end_at", now),
   ]);
 
   const visibleCategories = ((categories || []) as CategoryRow[])
@@ -168,6 +194,12 @@ export async function loadQrMenu(
     );
 
   const categoryById = new Map(visibleCategories.map((category) => [category.id, category]));
+  const saleByCategory = new Map<string, any>();
+  (flashSales || []).forEach((sale: any) => {
+    (sale.flash_sale_categories || []).forEach((row: any) => {
+      if (row.category_id) saleByCategory.set(row.category_id, sale);
+    });
+  });
   const productsByCategory = new Map<string, QrMenuProduct[]>();
 
   ((products || []) as ProductRow[])
@@ -179,12 +211,18 @@ export async function loadQrMenu(
     .forEach((product) => {
       const variant = getVariant(product);
       if (!variant || !product.category_id) return;
+      const sale = saleByCategory.get(product.category_id);
+      const price = Number(variant.price || 0);
+      const salePrice = sale ? getSalePrice(price, sale) : price;
       const current = productsByCategory.get(product.category_id) || [];
       current.push({
         id: product.id,
         name: product.name,
         description: product.description || undefined,
-        price: Number(variant.price || 0),
+        price: salePrice,
+        originalPrice: sale ? price : undefined,
+        salePrice: sale ? salePrice : undefined,
+        saleBadge: getSaleBadge(sale),
         imageUrl: variant.image_url || undefined,
         pricingMode: product.pricing_mode || "unit",
         variants: (product.product_variants || [])
@@ -196,7 +234,9 @@ export async function loadQrMenu(
           .map((item) => ({
             id: item.id,
             name: item.name,
-            price: Number(item.price || 0),
+            price: sale ? getSalePrice(Number(item.price || 0), sale) : Number(item.price || 0),
+            originalPrice: sale ? Number(item.price || 0) : undefined,
+            salePrice: sale ? getSalePrice(Number(item.price || 0), sale) : undefined,
             imageUrl: item.image_url || undefined,
             isDefault: Boolean(item.is_default),
           })),

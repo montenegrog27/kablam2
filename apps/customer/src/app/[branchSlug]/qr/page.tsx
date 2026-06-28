@@ -110,9 +110,19 @@ export default async function QrMenuPage({
                         <div className="min-w-0 flex-1 py-1">
                           <div className="flex items-start justify-between gap-3">
                             <h3 className="text-base font-black leading-tight">{product.name}</h3>
-                            <p className="whitespace-nowrap text-base font-black" style={{ color: brandColor }}>
-                              {money(product.price)}
-                            </p>
+                            <div className="text-right">
+                              {product.saleBadge && (
+                                <p className="mb-1 inline-flex rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">
+                                  {product.saleBadge}
+                                </p>
+                              )}
+                              {product.originalPrice && product.originalPrice > product.price && (
+                                <p className="text-xs font-bold text-slate-400 line-through">{money(product.originalPrice)}</p>
+                              )}
+                              <p className="whitespace-nowrap text-base font-black" style={{ color: product.originalPrice ? "#dc2626" : brandColor }}>
+                                {money(product.price)}
+                              </p>
+                            </div>
                           </div>
                           {product.description && (
                             <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-500">{product.description}</p>
