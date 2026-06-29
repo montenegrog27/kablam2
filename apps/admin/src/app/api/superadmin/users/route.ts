@@ -65,10 +65,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Validar role
-    const validRoles = ["owner", "admin", "cashier"];
+    const validRoles = ["owner", "manager", "admin", "cashier"];
     if (!validRoles.includes(role)) {
       return NextResponse.json(
-        { error: "Rol inválido. Debe ser: owner, admin, cashier" },
+        { error: "Rol inválido. Debe ser: owner, manager, admin, cashier" },
         { status: 400 },
       );
     }
@@ -221,10 +221,10 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const validRoles = ["owner", "admin", "cashier"];
+    const validRoles = ["owner", "manager", "admin", "cashier"];
     if (!validRoles.includes(role)) {
       return NextResponse.json(
-        { error: "Rol invÃ¡lido. Debe ser: owner, admin, cashier" },
+        { error: "Rol invÃ¡lido. Debe ser: owner, manager, admin, cashier" },
         { status: 400 },
       );
     }

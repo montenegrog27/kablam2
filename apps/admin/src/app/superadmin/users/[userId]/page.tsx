@@ -31,6 +31,7 @@ type UserRow = {
 
 const roles = [
   { value: "owner", label: "Owner (Dueño)" },
+  { value: "manager", label: "Manager (Gerente)" },
   { value: "admin", label: "Admin (Administrador)" },
   { value: "cashier", label: "Cashier (Cajero)" },
 ];

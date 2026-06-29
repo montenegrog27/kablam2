@@ -50,6 +50,42 @@ function weekStart(date = new Date()) {
   return current;
 }
 
+function argentinaDateString(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function localDateFromString(value: string) {
+  return new Date(`${value}T12:00:00-03:00`);
+}
+
+function addDays(value: string, days: number) {
+  const date = localDateFromString(value);
+  date.setDate(date.getDate() + days);
+  return argentinaDateString(date);
+}
+
+function weekRange(date = new Date()) {
+  const start = weekStart(date);
+  const startStr = argentinaDateString(start);
+  return {
+    from: startStr,
+    to: addDays(startStr, 6),
+  };
+}
+
+function dateToUtcStart(value: string) {
+  return new Date(`${value}T00:00:00-03:00`).toISOString();
+}
+
+function dateToUtcEnd(value: string) {
+  return new Date(`${value}T23:59:59.999-03:00`).toISOString();
+}
+
 function hoursBetween(start: string, end?: string | null) {
   const endTime = end ? new Date(end).getTime() : Date.now();
   return Math.max(0, (endTime - new Date(start).getTime()) / 3600000);
@@ -77,6 +113,27 @@ function dayKey(value: string) {
   }).format(new Date(value));
 }
 
+function formatTimeWithSeconds(value?: string | null) {
+  if (!value) return "abierto";
+  return new Date(value).toLocaleTimeString("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatDateTimeWithSeconds(value?: string | null) {
+  if (!value) return "abierto";
+  return new Date(value).toLocaleString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 function roleName(employee: Employee) {
   return employee.roles?.name || employee.role || "Sin rol";
 }
@@ -92,6 +149,9 @@ export default function EmployeesPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
+  const initialWeek = useMemo(() => weekRange(), []);
+  const [dateFrom, setDateFrom] = useState(initialWeek.from);
+  const [dateTo, setDateTo] = useState(initialWeek.to);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -102,7 +162,7 @@ export default function EmployeesPage() {
     branch_id: "",
   });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [dateFrom, dateTo]);
 
   const attendanceByEmployee = useMemo(() => {
     const map = new Map<string, { employee: Employee; rows: Attendance[]; rawHours: number }>();
@@ -158,7 +218,6 @@ export default function EmployeesPage() {
     if (!user?.tenant_id) return;
     setTenantId(user.tenant_id);
 
-    const start = weekStart();
     const [{ data: branchRows }, { data: roleRows }, { data: employeeRows }, { data: attendanceRows }] = await Promise.all([
       supabase.from("branches").select("id, name").eq("tenant_id", user.tenant_id).order("name"),
       supabase.from("roles").select("id, name").eq("tenant_id", user.tenant_id).eq("is_active", true).order("name"),
@@ -167,7 +226,8 @@ export default function EmployeesPage() {
         .from("employee_attendances")
         .select("*, employees(*, roles(id, name))")
         .eq("tenant_id", user.tenant_id)
-        .gte("clock_in_at", start.toISOString())
+        .gte("clock_in_at", dateToUtcStart(dateFrom))
+        .lte("clock_in_at", dateToUtcEnd(dateTo))
         .order("clock_in_at", { ascending: false }),
     ]);
 
@@ -258,6 +318,17 @@ export default function EmployeesPage() {
     if (!employee.id) return;
     await supabase.from("employees").update({ is_active: employee.is_active === false }).eq("id", employee.id);
     await load();
+  };
+
+  const moveWeek = (direction: -1 | 1) => {
+    setDateFrom((current) => addDays(current, direction * 7));
+    setDateTo((current) => addDays(current, direction * 7));
+  };
+
+  const setCurrentWeek = () => {
+    const range = weekRange();
+    setDateFrom(range.from);
+    setDateTo(range.to);
   };
 
   if (loading) return <div className="text-sm text-gray-500">Cargando empleados...</div>;
@@ -360,13 +431,44 @@ export default function EmployeesPage() {
             <div className="flex items-center gap-2">
               <CalendarDays size={18} className="text-gray-400" />
               <div>
-                <h2 className="font-black text-gray-100">Semana actual</h2>
-                <p className="text-xs text-gray-500">Horas redondeadas cada media hora. Total estimado: {money(totalPayroll)}</p>
+                <h2 className="font-black text-gray-100">Asistencias</h2>
+                <p className="text-xs text-gray-500">
+                  Rango {new Date(`${dateFrom}T12:00:00-03:00`).toLocaleDateString("es-AR")} al {new Date(`${dateTo}T12:00:00-03:00`).toLocaleDateString("es-AR")} · horas redondeadas cada media hora · total estimado: {money(totalPayroll)}
+                </p>
               </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <button onClick={() => moveWeek(-1)} className="rounded-xl border border-gray-700 px-3 py-2 text-xs font-bold text-gray-300 hover:bg-gray-800">
+                Semana anterior
+              </button>
+              <button onClick={setCurrentWeek} className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-gray-950 hover:bg-emerald-400">
+                Semana actual
+              </button>
+              <button onClick={() => moveWeek(1)} className="rounded-xl border border-gray-700 px-3 py-2 text-xs font-bold text-gray-300 hover:bg-gray-800">
+                Semana siguiente
+              </button>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-bold uppercase text-gray-500">Desde</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(event) => setDateFrom(event.target.value)}
+                  className="rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-xs font-bold text-gray-100 outline-none focus:border-emerald-500"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-bold uppercase text-gray-500">Hasta</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(event) => setDateTo(event.target.value)}
+                  className="rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-xs font-bold text-gray-100 outline-none focus:border-emerald-500"
+                />
+              </label>
             </div>
           </div>
           <div className="divide-y divide-gray-800">
-            {attendanceByEmployee.length === 0 && <div className="p-6 text-sm text-gray-500">Sin asistencias esta semana.</div>}
+            {attendanceByEmployee.length === 0 && <div className="p-6 text-sm text-gray-500">Sin asistencias en este rango.</div>}
             {attendanceByEmployee.map(({ employee, rows, rawHours, roundedHours, pay, days }) => (
               <div key={employee.id} className="p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -395,10 +497,18 @@ export default function EmployeesPage() {
                       <div className="mt-2 grid gap-2 md:grid-cols-2">
                         {day.rows.map((row) => (
                           <div key={row.id} className="rounded-lg bg-gray-900 px-3 py-2 text-xs text-gray-400">
-                            <Clock3 size={14} className="mr-1 inline text-gray-500" />
-                            {new Date(row.clock_in_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
-                            {" -> "}
-                            {row.clock_out_at ? new Date(row.clock_out_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) : "abierto"}
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <span className="inline-flex items-center gap-1 font-bold text-gray-300">
+                                <Clock3 size={14} className="text-gray-500" />
+                                Turno
+                              </span>
+                              <span className="font-black text-emerald-200">{roundHalfHour(hoursBetween(row.clock_in_at, row.clock_out_at)).toFixed(1)} h</span>
+                            </div>
+                            <div className="grid gap-1">
+                              <p>Desde: <span className="font-mono text-gray-200">{formatDateTimeWithSeconds(row.clock_in_at)}</span></p>
+                              <p>Hasta: <span className="font-mono text-gray-200">{formatDateTimeWithSeconds(row.clock_out_at)}</span></p>
+                              <p className="text-gray-500">Horario: {formatTimeWithSeconds(row.clock_in_at)} {" -> "} {formatTimeWithSeconds(row.clock_out_at)}</p>
+                            </div>
                           </div>
                         ))}
                       </div>

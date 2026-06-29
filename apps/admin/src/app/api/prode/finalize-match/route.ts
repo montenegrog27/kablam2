@@ -25,7 +25,7 @@ async function getAuthorizedUser(req: NextRequest) {
     .single();
 
   if (!userRecord?.tenant_id) return { error: "user_without_tenant" as const };
-  if (!["owner", "admin"].includes(userRecord.role)) return { error: "forbidden" as const };
+  if (!["owner", "manager", "admin"].includes(userRecord.role)) return { error: "forbidden" as const };
 
   return { supabase, user: userRecord };
 }

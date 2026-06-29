@@ -242,6 +242,7 @@ export default function NewUserPage() {
                 required
               >
                 <option value="owner">Owner (Dueño)</option>
+                <option value="manager">Manager (Gerente)</option>
                 <option value="admin">Admin (Administrador)</option>
                 <option value="cashier">Cashier (Cajero)</option>
               </select>
@@ -328,7 +329,7 @@ export default function NewUserPage() {
             contraseña.
           </li>
           <li>
-            Los permisos dependen del rol asignado (owner, admin, cashier).
+            Los permisos dependen del rol asignado (owner, manager, admin, cashier).
           </li>
           <li>El usuario quedará asociado al tenant y branch seleccionados.</li>
         </ul>

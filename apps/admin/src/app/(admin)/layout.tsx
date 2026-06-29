@@ -23,9 +23,80 @@ import {
   Search,
 } from "lucide-react";
 
+const NAV_PERMISSIONS: Record<string, string> = {
+  "/dashboard": "admin.dashboard.view",
+  "/branches": "admin.branches.view",
+  "/customers": "admin.customers.view",
+  "/marketing-ai": "admin.customers.view",
+  "/ads": "admin.ads.view",
+  "/anniversary": "admin.reservations.view",
+  "/prode": "admin.reservations.view",
+  "/categories": "admin.categories.view",
+  "/products": "admin.products.view",
+  "/qr-menu": "admin.products.view",
+  "/delivery-menu": "admin.products.view",
+  "/catalog-menu": "admin.catalog_orders.manage",
+  "/variant-types": "admin.products.view",
+  "/ingredients": "admin.ingredients.view",
+  "/packaging": "admin.recipes.view",
+  "/recipes": "admin.recipes.view",
+  "/product-ingredients": "admin.recipes.view",
+  "/combos": "admin.combos.view",
+  "/product-extras": "admin.products.view",
+  "/upsells": "admin.products.view",
+  "/featured-order": "admin.featured.view",
+  "/loyalty": "admin.loyalty.view",
+  "/promotions": "admin.coupons.view",
+  "/customer-popups": "admin.settings.view",
+  "/coupons": "admin.coupons.view",
+  "/reservations": "admin.reservations.view",
+  "/kitchens": "admin.settings.view",
+  "/printers": "admin.printers.view",
+  "/flash-sales": "admin.flashsales.view",
+  "/kds-config": "admin.kdsconfig.view",
+  "/ventas": "admin.ventas.view",
+  "/catalog-orders": "admin.catalog_orders.view",
+  "/ventas/productos": "admin.ventas.view",
+  "/arqueos": "admin.ventas.view",
+  "/central-cash": "admin.central_cash.view",
+  "/petty-cash": "admin.central_cash.view",
+  "/mercadopago-treasury": "admin.mercadopago.view",
+  "/debts": "admin.debts.view",
+  "/reporte-diario": "admin.reports.view",
+  "/reports": "admin.reports.view",
+  "/expenses": "admin.expenses.view",
+  "/expense-categories": "admin.expenses.view",
+  "/suppliers": "admin.suppliers.view",
+  "/purchases": "admin.purchases.view",
+  "/purchase-categories": "admin.purchases.view",
+  "/roles": "admin.users.view",
+  "/users": "admin.users.view",
+  "/employees": "admin.employees.view",
+  "/delivery-settings": "admin.delivery.view",
+  "/delivery-zones": "admin.delivery.view",
+  "/payment-methods": "admin.paymentmethods.view",
+  "/settings/financial": "admin.reports.view",
+  "/customer-hub": "admin.customerhub.view",
+  "/settings": "admin.settings.view",
+};
+
+const BASE_ADMIN_HIDDEN = new Set([
+  "/roles",
+  "/users",
+  "/employees",
+  "/central-cash",
+  "/petty-cash",
+  "/mercadopago-treasury",
+  "/debts",
+  "/settings/financial",
+  "/settings",
+]);
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [tenant, setTenant] = useState<{ name?: string } | null>(null);
+  const [userRole, setUserRole] = useState("");
+  const [permissionKeys, setPermissionKeys] = useState<string[] | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarSearch, setSidebarSearch] = useState("");
   const router = useRouter();
@@ -38,10 +109,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       if (!user) { router.push("/login"); return; }
 
       const { data: userRecord } = await supabase
-        .from("users").select("*, tenants(*)").eq("id", user.id).single();
+        .from("users")
+        .select("*, tenants(*), roles(role_permissions(permissions(key)))")
+        .eq("id", user.id)
+        .single();
       if (!userRecord) { router.push("/dashboard"); return; }
 
       setTenant(userRecord.tenants);
+      setUserRole(userRecord.role || "");
+      if (userRecord.role_id) {
+        const keys = (userRecord.roles?.role_permissions || [])
+          .map((row: any) => row.permissions?.key)
+          .filter(Boolean);
+        setPermissionKeys(keys);
+      } else {
+        setPermissionKeys(null);
+      }
       setLoading(false);
     }
     loadUser();
@@ -125,11 +208,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     ]},
   ];
 
-  const filteredNavItems = useMemo(() => {
-    const query = sidebarSearch.trim().toLowerCase();
-    if (!query) return navItems;
+  const permittedNavItems = useMemo(() => {
+    const canSee = (href: string) => {
+      if (["owner", "manager"].includes(userRole)) return true;
+      if (userRole === "admin" && permissionKeys === null && BASE_ADMIN_HIDDEN.has(href)) return false;
+      const permission = NAV_PERMISSIONS[href];
+      if (!permission) return true;
+      if (permissionKeys === null) return true;
+      return permissionKeys.includes(permission);
+    };
 
     return navItems
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => canSee(item.href)),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [navItems, permissionKeys, userRole]);
+
+  const filteredNavItems = useMemo(() => {
+    const query = sidebarSearch.trim().toLowerCase();
+    if (!query) return permittedNavItems;
+
+    return permittedNavItems
       .map((section) => ({
         ...section,
         items: section.items.filter((item) =>
@@ -137,7 +238,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         ),
       }))
       .filter((section) => section.items.length > 0);
-  }, [navItems, sidebarSearch]);
+  }, [permittedNavItems, sidebarSearch]);
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-950 text-gray-400">Cargando...</div>;
 

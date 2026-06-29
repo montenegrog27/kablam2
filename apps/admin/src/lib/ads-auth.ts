@@ -12,7 +12,7 @@ export function createSupabaseService() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-export async function getAdminUser(req: NextRequest, allowedRoles = ["owner", "admin"]) {
+export async function getAdminUser(req: NextRequest, allowedRoles = ["owner", "manager", "admin"]) {
   const authHeader = req.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return { error: "unauthorized" as const };

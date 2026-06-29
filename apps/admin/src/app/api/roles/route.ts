@@ -32,7 +32,7 @@ async function getAuthorizedUser(req: NextRequest) {
     return { error: "user_without_tenant" as const };
   }
 
-  if (!["owner", "admin"].includes(userRecord.role)) {
+  if (!["owner", "manager", "admin"].includes(userRecord.role)) {
     return { error: "forbidden" as const };
   }
 

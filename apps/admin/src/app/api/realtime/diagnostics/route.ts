@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
         .eq("tenant_id", tenantId)
         .order("name", { ascending: true });
 
-      if (userRecord!.role !== "owner" && userRecord!.role !== "admin" && userRecord!.branch_id) {
+      if (userRecord!.role !== "owner" && userRecord!.role !== "manager" && userRecord!.role !== "admin" && userRecord!.branch_id) {
         query.eq("id", userRecord!.branch_id);
       }
 
