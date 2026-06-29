@@ -21,12 +21,14 @@ import {
   QrCode,
   Camera,
   Search,
+  MessageCircle,
 } from "lucide-react";
 
 const NAV_PERMISSIONS: Record<string, string> = {
   "/dashboard": "admin.dashboard.view",
   "/branches": "admin.branches.view",
   "/customers": "admin.customers.view",
+  "/whatsapp": "admin.customers.view",
   "/marketing-ai": "admin.customers.view",
   "/ads": "admin.ads.view",
   "/anniversary": "admin.reservations.view",
@@ -135,6 +137,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/branches", label: "Sucursales", icon: Store },
       { href: "/customers", label: "Clientes", icon: Users },
+      { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
       { href: "/marketing-ai", label: "Marketing AI", icon: Brain },
       { href: "/ads", label: "Ads Center", icon: Target },
       { href: "/anniversary", label: "Cumple Mordisco", icon: Cake },

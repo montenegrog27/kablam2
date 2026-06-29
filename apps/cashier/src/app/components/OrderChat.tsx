@@ -5,12 +5,20 @@ import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { Paperclip, Send, Image, FileText, Camera, MapPin, User, X } from "lucide-react";
 import { markWhatsAppConversationRead } from "@/lib/whatsappNotifications";
 
+type QuickReply = {
+  id: string;
+  short_name: string;
+  message: string;
+  icon?: string | null;
+};
+
 export default function OrderChat({ order, session, onClose }: any) {
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -28,6 +36,7 @@ export default function OrderChat({ order, session, onClose }: any) {
   useEffect(() => {
     if (!order) return;
     initConversation();
+    loadQuickReplies();
   }, [order]);
 
   const initConversation = async () => {
@@ -123,6 +132,26 @@ export default function OrderChat({ order, session, onClose }: any) {
     }, 100);
   };
 
+  const loadQuickReplies = async () => {
+    if (!order?.tenant_id || !order?.branch_id) return;
+    const { data, error } = await supabase
+      .from("whatsapp_quick_replies")
+      .select("id, short_name, message, icon")
+      .eq("tenant_id", order.tenant_id)
+      .eq("is_active", true)
+      .or(`branch_id.eq.${order.branch_id},branch_id.is.null`)
+      .order("position", { ascending: true })
+      .order("short_name", { ascending: true });
+
+    if (error) {
+      console.warn("Could not load WhatsApp quick replies", error.message);
+      setQuickReplies([]);
+      return;
+    }
+
+    setQuickReplies(data || []);
+  };
+
   // -----------------------------
   // REALTIME
   // -----------------------------
@@ -179,13 +208,14 @@ export default function OrderChat({ order, session, onClose }: any) {
   // SEND TEXT
   // -----------------------------
 
-  const sendMessage = async () => {
-    if (!text.trim()) return;
+  const sendTextMessage = async (messageText: string) => {
+    if (!messageText.trim()) return;
     if (!conversationId) return;
 
+    const outgoingText = messageText.trim();
     const tempMessage = {
       id: crypto.randomUUID(),
-      message: text,
+      message: outgoingText,
       media_type: "text",
       sender_type: "cashier",
       created_at: new Date().toISOString(),
@@ -194,7 +224,6 @@ export default function OrderChat({ order, session, onClose }: any) {
     // ⚡ mostrar instantáneamente
     setMessages((prev) => [...prev, tempMessage]);
 
-    const messageText = text;
     setText("");
 
     const res = await fetch("/api/whatsapp/send", {
@@ -204,7 +233,8 @@ export default function OrderChat({ order, session, onClose }: any) {
       },
       body: JSON.stringify({
         conversationId,
-        text: messageText,
+        type: "text",
+        text: outgoingText,
       }),
     });
 
@@ -213,6 +243,14 @@ export default function OrderChat({ order, session, onClose }: any) {
     if (data.error) {
       console.error(data.error);
     }
+  };
+
+  const sendMessage = async () => {
+    await sendTextMessage(text);
+  };
+
+  const sendQuickReply = async (reply: QuickReply) => {
+    await sendTextMessage(reply.message);
   };
 
   // -----------------------------
@@ -325,7 +363,22 @@ export default function OrderChat({ order, session, onClose }: any) {
       </div>
 
       {/* INPUT */}
-      <div className="p-3 bg-white border-t flex items-center gap-2">
+      <div className="border-t bg-white">
+        {quickReplies.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto border-b border-gray-100 px-3 py-2">
+            {quickReplies.map((reply) => (
+              <button
+                key={reply.id}
+                onClick={() => sendQuickReply(reply)}
+                className="shrink-0 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-bold text-green-800 transition hover:border-green-400 hover:bg-green-100"
+                title={reply.message}
+              >
+                {reply.icon ? `${reply.icon} ` : ""}{reply.short_name}
+              </button>
+            ))}
+          </div>
+        )}
+      <div className="p-3 flex items-center gap-2">
         <div className="relative">
           <button onClick={() => setShowUploadMenu(!showUploadMenu)} className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center">
             <Paperclip size={20} className="text-gray-600" />
@@ -358,6 +411,7 @@ export default function OrderChat({ order, session, onClose }: any) {
         <button onClick={sendMessage} disabled={!text.trim()} className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition flex-shrink-0">
           <Send size={18} />
         </button>
+      </div>
       </div>
 
       {/* Lightbox */}

@@ -37,6 +37,13 @@ type Message = {
   retry?: () => void;
 };
 
+type QuickReply = {
+  id: string;
+  short_name: string;
+  message: string;
+  icon?: string | null;
+};
+
 type Props = {
   branchId: string;
   tenantId?: string;
@@ -87,6 +94,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const [allLoaded, setAllLoaded] = useState(false);
   const [shouldScroll, setShouldScroll] = useState(true);
   const [filter, setFilter] = useState<"all" | "without_orders" | "delivered">("all");
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [customerIdsWithoutOrders, setCustomerIdsWithoutOrders] = useState<Set<string>>(new Set());
   const [customerIdsDelivered, setCustomerIdsDelivered] = useState<Set<string>>(new Set());
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
@@ -127,8 +135,9 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     loadConversations(0);
     loadUnreadCounts();
     loadOrdersFilter();
+    loadQuickReplies();
     setNotificationPermission(getWhatsAppNotificationPermission());
-  }, [branchId]);
+  }, [branchId, tenantId]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -354,6 +363,26 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     setCustomerIdsDelivered(deliveredIds);
   };
 
+  const loadQuickReplies = async () => {
+    if (!branchId || !tenantId) return;
+    const { data, error } = await supabase
+      .from("whatsapp_quick_replies")
+      .select("id, short_name, message, icon")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .or(`branch_id.eq.${branchId},branch_id.is.null`)
+      .order("position", { ascending: true })
+      .order("short_name", { ascending: true });
+
+    if (error) {
+      console.warn("Could not load WhatsApp quick replies", error.message);
+      setQuickReplies([]);
+      return;
+    }
+
+    setQuickReplies(data || []);
+  };
+
   const loadMessages = async (convId: string, page = 0) => {
     const size = 6;
     const { data, error } = await supabase.from("messages").select("*").eq("conversation_id", convId).order("created_at", { ascending: false }).range(page * size, page * size + size - 1);
@@ -415,9 +444,9 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     return null;
   };
 
-  const sendMessage = async () => {
-    if (!text.trim() || !activeConv) return;
-    const outgoingText = text.trim();
+  const sendTextMessage = async (messageText: string) => {
+    if (!messageText.trim() || !activeConv) return;
+    const outgoingText = messageText.trim();
     const tmp = { id: crypto.randomUUID(), sender_type: "cashier" as const, message: outgoingText, media_type: "text", created_at: new Date().toISOString(), status: "pending" };
     setMessages((p) => [...p, tmp as any]); setText("");
     try {
@@ -433,6 +462,14 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
       console.error(e);
       setMessages((p) => p.map((m) => m.id === tmp.id ? { ...m, status: "error", error: "No se pudo enviar", retry: () => { setText(outgoingText); } } : m));
     }
+  };
+
+  const sendMessage = async () => {
+    await sendTextMessage(text);
+  };
+
+  const sendQuickReply = async (reply: QuickReply) => {
+    await sendTextMessage(reply.message);
   };
 
   const sendMedia = async (file: File) => {
@@ -762,7 +799,22 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
             })}
           </div>
 
-          <div className="px-3 py-2 bg-white border-t flex items-center gap-2">
+          <div className="border-t bg-white">
+            {quickReplies.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto border-b border-gray-100 px-3 py-2">
+                {quickReplies.map((reply) => (
+                  <button
+                    key={reply.id}
+                    onClick={() => sendQuickReply(reply)}
+                    className="shrink-0 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-bold text-green-800 transition hover:border-green-400 hover:bg-green-100"
+                    title={reply.message}
+                  >
+                    {reply.icon ? `${reply.icon} ` : ""}{reply.short_name}
+                  </button>
+                ))}
+              </div>
+            )}
+          <div className="px-3 py-2 flex items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowUploadMenu(!showUploadMenu)} className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center"><Paperclip size={20} className="text-gray-600" /></button>
               {showUploadMenu && (
@@ -785,6 +837,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
             ) : (
               <button onClick={startRecording} className="w-10 h-10 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition flex-shrink-0"><Mic size={18} /></button>
             )}
+          </div>
           </div>
         </div>
       ) : (
