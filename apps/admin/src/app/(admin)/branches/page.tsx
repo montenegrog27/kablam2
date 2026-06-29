@@ -292,6 +292,10 @@ export default function BranchesPage() {
             1,
             Number(branchSettings.catalog_order_advance_days || 10),
           ),
+          catalog_order_min_advance_days: Math.max(
+            0,
+            Number(branchSettings.catalog_order_min_advance_days || 0),
+          ),
         },
         { onConflict: "branch_id" },
       );
@@ -325,7 +329,8 @@ export default function BranchesPage() {
             "ADD COLUMN IF NOT EXISTS catalog_order_show_delivery_address BOOLEAN,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_show_pickup_addresses BOOLEAN,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_pickup_addresses JSONB,\n" +
-            "ADD COLUMN IF NOT EXISTS catalog_order_advance_days INTEGER;",
+            "ADD COLUMN IF NOT EXISTS catalog_order_advance_days INTEGER,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_min_advance_days INTEGER;",
         );
       } else {
         alert("Error al guardar configuración: " + error.message);
@@ -1220,7 +1225,31 @@ export default function BranchesPage() {
                       }
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      Customer muestra solo hoy y los proximos dias configurados.
+                      Cantidad de fechas que customer muestra desde el minimo configurado.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      Dias minimos de anticipacion
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      step={1}
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100"
+                      value={branchSettings.catalog_order_min_advance_days ?? 0}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_min_advance_days",
+                          e.target.value,
+                        )
+                      }
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      0 permite hoy. 2 muestra fechas desde pasado manana.
                     </p>
                   </div>
 

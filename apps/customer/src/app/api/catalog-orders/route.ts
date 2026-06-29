@@ -49,14 +49,16 @@ function isValidDate(value: string) {
   return date.getTime() >= today.getTime();
 }
 
-function isDateWithinAdvanceDays(value: string, advanceDays: number) {
+function isDateWithinOrderWindow(value: string, minAdvanceDays: number, advanceDays: number) {
   if (!isValidDate(value)) return false;
   const date = new Date(`${value}T12:00:00-03:00`);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const maxDate = new Date(today);
-  maxDate.setDate(today.getDate() + Math.max(1, advanceDays) - 1);
-  return date.getTime() <= maxDate.getTime();
+  const minDate = new Date(today);
+  minDate.setDate(today.getDate() + Math.max(0, minAdvanceDays));
+  const maxDate = new Date(minDate);
+  maxDate.setDate(minDate.getDate() + Math.max(1, advanceDays) - 1);
+  return date.getTime() >= minDate.getTime() && date.getTime() <= maxDate.getTime();
 }
 
 function getDefaultVariant(product: any) {
@@ -274,7 +276,7 @@ export async function POST(req: Request) {
         supabase
           .from("branch_settings")
           .select(
-            "catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days",
+            "catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days, catalog_order_min_advance_days",
           )
           .eq("branch_id", branch.id)
           .maybeSingle(),
@@ -313,7 +315,8 @@ export async function POST(req: Request) {
       ? settings.catalog_order_pickup_addresses.filter(Boolean).map(String)
       : [];
     const advanceDays = Math.max(1, Number(settings?.catalog_order_advance_days || 10));
-    if (!isDateWithinAdvanceDays(requestedDate, advanceDays)) {
+    const minAdvanceDays = Math.max(0, Number(settings?.catalog_order_min_advance_days || 0));
+    if (!isDateWithinOrderWindow(requestedDate, minAdvanceDays, advanceDays)) {
       return NextResponse.json(
         { error: "requested_date_not_available" },
         { status: 400 },

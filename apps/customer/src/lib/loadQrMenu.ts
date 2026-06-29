@@ -87,6 +87,7 @@ export type QrMenuData = {
     show_pickup_addresses?: boolean | null;
     pickup_addresses?: string[] | null;
     advance_days?: number | null;
+    min_advance_days?: number | null;
   };
   categories: QrMenuCategory[];
 };
@@ -146,7 +147,7 @@ export async function loadQrMenu(
   const [{ data: branding }, { data: categories }, { data: products }, { data: flashSales }] = await Promise.all([
     supabase
       .from("branch_settings")
-      .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days")
+      .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days, catalog_order_min_advance_days")
       .eq("branch_id", branch.id)
       .maybeSingle(),
     supabase
@@ -268,6 +269,7 @@ export async function loadQrMenu(
         ? branding.catalog_order_pickup_addresses.filter(Boolean).map(String)
         : [],
       advance_days: Math.max(1, Number(branding?.catalog_order_advance_days || 10)),
+      min_advance_days: Math.max(0, Number(branding?.catalog_order_min_advance_days || 0)),
     },
     categories: menuCategories,
   };

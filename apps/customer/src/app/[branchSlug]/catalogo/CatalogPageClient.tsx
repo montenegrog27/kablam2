@@ -77,9 +77,10 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
   const showDeliveryAddress = data.catalogOrder?.show_delivery_address !== false;
   const showPickupAddresses = Boolean(data.catalogOrder?.show_pickup_addresses && pickupAddresses.length > 0);
   const advanceDays = Math.max(1, Number(data.catalogOrder?.advance_days || 10));
+  const minAdvanceDays = Math.max(0, Number(data.catalogOrder?.min_advance_days || 0));
   const availableDates = useMemo(
-    () => Array.from({ length: advanceDays }, (_, index) => dateInputFromOffset(index)),
-    [advanceDays],
+    () => Array.from({ length: advanceDays }, (_, index) => dateInputFromOffset(minAdvanceDays + index)),
+    [advanceDays, minAdvanceDays],
   );
   const defaultFulfillmentType: OrderForm["fulfillmentType"] = showDeliveryAddress
     ? "delivery"
