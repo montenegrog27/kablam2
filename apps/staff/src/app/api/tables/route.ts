@@ -252,18 +252,20 @@ export async function POST(req: NextRequest) {
 
     if (action === "send_order") {
       const items = normalizeCart(body.items);
-      if (!items.length) return NextResponse.json({ error: "items_required" }, { status: 400 });
+      if (!items.length && !tableSession.order_id) return NextResponse.json({ error: "items_required" }, { status: 400 });
       const orderId = await ensureOrder(tableSession, table, staffSession);
-      await insertItems(orderId, items);
+      if (items.length) await insertItems(orderId, items);
       const addedTotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
       const total = money(tableSession.total) + addedTotal;
       await supabase
         .from("orders")
         .update({
-          status: "confirmed",
+          status: "preparing",
           subtotal: total,
           total,
           confirmed_at: new Date().toISOString(),
+          preparing_at: new Date().toISOString(),
+          comanda_print_at: new Date().toISOString(),
         })
         .eq("id", orderId);
       await supabase.from("table_sessions").update({ status: "open", order_id: orderId, total }).eq("id", tableSession.id);
@@ -277,9 +279,10 @@ export async function POST(req: NextRequest) {
       await supabase
         .from("orders")
         .update({
-          status: "confirmed",
+          status: "preparing",
           subtotal: total,
           total,
+          ticket_print_at: new Date().toISOString(),
         })
         .eq("id", tableSession.order_id);
       return NextResponse.json({ orderId: tableSession.order_id, total, status: "table_closed" });
@@ -291,36 +294,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "pay_table") {
-      const paymentMethodId = String(body.paymentMethodId || "");
-      const paymentRef = String(body.paymentRef || "");
-      if (!paymentMethodId) return NextResponse.json({ error: "payment_method_required" }, { status: 400 });
-      if (!tableSession.order_id) return NextResponse.json({ error: "order_not_found" }, { status: 404 });
-
-      const total = money(body.total) || money(tableSession.total);
-      await supabase
-        .from("orders")
-        .update({
-          status: "delivered",
-          subtotal: total,
-          total,
-          paid_amount: total,
-          is_paid: true,
-        })
-        .eq("id", tableSession.order_id);
-
-      await supabase.from("order_payments").insert({
-        order_id: tableSession.order_id,
-        payment_method_id: paymentMethodId,
-        amount: total,
-        reference: paymentRef || null,
-      });
-
-      await supabase
-        .from("table_sessions")
-        .update({ status: "closed", closed_at: new Date().toISOString() })
-        .eq("id", tableSession.id);
-
-      return NextResponse.json({ status: "paid" });
+      return NextResponse.json({ error: "payment_must_be_closed_from_cashier" }, { status: 403 });
     }
 
     return NextResponse.json({ error: "unknown_action" }, { status: 400 });

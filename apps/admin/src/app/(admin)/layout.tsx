@@ -92,6 +92,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     ]},
     { section: "Finanzas", items: [
       { href: "/ventas", label: "Ventas", icon: DollarSign },
+      { href: "/catalog-orders", label: "Pedidos", icon: ShoppingBag },
       { href: "/ventas/productos", label: "Ventas x Producto", icon: BarChart3 },
       { href: "/arqueos", label: "Arqueos de Caja", icon: Calculator },
       { href: "/central-cash", label: "Caja Central", icon: Wallet },

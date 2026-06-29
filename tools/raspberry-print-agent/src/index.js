@@ -137,6 +137,7 @@ async function sendToPrinter(buffer, printer) {
 async function printOrder(orderId, reason = "realtime", options = {}) {
   const force = options.force === true;
   const dedupeSuffix = options.dedupeSuffix || "";
+  const jobs = options.jobs || ["comanda", ...(printTickets ? ["ticket"] : [])];
   const order = await fetchOrder(orderId);
   if (!order) {
     console.warn(`[print-agent] Order ${orderId} not found for branch ${branchId}`);
@@ -149,8 +150,6 @@ async function printOrder(orderId, reason = "realtime", options = {}) {
   }
 
   const branchName = await fetchBranchName();
-  const jobs = ["comanda", ...(printTickets ? ["ticket"] : [])];
-
   for (const jobType of jobs) {
     const printers = await fetchPrinters(jobType);
     if (printers.length === 0) {
@@ -205,12 +204,30 @@ function subscribeRealtime() {
         const nextStatus = payload.new?.status;
         const oldReprintAt = payload.old?.reprint_at || null;
         const nextReprintAt = payload.new?.reprint_at || null;
+        const oldComandaPrintAt = payload.old?.comanda_print_at || null;
+        const nextComandaPrintAt = payload.new?.comanda_print_at || null;
+        const oldTicketPrintAt = payload.old?.ticket_print_at || null;
+        const nextTicketPrintAt = payload.new?.ticket_print_at || null;
         const shouldAutoPrint = nextStatus === "preparing" && oldStatus !== "preparing";
+        const shouldPrintComanda = nextComandaPrintAt && nextComandaPrintAt !== oldComandaPrintAt;
         const shouldReprint = nextReprintAt && nextReprintAt !== oldReprintAt;
-        if (!shouldAutoPrint && !shouldReprint) return;
+        const shouldPrintTicket = nextTicketPrintAt && nextTicketPrintAt !== oldTicketPrintAt;
+        if (!shouldAutoPrint && !shouldPrintComanda && !shouldReprint && !shouldPrintTicket) return;
 
         try {
-          if (shouldReprint) {
+          if (shouldPrintComanda) {
+            await printOrder(payload.new.id, "comanda-print", {
+              force: true,
+              jobs: ["comanda"],
+              dedupeSuffix: `:comanda:${nextComandaPrintAt}`,
+            });
+          } else if (shouldPrintTicket) {
+            await printOrder(payload.new.id, "ticket-print", {
+              force: true,
+              jobs: ["ticket"],
+              dedupeSuffix: `:ticket:${nextTicketPrintAt}`,
+            });
+          } else if (shouldReprint) {
             await printOrder(payload.new.id, "reprint", {
               force: true,
               dedupeSuffix: `:${nextReprintAt}`,

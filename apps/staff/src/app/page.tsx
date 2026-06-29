@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Check,
   Clock3,
-  CreditCard,
   FileText,
   LogIn,
   LogOut,
@@ -433,15 +432,11 @@ function WaiterTables() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [floorObjects, setFloorObjects] = useState<any[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [customerCount, setCustomerCount] = useState(1);
   const [confirmedItems, setConfirmedItems] = useState<CartItem[]>([]);
   const [pendingCart, setPendingCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
-  const [showPayment, setShowPayment] = useState(false);
-  const [paymentMethodId, setPaymentMethodId] = useState("");
-  const [paymentRef, setPaymentRef] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -461,7 +456,6 @@ function WaiterTables() {
     setSessions(data.sessions || []);
     setProducts(data.products || []);
     setFloorObjects(data.floorObjects || []);
-    setPaymentMethods(data.paymentMethods || []);
   };
 
   const getSession = (tableId: string) => sessions.find((session) => session.table_id === tableId);
@@ -471,7 +465,6 @@ function WaiterTables() {
     setSelectedTable(table);
     setPendingCart([]);
     setConfirmedItems([]);
-    setShowPayment(false);
     setCustomerCount(1);
 
     const response = await fetch(`/api/tables?tableId=${table.id}`);
@@ -584,7 +577,6 @@ function WaiterTables() {
 
   const reopenTable = async () => {
     await runAction("reopen_table");
-    setShowPayment(false);
   };
 
   const closeTable = async () => {
@@ -592,18 +584,7 @@ function WaiterTables() {
     if (!data) return;
     await loadTables();
     if (selectedTable) await openTable(selectedTable);
-    setShowPayment(true);
-  };
-
-  const payTable = async () => {
-    const data = await runAction("pay_table", { paymentMethodId, paymentRef, total: subtotal });
-    if (!data) return;
-    setSelectedTable(null);
-    setConfirmedItems([]);
-    setPendingCart([]);
-    setShowPayment(false);
-    setPaymentMethodId("");
-    setPaymentRef("");
+    setError("Ticket de venta enviado. La mesa quedo en cobrando para que caja la cierre.");
   };
 
   const statusClasses: Record<string, string> = {
@@ -823,7 +804,7 @@ function WaiterTables() {
                       </button>
                       <button
                         onClick={sendToKds}
-                        disabled={!pendingCart.length || saving}
+                        disabled={(!pendingCart.length && !confirmedItems.length) || saving}
                         className="rounded-xl bg-sky-600 px-3 py-4 text-sm font-black disabled:opacity-40"
                       >
                         Comandar
@@ -838,19 +819,18 @@ function WaiterTables() {
                       className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-4 text-sm font-black text-slate-950 disabled:opacity-40"
                     >
                       <FileText size={16} />
-                      Cerrar mesa y cobrar
+                      Imprimir ticket y enviar a caja
                     </button>
                   )}
 
                   {status === "paying" && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-100">
+                        Mesa en cobrando. Caja debe cargar el metodo de pago y cerrar la mesa.
+                      </div>
                       <button onClick={reopenTable} className="flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-3 py-4 text-sm font-black">
                         <ArrowLeft size={15} />
                         Reabrir
-                      </button>
-                      <button onClick={() => setShowPayment(true)} className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-4 text-sm font-black">
-                        <CreditCard size={15} />
-                        Cobrar
                       </button>
                     </div>
                   )}
@@ -858,49 +838,6 @@ function WaiterTables() {
               </aside>
             </div>
           )}
-        </div>
-      )}
-
-      {showPayment && selectedTable && (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 md:items-center md:justify-center">
-          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-lg font-black">Cobrar mesa {selectedTable.number}</p>
-                <p className="text-3xl font-black text-emerald-300">{money(subtotal)}</p>
-              </div>
-              <button onClick={() => setShowPayment(false)} className="rounded-xl p-2 text-slate-400">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {paymentMethods.map((method) => (
-                <button
-                  key={method.id}
-                  onClick={() => setPaymentMethodId(method.id)}
-                  className={`w-full rounded-xl border px-4 py-3 text-left text-sm font-bold ${paymentMethodId === method.id ? "border-emerald-500 bg-emerald-500/10" : "border-slate-800 bg-slate-950"}`}
-                >
-                  {method.name}
-                </button>
-              ))}
-            </div>
-
-            <input
-              value={paymentRef}
-              onChange={(event) => setPaymentRef(event.target.value)}
-              className="mt-3 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 text-sm outline-none"
-              placeholder="Referencia opcional"
-            />
-
-            <button
-              onClick={payTable}
-              disabled={!paymentMethodId || saving}
-              className="mt-3 w-full rounded-xl bg-emerald-500 px-4 py-4 text-sm font-black text-slate-950 disabled:opacity-50"
-            >
-              Confirmar cobro
-            </button>
-          </div>
         </div>
       )}
     </section>

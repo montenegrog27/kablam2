@@ -38,7 +38,7 @@ export function buildComanda(order, items, branchName, config = {}) {
   lines.push(center(bold("COMANDA")));
   lines.push(center(`Pedido #${String(order.id || "").slice(-6).toUpperCase()}`));
   lines.push(center(`Cliente: ${normalizeText(order.customer_name || "N/A")}`));
-  lines.push(center(`Tipo: ${order.type === "delivery" ? "DELIVERY" : "TAKEAWAY"}`));
+  lines.push(center(`Tipo: ${order.type === "dine-in" ? "SALON" : order.type === "delivery" ? "DELIVERY" : "TAKEAWAY"}`));
   if (order.type === "delivery" && order.address) lines.push(center(`Dir: ${normalizeText(order.address)}`));
   lines.push("--------------------------------");
   lines.push("");
@@ -81,6 +81,8 @@ export function buildTicket(order, items, branchName, total, payment, config = {
   if (config.ticket_header) lines.push(center(normalizeText(config.ticket_header)));
   lines.push(center("TICKET DE COMPRA"));
   lines.push(center(new Date().toLocaleString("es-AR")));
+  if (order.customer_name) lines.push(center(normalizeText(order.customer_name)));
+  if (order.type) lines.push(center(`Tipo: ${order.type === "dine-in" ? "SALON" : order.type === "delivery" ? "DELIVERY" : "TAKEAWAY"}`));
   lines.push("================================");
   lines.push("");
 

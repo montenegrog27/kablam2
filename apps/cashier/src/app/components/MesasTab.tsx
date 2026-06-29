@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useState, useCallback } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { useCurrentBranch } from "../(cashier)/context/BranchContext";
@@ -253,8 +253,8 @@ export default function MesasTab() {
                 ) : "transparent",
                 transform: `rotate(${Number(obj.rotation)}deg)`,
               }}>
-              {obj.type === "tree" && <span className="text-2xl">🌴</span>}
-              {obj.type === "decoration" && <span className="text-xl">🎍</span>}
+              {obj.type === "tree" && <span className="text-2xl">ðŸŒ´</span>}
+              {obj.type === "decoration" && <span className="text-xl">ðŸŽ</span>}
               {obj.type === "counter" && <span className="text-amber-600 text-xs font-bold uppercase tracking-widest">BARRA</span>}
             </div>
           ))}
@@ -270,8 +270,8 @@ export default function MesasTab() {
                 <span className="text-lg font-bold text-white">{table.number}</span>
                 <span className="text-[10px] text-gray-400">
                   {status === "free" ? `${table.capacity} pers` :
-                   status === "paying" ? "💰 Pagando" :
-                   `🟢 $${Math.round(session?.total || 0).toLocaleString("es-AR")}`}
+                   status === "paying" ? "Cobrando" :
+                   `$${Math.round(session?.total || 0).toLocaleString("es-AR")}`}
                 </span>
               </button>
             );
@@ -285,7 +285,7 @@ export default function MesasTab() {
           <div className="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-bold text-white">Mesa {tables.find((t) => t.id === selectedTable)?.number}</h3>
-              <p className="text-xs text-gray-500">{getStatus(selectedTable) === "free" ? "Libre" : getStatus(selectedTable) === "paying" ? "Pagando" : "Ocupada"} · ${subtotal.toLocaleString("es-AR")}</p>
+              <p className="text-xs text-gray-500">{getStatus(selectedTable) === "free" ? "Libre" : getStatus(selectedTable) === "paying" ? "Cobrando" : "Ocupada"} · ${subtotal.toLocaleString("es-AR")}</p>
             </div>
             <button onClick={() => { setSelectedTable(null); setShowPayment(false); }} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400"><X size={18} /></button>
           </div>
@@ -340,7 +340,7 @@ export default function MesasTab() {
               )}
               {getStatus(selectedTable) === "paying" && (
                 <div className="flex-1 flex items-center justify-center text-gray-600 text-sm px-6 text-center">
-                  Mesa en estado pagando. Podés volver a abrirla para agregar más productos o cobrar.
+                  Mesa en estado cobrando. Podes volver a abrirla para agregar mas productos o cerrarla con metodo de pago.
                 </div>
               )}
 
@@ -391,9 +391,7 @@ export default function MesasTab() {
                       <ArrowLeft size={16} /> Volver a abrir
                     </button>
                     <button onClick={() => setShowPayment(true)} disabled={loading}
-                      className="flex-1 py-3 bg-emerald-700 text-white rounded-xl font-bold hover:bg-emerald-600 transition disabled:opacity-40 flex items-center justify-center gap-2">
-                      <DollarSign size={16} /> Cobrar
-                    </button>
+                      className="flex-1 py-3 bg-emerald-700 text-white rounded-xl font-bold hover:bg-emerald-600 transition disabled:opacity-40 flex items-center justify-center gap-2"><DollarSign size={16} /> Cerrar mesa</button>
                   </div>
                 )}
               </div>
@@ -404,7 +402,7 @@ export default function MesasTab() {
           {showPayment && (
             <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
               <div className="bg-gray-900 rounded-2xl max-w-md w-full p-6 space-y-4">
-                <h3 className="text-lg font-bold text-white">Cobrar Mesa {tables.find((t) => t.id === selectedTable)?.number}</h3>
+                <h3 className="text-lg font-bold text-white">Cerrar mesa {tables.find((t) => t.id === selectedTable)?.number}</h3>
                 <p className="text-3xl font-black text-emerald-400 text-center">${subtotal.toLocaleString("es-AR")}</p>
                 <div className="space-y-2">
                   {paymentMethods.map((pm) => (
@@ -423,7 +421,7 @@ export default function MesasTab() {
                   <button onClick={() => { setShowPayment(false); }} className="flex-1 py-3 border border-gray-700 rounded-xl text-sm text-gray-400 hover:bg-gray-800">Cancelar</button>
                   <button onClick={payTable} disabled={!selPayment || loading}
                     className="flex-1 py-3 bg-emerald-700 text-white rounded-xl font-bold hover:bg-emerald-600 disabled:opacity-40 flex items-center justify-center gap-2">
-                    <DollarSign size={16} /> Cobrar ${subtotal.toLocaleString("es-AR")}
+                    <DollarSign size={16} /> Cerrar mesa ${subtotal.toLocaleString("es-AR")}
                   </button>
                 </div>
               </div>
@@ -434,3 +432,7 @@ export default function MesasTab() {
     </div>
   );
 }
+
+
+
+
