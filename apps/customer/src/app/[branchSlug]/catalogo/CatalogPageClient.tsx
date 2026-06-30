@@ -392,7 +392,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
 
                 {depositEnabled && (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
-                    <p className="font-black">Sena para confirmar: {depositPercent}% ({money(depositAmount)})</p>
+                    <p className="font-black">Seña para confirmar: {depositPercent}% ({money(depositAmount)})</p>
                     {data.catalogOrder?.transfer_alias && (
                       <p className="mt-1 text-xs font-semibold">Alias: {data.catalogOrder.transfer_alias}</p>
                     )}
