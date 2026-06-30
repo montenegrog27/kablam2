@@ -99,6 +99,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [tenant, setTenant] = useState<{ name?: string } | null>(null);
   const [userRole, setUserRole] = useState("");
   const [permissionKeys, setPermissionKeys] = useState<string[] | null>(null);
+  const [tenantHiddenNavKeys, setTenantHiddenNavKeys] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarSearch, setSidebarSearch] = useState("");
   const router = useRouter();
@@ -127,6 +128,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       } else {
         setPermissionKeys(null);
       }
+
+      // Fetch tenant-specific hidden sidebar items
+      if (userRecord.tenant_id) {
+        const { data: hiddenRows } = await supabase
+          .from("admin_sidebar_hidden")
+          .select("nav_key")
+          .eq("tenant_id", userRecord.tenant_id);
+        if (hiddenRows) {
+          setTenantHiddenNavKeys(new Set(hiddenRows.map((r: any) => r.nav_key)));
+        }
+      }
+
       setLoading(false);
     }
     loadUser();
@@ -214,7 +227,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const permittedNavItems = useMemo(() => {
     const canSee = (href: string) => {
       if (["owner", "manager"].includes(userRole)) return true;
-      if (userRole === "admin" && permissionKeys === null && BASE_ADMIN_HIDDEN.has(href)) return false;
+      if (userRole === "admin") {
+        if (BASE_ADMIN_HIDDEN.has(href) || tenantHiddenNavKeys.has(href)) return false;
+      }
       const permission = NAV_PERMISSIONS[href];
       if (!permission) return true;
       if (permissionKeys === null) return true;
@@ -227,7 +242,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         items: section.items.filter((item) => canSee(item.href)),
       }))
       .filter((section) => section.items.length > 0);
-  }, [navItems, permissionKeys, userRole]);
+  }, [navItems, permissionKeys, userRole, tenantHiddenNavKeys]);
 
   const filteredNavItems = useMemo(() => {
     const query = sidebarSearch.trim().toLowerCase();

@@ -109,6 +109,12 @@ export default function SuperAdminLayout({
             Integrations
           </Link>
           <Link
+            href="/superadmin/admin-sidebar"
+            className="px-3 py-2 rounded hover:bg-gray-800"
+          >
+            Sidebar Admin
+          </Link>
+          <Link
             href="/superadmin/realtime"
             className="px-3 py-2 rounded hover:bg-gray-800"
           >
