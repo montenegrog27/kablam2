@@ -78,6 +78,13 @@ create table if not exists public.reservation_events (
   hero_show_title boolean not null default true,
   hero_show_description boolean not null default true,
   hero_show_cta boolean not null default true,
+  require_customer_name boolean not null default true,
+  show_customer_phone boolean not null default true,
+  require_customer_phone boolean not null default true,
+  show_customer_email boolean not null default true,
+  require_customer_email boolean not null default false,
+  show_customer_notes boolean not null default true,
+  require_customer_notes boolean not null default false,
   confirmation_title text,
   confirmation_message text,
   whatsapp_message_template text,
@@ -102,7 +109,14 @@ alter table public.reservation_events
   add column if not exists hero_show_logo boolean not null default true,
   add column if not exists hero_show_title boolean not null default true,
   add column if not exists hero_show_description boolean not null default true,
-  add column if not exists hero_show_cta boolean not null default true;
+  add column if not exists hero_show_cta boolean not null default true,
+  add column if not exists require_customer_name boolean not null default true,
+  add column if not exists show_customer_phone boolean not null default true,
+  add column if not exists require_customer_phone boolean not null default true,
+  add column if not exists show_customer_email boolean not null default true,
+  add column if not exists require_customer_email boolean not null default false,
+  add column if not exists show_customer_notes boolean not null default true,
+  add column if not exists require_customer_notes boolean not null default false;
 
 alter table public.reservation_events
 drop constraint if exists reservation_events_type_check;

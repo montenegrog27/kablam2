@@ -33,6 +33,13 @@ type Settings = {
   hero_show_title?: boolean | null;
   hero_show_description?: boolean | null;
   hero_show_cta?: boolean | null;
+  require_customer_name?: boolean | null;
+  show_customer_phone?: boolean | null;
+  require_customer_phone?: boolean | null;
+  show_customer_email?: boolean | null;
+  require_customer_email?: boolean | null;
+  show_customer_notes?: boolean | null;
+  require_customer_notes?: boolean | null;
   confirmation_title?: string | null;
   confirmation_message?: string | null;
 };
@@ -273,6 +280,13 @@ export default function ReservationPageClient({
   const maxPartySize = Number(settings.max_party_size || 20);
   const minPartySize = Number(settings.min_party_size || 1);
   const capacityPerSlot = Number(settings.capacity_per_slot || 0);
+  const showPhone = settings.show_customer_phone !== false;
+  const requirePhone = showPhone && settings.require_customer_phone !== false;
+  const showEmail = settings.show_customer_email !== false;
+  const requireEmail = showEmail && settings.require_customer_email === true;
+  const showNotes = settings.show_customer_notes !== false;
+  const requireNotes = showNotes && settings.require_customer_notes === true;
+  const requireName = settings.require_customer_name !== false;
 
   const slots = useMemo(() => {
     if (noTime) return [];
@@ -324,8 +338,10 @@ export default function ReservationPageClient({
 
   const selectedSlot = slots.find((slot) => slot.time === selectedTime);
   const canSubmit =
-    customerName.trim() &&
-    customerPhone.replace(/\D/g, "").length >= 10 &&
+    (!requireName || customerName.trim()) &&
+    (!requirePhone || customerPhone.replace(/\D/g, "").length >= 10) &&
+    (!requireEmail || isValidEmail(customerEmail.trim())) &&
+    (!requireNotes || notes.trim()) &&
     (noTime || selectedTime) &&
     (noTime || !selectedSlot?.remaining || selectedSlot.remaining >= partySize);
 
@@ -353,12 +369,12 @@ export default function ReservationPageClient({
         branchSlug,
         eventId,
         customerName,
-        customerPhone,
-        customerEmail,
+        customerPhone: showPhone ? customerPhone : "",
+        customerEmail: showEmail ? customerEmail : "",
         partySize,
         reservationDate,
         reservationTime: noTime ? "00:00" : selectedTime,
-        notes,
+        notes: showNotes ? notes : "",
       }),
     });
     const result = await response.json().catch(() => null);
@@ -515,19 +531,25 @@ export default function ReservationPageClient({
                 <Summary icon={Clock} text={formatDisplayTime(settings, selectedTime)} color={primaryColor} />
               </div>
 
-              <Input label="Tu nombre" icon={Users}>
+              <Input label={requireName ? "Tu nombre" : "Tu nombre opcional"} icon={Users}>
                 <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="field" placeholder="¿Cómo te llamás?" />
               </Input>
-              <Input label="WhatsApp" icon={Phone}>
-                <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, "").slice(0, 14))} className="field" placeholder="3794 123456" inputMode="tel" />
-              </Input>
-              <Input label="Email opcional" icon={Mail}>
-                <input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="field" placeholder="tu@email.com" type="email" />
-              </Input>
-              <label className="block">
-                <span className="text-xs font-bold uppercase tracking-widest opacity-50">Nota opcional</span>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="field mt-2 min-h-24 resize-none" placeholder="Aclaraciones para la reserva" />
-              </label>
+              {showPhone && (
+                <Input label={requirePhone ? "WhatsApp" : "WhatsApp opcional"} icon={Phone}>
+                  <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, "").slice(0, 14))} className="field" placeholder="3794 123456" inputMode="tel" />
+                </Input>
+              )}
+              {showEmail && (
+                <Input label={requireEmail ? "Email" : "Email opcional"} icon={Mail}>
+                  <input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="field" placeholder="tu@email.com" type="email" />
+                </Input>
+              )}
+              {showNotes && (
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-widest opacity-50">{requireNotes ? "Nota" : "Nota opcional"}</span>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="field mt-2 min-h-24 resize-none" placeholder="Aclaraciones para la reserva" />
+                </label>
+              )}
 
               {error && <p className="rounded-xl bg-red-500/10 p-3 text-center text-sm text-red-600">{error}</p>}
 
@@ -597,6 +619,7 @@ function EventRegistrationView({
     name: "",
     phone: "",
     email: "",
+    notes: "",
     province: "corrientes",
     provinceOther: "",
   });
@@ -627,6 +650,13 @@ function EventRegistrationView({
     : [];
   const province =
     form.province === "otro" ? form.provinceOther.trim() : form.province;
+  const showPhone = settings.show_customer_phone !== false;
+  const requirePhone = showPhone && settings.require_customer_phone !== false;
+  const showEmail = settings.show_customer_email !== false;
+  const requireEmail = showEmail && settings.require_customer_email === true;
+  const showNotes = settings.show_customer_notes !== false;
+  const requireNotes = showNotes && settings.require_customer_notes === true;
+  const requireName = settings.require_customer_name !== false;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -636,16 +666,28 @@ function EventRegistrationView({
       setError("Las inscripciones ya llegaron al cupo maximo.");
       return;
     }
-    if (!form.name.trim()) {
+    if (requireName && !form.name.trim()) {
       setError("Ingresa tu nombre completo.");
       return;
     }
-    if (!normalizeArgPhone(form.phone)) {
+    if (requirePhone && !normalizeArgPhone(form.phone)) {
       setError("Ingresa un WhatsApp argentino valido.");
       return;
     }
-    if (!isValidEmail(form.email.trim())) {
+    if (showPhone && form.phone.trim() && !normalizeArgPhone(form.phone)) {
+      setError("Ingresa un WhatsApp argentino valido.");
+      return;
+    }
+    if (requireEmail && !isValidEmail(form.email.trim())) {
       setError("Ingresa un email valido.");
+      return;
+    }
+    if (showEmail && form.email.trim() && !isValidEmail(form.email.trim())) {
+      setError("Ingresa un email valido.");
+      return;
+    }
+    if (requireNotes && !form.notes.trim()) {
+      setError("Completa la nota solicitada.");
       return;
     }
     if (form.province === "otro" && !form.provinceOther.trim()) {
@@ -661,13 +703,13 @@ function EventRegistrationView({
         branchSlug,
         eventId,
         customerName: form.name,
-        customerPhone: form.phone,
-        customerEmail: form.email,
+        customerPhone: showPhone ? form.phone : "",
+        customerEmail: showEmail ? form.email : "",
         partySize: 1,
         reservationDate: settings.event_date,
         reservationTime: eventTime,
         province,
-        notes: `Provincia: ${province}`,
+        notes: showNotes ? form.notes : "",
       }),
     });
     const result = await response.json().catch(() => null);
@@ -683,6 +725,7 @@ function EventRegistrationView({
       name: "",
       phone: "",
       email: "",
+      notes: "",
       province: "corrientes",
       provinceOther: "",
     });
@@ -752,15 +795,24 @@ function EventRegistrationView({
           )}
 
           <div className="mt-5 space-y-4">
-            <EventInput label="Nombre">
+            <EventInput label={requireName ? "Nombre" : "Nombre opcional"}>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="event-field" placeholder="Nombre y apellido" />
             </EventInput>
-            <EventInput label="WhatsApp">
-              <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="event-field" placeholder="Ej: 3794123456" inputMode="tel" />
-            </EventInput>
-            <EventInput label="Email">
-              <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="event-field" placeholder="tu@email.com" inputMode="email" />
-            </EventInput>
+            {showPhone && (
+              <EventInput label={requirePhone ? "WhatsApp" : "WhatsApp opcional"}>
+                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="event-field" placeholder="Ej: 3794123456" inputMode="tel" />
+              </EventInput>
+            )}
+            {showEmail && (
+              <EventInput label={requireEmail ? "Email" : "Email opcional"}>
+                <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="event-field" placeholder="tu@email.com" inputMode="email" />
+              </EventInput>
+            )}
+            {showNotes && (
+              <EventInput label={requireNotes ? "Nota" : "Nota opcional"}>
+                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="event-field min-h-24 resize-none" placeholder="Aclaraciones para la inscripción" />
+              </EventInput>
+            )}
             <EventInput label="Provincia">
               <select value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value, provinceOther: e.target.value === "otro" ? form.provinceOther : "" })} className="event-field bg-white">
                 <option value="corrientes">Corrientes</option>

@@ -152,7 +152,7 @@ function buildReservationBranchMessage({
     isEvent ? `Nueva inscripcion: *${title}*` : `Nueva reserva: *${branchName}*`,
     "",
     `Cliente: ${customerName.trim()}`,
-    `WhatsApp: ${customerPhone}`,
+    customerPhone ? `WhatsApp: ${customerPhone}` : null,
     customerEmail ? `Email: ${customerEmail}` : null,
     `Fecha: ${formatDate(reservationDate)}`,
     resolveTimeMode(settings) === "none" ? null : `Horario: ${reservationTime.slice(0, 5)}`,
@@ -398,13 +398,8 @@ export async function POST(req: Request) {
       notes,
     } = body;
 
-    if (!branchSlug || !customerName || !customerPhone || !partySize || !reservationDate) {
+    if (!branchSlug || !partySize || !reservationDate) {
       return Response.json({ success: false, error: "Faltan datos obligatorios" }, { status: 400 });
-    }
-
-    const normalizedPhone = normalizeArgPhone(customerPhone);
-    if (!normalizedPhone) {
-      return Response.json({ success: false, error: "WhatsApp invalido" }, { status: 400 });
     }
 
     const { data: branch } = await supabase
@@ -437,6 +432,38 @@ export async function POST(req: Request) {
 
     if (!settings) {
       return Response.json({ success: false, error: "Reservas no disponibles" }, { status: 404 });
+    }
+
+    const showPhone = settings.show_customer_phone !== false;
+    const requirePhone = showPhone && settings.require_customer_phone !== false;
+    const showEmail = settings.show_customer_email !== false;
+    const requireEmail = showEmail && settings.require_customer_email === true;
+    const showNotes = settings.show_customer_notes !== false;
+    const requireNotes = showNotes && settings.require_customer_notes === true;
+    const requireName = settings.require_customer_name !== false;
+    const finalCustomerName = String(customerName || "").trim() || "Cliente";
+    const normalizedPhone = customerPhone ? normalizeArgPhone(customerPhone) : null;
+    const cleanEmail = showEmail ? String(customerEmail || "").trim() : "";
+    const cleanNotes = showNotes ? String(notes || "").trim() : "";
+
+    if (requireName && !String(customerName || "").trim()) {
+      return Response.json({ success: false, error: "Nombre requerido" }, { status: 400 });
+    }
+
+    if (requirePhone && !normalizedPhone) {
+      return Response.json({ success: false, error: "WhatsApp invalido" }, { status: 400 });
+    }
+
+    if (showPhone && customerPhone && !normalizedPhone) {
+      return Response.json({ success: false, error: "WhatsApp invalido" }, { status: 400 });
+    }
+
+    if (requireEmail && !cleanEmail) {
+      return Response.json({ success: false, error: "Email requerido" }, { status: 400 });
+    }
+
+    if (requireNotes && !cleanNotes) {
+      return Response.json({ success: false, error: "Nota requerida" }, { status: 400 });
     }
 
     const timeMode = resolveTimeMode(settings);
@@ -477,13 +504,13 @@ export async function POST(req: Request) {
         tenant_id: branch.tenant_id,
         branch_id: branch.id,
         reservation_event_id: eventId || null,
-        customer_name: customerName.trim(),
-        customer_phone: normalizedPhone,
-        customer_email: customerEmail?.trim() || null,
+        customer_name: finalCustomerName,
+        customer_phone: normalizedPhone || "",
+        customer_email: cleanEmail || null,
         party_size: size,
         reservation_date: reservationDate,
         reservation_time: finalReservationTime,
-        notes: notes?.trim() || null,
+        notes: cleanNotes || null,
         status: "pending",
         source: "customer",
         metadata: province ? { province } : {},
@@ -515,7 +542,7 @@ export async function POST(req: Request) {
     const customerMessage = buildReservationCustomerMessage({
       branchName: branch.name,
       settings,
-      customerName,
+      customerName: finalCustomerName,
       partySize: size,
       reservationDate,
       reservationTime: finalReservationTime,
@@ -524,9 +551,9 @@ export async function POST(req: Request) {
     const branchMessage = buildReservationBranchMessage({
       branchName: branch.name,
       settings,
-      customerName,
-      customerPhone: normalizedPhone,
-      customerEmail,
+      customerName: finalCustomerName,
+      customerPhone: normalizedPhone || "",
+      customerEmail: cleanEmail,
       partySize: size,
       reservationDate,
       reservationTime: finalReservationTime,
@@ -535,12 +562,18 @@ export async function POST(req: Request) {
 
     const [customerWhatsapp, branchWhatsapp] = tenantSlug
       ? await Promise.all([
-          sendWhatsapp({
-            tenantSlug,
-            branchSlug: branch.slug,
-            phone: normalizedPhone,
-            message: customerMessage,
-          }),
+          normalizedPhone
+            ? sendWhatsapp({
+                tenantSlug,
+                branchSlug: branch.slug,
+                phone: normalizedPhone,
+                message: customerMessage,
+              })
+            : Promise.resolve({
+                ok: false,
+                skipped: true,
+                error: "customer_whatsapp_not_provided",
+              }),
           branchReceiverPhone
             ? sendWhatsapp({
                 tenantSlug,

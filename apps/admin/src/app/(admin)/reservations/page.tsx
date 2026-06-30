@@ -51,6 +51,13 @@ type ReservationEvent = {
   hero_show_title: boolean;
   hero_show_description: boolean;
   hero_show_cta: boolean;
+  require_customer_name: boolean;
+  show_customer_phone: boolean;
+  require_customer_phone: boolean;
+  show_customer_email: boolean;
+  require_customer_email: boolean;
+  show_customer_notes: boolean;
+  require_customer_notes: boolean;
   confirmation_title: string;
   confirmation_message: string;
   whatsapp_message_template: string;
@@ -102,6 +109,13 @@ const DEFAULT_EVENT: ReservationEvent = {
   hero_show_title: true,
   hero_show_description: true,
   hero_show_cta: true,
+  require_customer_name: true,
+  show_customer_phone: true,
+  require_customer_phone: true,
+  show_customer_email: true,
+  require_customer_email: false,
+  show_customer_notes: true,
+  require_customer_notes: false,
   confirmation_title: "Reserva recibida",
   confirmation_message: "Te vamos a contactar por WhatsApp con los detalles.",
   whatsapp_message_template:
@@ -195,6 +209,13 @@ function cleanEvent(row: any): ReservationEvent {
     hero_show_title: row.hero_show_title ?? DEFAULT_EVENT.hero_show_title,
     hero_show_description: row.hero_show_description ?? DEFAULT_EVENT.hero_show_description,
     hero_show_cta: row.hero_show_cta ?? DEFAULT_EVENT.hero_show_cta,
+    require_customer_name: row.require_customer_name ?? DEFAULT_EVENT.require_customer_name,
+    show_customer_phone: row.show_customer_phone ?? DEFAULT_EVENT.show_customer_phone,
+    require_customer_phone: row.require_customer_phone ?? DEFAULT_EVENT.require_customer_phone,
+    show_customer_email: row.show_customer_email ?? DEFAULT_EVENT.show_customer_email,
+    require_customer_email: row.require_customer_email ?? DEFAULT_EVENT.require_customer_email,
+    show_customer_notes: row.show_customer_notes ?? DEFAULT_EVENT.show_customer_notes,
+    require_customer_notes: row.require_customer_notes ?? DEFAULT_EVENT.require_customer_notes,
   };
 }
 
@@ -401,6 +422,13 @@ export default function ReservationsPage() {
       hero_show_title: selectedEvent.hero_show_title ?? true,
       hero_show_description: selectedEvent.hero_show_description ?? true,
       hero_show_cta: selectedEvent.hero_show_cta ?? true,
+      require_customer_name: selectedEvent.require_customer_name ?? true,
+      show_customer_phone: selectedEvent.show_customer_phone ?? true,
+      require_customer_phone: selectedEvent.require_customer_phone ?? true,
+      show_customer_email: selectedEvent.show_customer_email ?? true,
+      require_customer_email: selectedEvent.require_customer_email ?? false,
+      show_customer_notes: selectedEvent.show_customer_notes ?? true,
+      require_customer_notes: selectedEvent.require_customer_notes ?? false,
       confirmation_title: selectedEvent.confirmation_title || null,
       confirmation_message: selectedEvent.confirmation_message || null,
       whatsapp_message_template: selectedEvent.whatsapp_message_template || null,
@@ -615,6 +643,21 @@ export default function ReservationsPage() {
                 {selectedEvent.reservation_type === "event" && (
                   <Field label="Que incluye (uno por linea)"><textarea className="input min-h-28 resize-none" value={eventIncludesText(selectedEvent.event_includes)} onChange={(e) => updateEvent("event_includes", e.target.value)} placeholder={"Kit con dorsal y regalos\nCafe libre post Run\nRegalos y sorteos"} /></Field>
                 )}
+                <div className="md:col-span-2">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-gray-300">Campos del formulario</h3>
+                    <p className="mt-1 text-xs text-gray-500">Defini que datos se muestran y cuales son obligatorios para este evento.</p>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <ToggleField label="Nombre obligatorio" checked={selectedEvent.require_customer_name ?? true} onChange={(value) => updateEvent("require_customer_name", value)} />
+                    <ToggleField label="Mostrar WhatsApp" checked={selectedEvent.show_customer_phone ?? true} onChange={(value) => updateEvent("show_customer_phone", value)} />
+                    <ToggleField label="WhatsApp obligatorio" checked={(selectedEvent.show_customer_phone ?? true) && (selectedEvent.require_customer_phone ?? true)} onChange={(value) => updateEvent("require_customer_phone", value)} />
+                    <ToggleField label="Mostrar email" checked={selectedEvent.show_customer_email ?? true} onChange={(value) => updateEvent("show_customer_email", value)} />
+                    <ToggleField label="Email obligatorio" checked={(selectedEvent.show_customer_email ?? true) && (selectedEvent.require_customer_email ?? false)} onChange={(value) => updateEvent("require_customer_email", value)} />
+                    <ToggleField label="Mostrar nota" checked={selectedEvent.show_customer_notes ?? true} onChange={(value) => updateEvent("show_customer_notes", value)} />
+                    <ToggleField label="Nota obligatoria" checked={(selectedEvent.show_customer_notes ?? true) && (selectedEvent.require_customer_notes ?? false)} onChange={(value) => updateEvent("require_customer_notes", value)} />
+                  </div>
+                </div>
                 <Field label="Mensaje al confirmar"><textarea className="input min-h-28 resize-none" value={selectedEvent.confirmation_message || ""} onChange={(e) => updateEvent("confirmation_message", e.target.value)} /></Field>
                 <Field label="Template WhatsApp (pendiente)"><textarea className="input min-h-32 resize-none" value={selectedEvent.whatsapp_message_template || ""} onChange={(e) => updateEvent("whatsapp_message_template", e.target.value)} /></Field>
                 <Field label="Titulo de exito"><input className="input" value={selectedEvent.confirmation_title || ""} onChange={(e) => updateEvent("confirmation_title", e.target.value)} /></Field>
