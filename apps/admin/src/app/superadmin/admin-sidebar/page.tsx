@@ -103,7 +103,7 @@ export default function AdminSidebarConfig() {
   const [selectedTenant, setSelectedTenant] = useState<string>("");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -119,29 +119,29 @@ export default function AdminSidebarConfig() {
 
   useEffect(() => {
     if (!selectedTenant) return;
-    fetch(`/api/superadmin/admin-sidebar?tenant_id=${selectedTenant}`)
-      .then((r) => r.json())
-      .then((data) => setHidden(new Set(data.hidden || [])));
+    supabase
+      .from("admin_sidebar_hidden")
+      .select("nav_key")
+      .eq("tenant_id", selectedTenant)
+      .then(({ data }) => setHidden(new Set((data || []).map((r) => r.nav_key))));
   }, [selectedTenant]);
 
   const toggleItem = async (navKey: string, isHidden: boolean) => {
-    setSaving(navKey);
+    setToggling(navKey);
     if (isHidden) {
-      await fetch("/api/superadmin/admin-sidebar", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: selectedTenant, nav_key: navKey }),
-      });
+      await supabase
+        .from("admin_sidebar_hidden")
+        .delete()
+        .eq("tenant_id", selectedTenant)
+        .eq("nav_key", navKey);
       setHidden((prev) => { const next = new Set(prev); next.delete(navKey); return next; });
     } else {
-      await fetch("/api/superadmin/admin-sidebar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: selectedTenant, nav_key: navKey }),
-      });
+      await supabase
+        .from("admin_sidebar_hidden")
+        .insert({ tenant_id: selectedTenant, nav_key: navKey });
       setHidden((prev) => { const next = new Set(prev); next.add(navKey); return next; });
     }
-    setSaving(null);
+    setToggling(null);
   };
 
   const hiddenCount = hidden.size;
@@ -205,7 +205,7 @@ export default function AdminSidebarConfig() {
                     <div className="divide-y">
                       {section.items.map((item) => {
                         const isHidden = hidden.has(item.href);
-                        const isSaving = saving === item.href;
+                        const isToggling = toggling === item.href;
                         return (
                           <div key={item.href} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition">
                             <div>
@@ -214,14 +214,14 @@ export default function AdminSidebarConfig() {
                             </div>
                             <button
                               onClick={() => toggleItem(item.href, isHidden)}
-                              disabled={!!isSaving}
+                              disabled={!!isToggling}
                               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                                 isHidden
                                   ? "bg-red-100 text-red-700 hover:bg-red-200"
                                   : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                               } disabled:opacity-50`}
                             >
-                              {isSaving ? (
+                              {isToggling ? (
                                 <Loader2 size={14} className="animate-spin" />
                               ) : isHidden ? (
                                 <EyeOff size={14} />
