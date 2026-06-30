@@ -25,6 +25,8 @@ type QuickReply = {
   message: string;
   icon: string | null;
   position: number;
+  show_in_whatsapp_tab?: boolean | null;
+  show_in_order_sidebar?: boolean | null;
   is_active: boolean;
 };
 
@@ -58,6 +60,8 @@ const DEFAULT_FORM = {
   icon: "",
   branch_id: "",
   position: "0",
+  show_in_whatsapp_tab: true,
+  show_in_order_sidebar: true,
   is_active: true,
 };
 
@@ -240,6 +244,8 @@ export default function WhatsAppAdminPage() {
       icon: reply.icon || "",
       branch_id: reply.branch_id || "",
       position: String(reply.position || 0),
+      show_in_whatsapp_tab: reply.show_in_whatsapp_tab !== false,
+      show_in_order_sidebar: reply.show_in_order_sidebar !== false,
       is_active: reply.is_active,
     });
     setTab("quick");
@@ -258,6 +264,8 @@ export default function WhatsAppAdminPage() {
       message: form.message.trim(),
       icon: form.icon.trim() || null,
       position: Number(form.position || 0),
+      show_in_whatsapp_tab: form.show_in_whatsapp_tab,
+      show_in_order_sidebar: form.show_in_order_sidebar,
       is_active: form.is_active,
       updated_at: new Date().toISOString(),
     };
@@ -495,6 +503,24 @@ export default function WhatsAppAdminPage() {
                 />
                 Activo
               </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300">
+                  <span>Mostrar en tab WhatsApp</span>
+                  <input
+                    type="checkbox"
+                    checked={form.show_in_whatsapp_tab}
+                    onChange={(event) => setForm((prev) => ({ ...prev, show_in_whatsapp_tab: event.target.checked }))}
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300">
+                  <span>Mostrar en pedidos</span>
+                  <input
+                    type="checkbox"
+                    checked={form.show_in_order_sidebar}
+                    onChange={(event) => setForm((prev) => ({ ...prev, show_in_order_sidebar: event.target.checked }))}
+                  />
+                </label>
+              </div>
               <div className="flex gap-2">
                 <button onClick={saveReply} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-500 px-4 py-3 text-sm font-black text-black transition hover:bg-green-400">
                   <Save size={17} />
@@ -531,6 +557,8 @@ export default function WhatsAppAdminPage() {
                         {reply.icon ? `${reply.icon} ` : ""}{reply.short_name}
                       </span>
                       {!reply.is_active && <span className="rounded-full bg-red-500/15 px-2 py-1 text-[11px] font-bold text-red-300">Inactivo</span>}
+                      {reply.show_in_whatsapp_tab !== false && <span className="rounded-full bg-green-500/10 px-2 py-1 text-[11px] font-bold text-green-300">Tab WhatsApp</span>}
+                      {reply.show_in_order_sidebar !== false && <span className="rounded-full bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-300">Pedidos</span>}
                       <span className="text-xs text-gray-600">
                         {reply.branch_id ? branches.find((branch) => branch.id === reply.branch_id)?.name || "Sucursal" : "Todas"}
                       </span>

@@ -8,6 +8,8 @@ create table if not exists public.whatsapp_quick_replies (
   message text not null,
   icon text,
   position integer not null default 0,
+  show_in_whatsapp_tab boolean not null default true,
+  show_in_order_sidebar boolean not null default true,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

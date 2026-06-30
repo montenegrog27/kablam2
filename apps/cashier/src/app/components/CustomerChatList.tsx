@@ -370,6 +370,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
       .select("id, short_name, message, icon")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
+      .eq("show_in_whatsapp_tab", true)
       .or(`branch_id.eq.${branchId},branch_id.is.null`)
       .order("position", { ascending: true })
       .order("short_name", { ascending: true });

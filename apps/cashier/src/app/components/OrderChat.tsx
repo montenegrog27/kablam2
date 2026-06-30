@@ -139,6 +139,7 @@ export default function OrderChat({ order, session, onClose }: any) {
       .select("id, short_name, message, icon")
       .eq("tenant_id", order.tenant_id)
       .eq("is_active", true)
+      .eq("show_in_order_sidebar", true)
       .or(`branch_id.eq.${order.branch_id},branch_id.is.null`)
       .order("position", { ascending: true })
       .order("short_name", { ascending: true });
