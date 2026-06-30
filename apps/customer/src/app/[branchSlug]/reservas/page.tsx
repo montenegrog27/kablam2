@@ -2,6 +2,35 @@ import { createSupabaseServer } from "@kablam/supabase/server";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import FontLoader from "@/app/components/FontLoader";
 import { getBrandFontFamily } from "@/lib/fonts";
+import { buildCustomerMetadata } from "@/lib/metadata";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ branchSlug: string }>;
+}): Promise<Metadata> {
+  const supabase = await createSupabaseServer();
+  const { branchSlug } = await params;
+  const { data: branch } = await supabase
+    .from("branches")
+    .select("id,name")
+    .eq("slug", branchSlug)
+    .maybeSingle();
+  if (!branch) return { title: "Reservas - Kablam" };
+  const { data: branding } = await supabase
+    .from("branch_settings")
+    .select("logo_url, meta_title, meta_description")
+    .eq("branch_id", branch.id)
+    .maybeSingle();
+  return buildCustomerMetadata({
+    title: branding?.meta_title || `${branch.name} - Reservas`,
+    fallbackTitle: `${branch.name} - Reservas`,
+    description: branding?.meta_description || `Reservá tu lugar en ${branch.name}`,
+    ogImage: branding?.logo_url,
+    faviconUrl: branding?.logo_url,
+  });
+}
 
 function formatDate(value?: string | null) {
   if (!value) return "Fecha a confirmar";

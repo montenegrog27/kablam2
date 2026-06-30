@@ -7,6 +7,7 @@ type CustomerMetaInput = {
   faviconUrl?: string | null;
   appIconUrl?: string | null;
   manifestUrl?: string | null;
+  ogImage?: string | null;
 };
 
 export function normalizeAssetUrl(url?: string | null) {
@@ -30,10 +31,19 @@ export function buildCustomerMetadata({
   faviconUrl,
   appIconUrl,
   manifestUrl,
+  ogImage,
 }: CustomerMetaInput): Metadata {
   const metaTitle = title?.trim() || fallbackTitle?.trim() || "Kablam";
   const normalizedFaviconUrl = normalizeAssetUrl(faviconUrl);
   const normalizedAppIconUrl = normalizeAssetUrl(appIconUrl) || normalizedFaviconUrl;
+  const normalizedOgImage = normalizeAssetUrl(ogImage);
+  const openGraph: Metadata["openGraph"] = {
+    title: metaTitle,
+    description: description || `Pedidos online de ${metaTitle}`,
+  };
+  if (normalizedOgImage) {
+    openGraph.images = [{ url: normalizedOgImage, width: 1200, height: 630 }];
+  }
   const metadata: Metadata = {
     title: metaTitle,
     description: description || `Pedidos online de ${metaTitle}`,
@@ -46,10 +56,7 @@ export function buildCustomerMetadata({
     formatDetection: {
       telephone: false,
     },
-    openGraph: {
-      title: metaTitle,
-      description: description || `Pedidos online de ${metaTitle}`,
-    },
+    openGraph,
     other: {
       "mobile-web-app-capable": "yes",
       "apple-mobile-web-app-capable": "yes",

@@ -1,6 +1,46 @@
 import { createSupabaseServer } from "@kablam/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import ReservationPageClient from "../ReservationPageClient";
+import { buildCustomerMetadata } from "@/lib/metadata";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ branchSlug: string; eventId: string }>;
+}): Promise<Metadata> {
+  const supabase = await createSupabaseServer();
+  const { branchSlug, eventId } = await params;
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId);
+  const { data: branch } = await supabase
+    .from("branches")
+    .select("id,name")
+    .eq("slug", branchSlug)
+    .maybeSingle();
+  if (!branch) return { title: "Reservas - Kablam" };
+  const eventQuery = supabase
+    .from("reservation_events")
+    .select("title, description, hero_image_url")
+    .eq("branch_id", branch.id)
+    .eq("enabled", true);
+  const [{ data: event }, { data: branding }] = await Promise.all([
+    (isUuid ? eventQuery.eq("id", eventId) : eventQuery.eq("slug", eventId)).maybeSingle(),
+    supabase
+      .from("branch_settings")
+      .select("logo_url, meta_title")
+      .eq("branch_id", branch.id)
+      .maybeSingle(),
+  ]);
+  const title = event?.title || branding?.meta_title || `${branch.name} - Reservas`;
+  return buildCustomerMetadata({
+    title,
+    fallbackTitle: `${branch.name} - Reservas`,
+    description: event?.description || `Reservá tu lugar en ${branch.name}`,
+    ogImage: branding?.logo_url,
+    faviconUrl: branding?.logo_url,
+  });
+}
 
 export default async function ReservationEventPage({
   params,
