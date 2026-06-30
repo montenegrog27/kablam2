@@ -476,7 +476,7 @@ export default function ReservationPageClient({
               </div>
 
               <div>
-                <h3 className="mb-3 text-2xl font-bold">{singleTime ? "Horario de entrada" : "Horario"}</h3>
+                <h3 className="mb-3 text-2xl font-bold">{singleTime ? "Horario" : "Horario"}</h3>
                 {noTime ? (
                   <div className="rounded-2xl border px-4 py-5 text-center font-bold" style={{ borderColor: `${primaryColor}25`, background: `${primaryColor}0D` }}>
                     Este evento no requiere horario
