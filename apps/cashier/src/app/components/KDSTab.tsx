@@ -10,6 +10,8 @@ import {
   Clock,
   Package,
   Play,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { useCurrentBranch } from "../(cashier)/context/BranchContext";
 import {
@@ -58,9 +60,13 @@ export default function KDSTab() {
   const [categoryConfig, setCategoryConfig] = useState<Record<string, KdsCategoryConfig>>({});
   const [now, setNow] = useState(Date.now());
   const [showConfirmed, setShowConfirmed] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [realtimeStatus, setRealtimeStatus] =
     useState<KdsRealtimeStatus>("disabled");
   const preparingRef = useRef<HTMLDivElement>(null);
+  const preparingIdsRef = useRef<Set<string>>(new Set());
+  const preparingWatchReadyRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const confirmed = allOrders.filter((o) => o.status === "confirmed");
   const preparing = allOrders.filter((o) => o.status === "preparing");
@@ -79,6 +85,58 @@ export default function KDSTab() {
       });
     }
   }, [preparing.length]);
+
+  const playKdsBeep = async (force = false) => {
+    if ((!force && !soundEnabled) || typeof window === "undefined") return;
+
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const context = audioContextRef.current || new AudioContextClass();
+    audioContextRef.current = context;
+    if (context.state === "suspended") await context.resume();
+
+    const playTone = (frequency: number, delay: number) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const startAt = context.currentTime + delay;
+      oscillator.type = "square";
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.18, startAt + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.22);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + 0.24);
+    };
+
+    playTone(880, 0);
+    playTone(1175, 0.28);
+  };
+
+  const enableSound = async () => {
+    setSoundEnabled(true);
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContextClass) {
+      const context = audioContextRef.current || new AudioContextClass();
+      audioContextRef.current = context;
+      if (context.state === "suspended") await context.resume();
+    }
+    setTimeout(() => void playKdsBeep(true), 0);
+  };
+
+  useEffect(() => {
+    const currentIds = new Set(preparing.map((order) => order.id));
+    const hasNewPreparing = [...currentIds].some((id) => !preparingIdsRef.current.has(id));
+
+    if (preparingWatchReadyRef.current && hasNewPreparing) {
+      void playKdsBeep();
+    }
+
+    preparingIdsRef.current = currentIds;
+    preparingWatchReadyRef.current = true;
+  }, [preparing]);
 
   const loadOrders = async () => {
     if (!branchId) return;
@@ -539,11 +597,33 @@ export default function KDSTab() {
 
   return (
     <div className="h-full overflow-y-auto bg-gray-950 p-6 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-800 bg-gray-900 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <ChefHat size={22} className="text-emerald-300" />
+          <div>
+            <h2 className="text-lg font-black text-gray-100">KDS Cocina</h2>
+            <p className="text-xs text-gray-500">Aviso sonoro para pedidos nuevos en preparacion</p>
+          </div>
+          <RealtimeBadge status={realtimeStatus} />
+        </div>
+        <button
+          type="button"
+          onClick={() => soundEnabled ? setSoundEnabled(false) : void enableSound()}
+          className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-black transition ${
+            soundEnabled
+              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+              : "border-gray-700 bg-gray-950 text-gray-300 hover:bg-gray-800"
+          }`}
+        >
+          {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
+          {soundEnabled ? "Sonido ON" : "Activar sonido"}
+        </button>
+      </div>
+
       {/* Totales sticky */}
       {sortedTotalIngredients.length > 0 && (
         <div className="flex flex-wrap gap-4 items-center bg-gray-900 rounded-2xl px-6 py-5 border border-gray-800 sticky top-0 z-10 shadow-lg">
           <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">En cocina</span>
-          <RealtimeBadge status={realtimeStatus} />
           {sortedTotalIngredients.map(([id, info]) => (
             <span
               key={id}

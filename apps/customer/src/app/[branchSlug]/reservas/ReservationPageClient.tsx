@@ -28,6 +28,11 @@ type Settings = {
   event_subtitle?: string | null;
   event_includes?: string[] | null;
   event_theme_color?: string | null;
+  hero_layout?: "center_bottom" | "center_card" | "left_panel" | "top_logo_bottom_cta" | "poster_clean" | null;
+  hero_show_logo?: boolean | null;
+  hero_show_title?: boolean | null;
+  hero_show_description?: boolean | null;
+  hero_show_cta?: boolean | null;
   confirmation_title?: string | null;
   confirmation_message?: string | null;
 };
@@ -104,6 +109,136 @@ function timeFromMinutes(value: number) {
   const hours = Math.floor(value / 60);
   const minutes = value % 60;
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function ReservationHero({
+  title,
+  description,
+  branchName,
+  settings,
+  branding,
+  primaryColor,
+  accentColor,
+  backgroundColor,
+  onCta,
+  ctaLabel = "RESERVAR",
+}: {
+  title: string;
+  description?: string | null;
+  branchName: string;
+  settings: Settings;
+  branding?: Branding;
+  primaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
+  onCta: () => void;
+  ctaLabel?: string;
+}) {
+  const layout = settings.hero_layout || "center_bottom";
+  const showLogo = settings.hero_show_logo !== false;
+  const showTitle = settings.hero_show_title !== false;
+  const showDescription = settings.hero_show_description !== false;
+  const showCta = settings.hero_show_cta !== false;
+  const hasVisibleContent = showLogo || showTitle || showDescription || showCta;
+  const logo = showLogo && branding?.logo_url ? (
+    <img src={branding.logo_url} alt={branchName} className="mx-auto h-16 w-auto object-contain md:h-20" />
+  ) : null;
+  const cta = showCta ? (
+    <button
+      onClick={onCta}
+      className="rounded-full px-10 py-4 text-sm font-black uppercase tracking-[0.18em] transition hover:scale-[1.02] active:scale-[0.98] md:px-12 md:text-base"
+      style={{ background: primaryColor, color: backgroundColor }}
+    >
+      {ctaLabel}
+    </button>
+  ) : null;
+  const textBlock = (
+    <>
+      {logo}
+      {showTitle && <h1 className="mt-5 text-5xl font-black uppercase leading-[0.9] tracking-[-0.06em] md:text-7xl">{title}</h1>}
+      {showDescription && description && <p className="mx-auto mt-4 max-w-xl text-base font-medium leading-7 text-white/85 md:text-lg">{description}</p>}
+      {cta && <div className="mt-7">{cta}</div>}
+    </>
+  );
+
+  const background = settings.hero_image_url ? (
+    <img
+      src={settings.hero_image_url}
+      alt={title}
+      className={`h-full w-full ${layout === "poster_clean" ? "object-contain" : "object-cover"}`}
+    />
+  ) : (
+    <div className="h-full w-full" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})` }} />
+  );
+
+  if (layout === "poster_clean") {
+    return (
+      <section className="relative flex min-h-dvh flex-col overflow-hidden" style={{ background: accentColor }}>
+        <div className="absolute inset-0">{background}</div>
+        {showCta && (
+          <div className="relative z-10 mt-auto flex justify-center px-6 pb-8">
+            {cta}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (layout === "left_panel") {
+    return (
+      <section className="relative min-h-dvh overflow-hidden">
+        <div className="absolute inset-0">{background}</div>
+        <div className="relative z-10 flex min-h-dvh items-end p-4 md:items-center md:p-8">
+          {hasVisibleContent && (
+            <div className="w-full max-w-xl bg-black px-6 py-8 text-white md:px-10 md:py-12">
+              <div className="text-left [&_img]:mx-0">{textBlock}</div>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  if (layout === "center_card") {
+    return (
+      <section className="relative flex min-h-dvh items-center justify-center overflow-hidden px-5 py-10">
+        <div className="absolute inset-0">{background}</div>
+        <div className="absolute inset-0 bg-black/25" />
+        {hasVisibleContent && (
+          <div className="relative z-10 w-full max-w-2xl bg-black px-6 py-8 text-center text-white md:px-12 md:py-14">
+            {textBlock}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (layout === "top_logo_bottom_cta") {
+    return (
+      <section className="relative flex min-h-dvh flex-col overflow-hidden px-6 py-8 text-white">
+        <div className="absolute inset-0">{background}</div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/70" />
+        <div className="relative z-10 flex justify-center">{logo}</div>
+        <div className="relative z-10 mt-auto text-center">
+          {showTitle && <h1 className="text-5xl font-black uppercase leading-[0.9] tracking-[-0.06em] md:text-7xl">{title}</h1>}
+          {showDescription && description && <p className="mx-auto mt-4 max-w-xl text-base font-medium leading-7 text-white/85 md:text-lg">{description}</p>}
+          {cta && <div className="mt-7">{cta}</div>}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="relative flex h-dvh min-h-[620px] flex-col overflow-hidden">
+      <div className="absolute inset-0">{background}</div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/10" />
+      {hasVisibleContent && (
+        <div className="relative z-10 mt-auto px-6 pb-10 text-center text-white">
+          {textBlock}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function ReservationPageClient({
@@ -274,28 +409,17 @@ export default function ReservationPageClient({
     <main className="min-h-screen" style={{ background: backgroundColor, color: primaryColor, fontFamily }}>
       <FontLoader branding={branding} />
 
-      <section className="relative flex h-dvh min-h-[620px] flex-col overflow-hidden">
-        <div className="absolute inset-0">
-          {settings.hero_image_url ? (
-            <img src={settings.hero_image_url} alt={title} className="h-full w-full object-cover" />
-          ) : (
-            <div className="h-full w-full" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})` }} />
-          )}
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/10" />
-        <div className="relative z-10 mt-auto px-6 pb-10 text-center text-white">
-          {branding?.logo_url && <img src={branding.logo_url} alt={branchName} className="mx-auto mb-5 h-20 w-auto object-contain" />}
-          <h1 className="text-5xl font-bold leading-none md:text-7xl">{title}</h1>
-          <p className="mx-auto mt-4 max-w-xl text-lg leading-7 text-white/80">{settings.description}</p>
-          <button
-            onClick={scrollToForm}
-            className="mt-8 rounded-full px-12 py-4 text-lg font-black tracking-wide shadow-2xl transition hover:scale-[1.02] active:scale-[0.98]"
-            style={{ background: primaryColor, color: backgroundColor }}
-          >
-            RESERVAR
-          </button>
-        </div>
-      </section>
+      <ReservationHero
+        title={title}
+        description={settings.description}
+        branchName={branchName}
+        settings={settings}
+        branding={branding}
+        primaryColor={primaryColor}
+        accentColor={accentColor}
+        backgroundColor={backgroundColor}
+        onCta={scrollToForm}
+      />
 
       <section ref={contentRef} className="px-5 py-10">
         <div className="mx-auto max-w-lg">
@@ -468,6 +592,7 @@ function EventRegistrationView({
   branding,
   reservations,
 }: Props) {
+  const contentRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -567,62 +692,29 @@ function EventRegistrationView({
     <main className="min-h-screen bg-[#f7f7f4] text-slate-950">
       <FontLoader branding={branding} />
 
-      <section style={{ background: themeColor }}>
-        <div className="relative mx-auto aspect-[820/312] w-full max-w-6xl">
-          {settings.hero_image_url ? (
-            <img src={settings.hero_image_url} alt={eventName} className="h-full w-full object-contain" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center px-6 text-center text-5xl font-black uppercase text-white">
-              {eventName}
-            </div>
-          )}
+      <ReservationHero
+        title={eventName}
+        description={settings.event_subtitle || settings.description}
+        branchName={branchName}
+        settings={settings}
+        branding={branding}
+        primaryColor={darkColor}
+        accentColor={themeColor}
+        backgroundColor="#f7f7f4"
+        onCta={() => contentRef.current?.scrollIntoView({ behavior: "smooth" })}
+        ctaLabel="INSCRIBIRME"
+      />
+
+      <section className="text-white" style={{ background: darkColor }}>
+        <div className="mx-auto grid max-w-6xl gap-3 px-5 py-5 text-sm font-semibold md:grid-cols-4 md:px-8">
+          <div className="border-t border-white/35 pt-3">Lugar: {settings.location_name || branchName}</div>
+          <div className="border-t border-white/35 pt-3">{settings.location_address || "Direccion a confirmar"}</div>
+          <div className="border-t border-white/35 pt-3">{eventDate} · {eventTimeLabel}</div>
+          <div className="border-t border-white/35 pt-3">Entrada: {price ? formatCurrency(price) : "A confirmar"}</div>
         </div>
       </section>
 
-      <section className="text-white" style={{ background: themeColor }}>
-        <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
-          <div className="mb-7 flex items-center justify-between gap-4 text-sm font-semibold uppercase tracking-[0.2em]">
-            <span>{settings.location_name || branchName}</span>
-            <span>{eventDate}</span>
-          </div>
-
-          <div className="max-w-3xl">
-            {settings.event_badge && (
-              <p className="mb-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-bold" style={{ color: darkColor }}>
-                {settings.event_badge}
-              </p>
-            )}
-            <h1 className="text-5xl font-black uppercase leading-[0.95] md:text-7xl">
-              {eventName}
-            </h1>
-            {settings.description && (
-              <p className="mt-6 max-w-2xl text-xl font-medium leading-relaxed text-white/95">
-                {settings.description}
-              </p>
-            )}
-            {settings.event_subtitle && (
-              <p className="mt-5 text-2xl font-black">{settings.event_subtitle}</p>
-            )}
-          </div>
-
-          <div className="mt-8 grid gap-3 pb-2 text-sm font-semibold md:grid-cols-5">
-            <div className="border-t border-white/50 pt-3">
-              Lugar: {settings.location_name || branchName}
-            </div>
-            <div className="border-t border-white/50 pt-3">
-              {settings.location_address || "Direccion a confirmar"}
-            </div>
-            <div className="border-t border-white/50 pt-3">
-              {eventTimeLabel}
-            </div>
-            <div className="border-t border-white/50 pt-3">
-              Entrada: {price ? formatCurrency(price) : "A confirmar"}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto grid max-w-6xl gap-8 px-5 py-10 md:grid-cols-[1fr_420px] md:px-8">
+      <section ref={contentRef} className="mx-auto grid max-w-6xl gap-8 px-5 py-10 md:grid-cols-[1fr_420px] md:px-8">
         <div className="space-y-6">
           {includes.length > 0 && (
             <div className="rounded-lg border border-slate-200 bg-white p-6">

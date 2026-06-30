@@ -46,6 +46,11 @@ type ReservationEvent = {
   event_subtitle: string;
   event_includes: string[] | string;
   event_theme_color: string;
+  hero_layout: "center_bottom" | "center_card" | "left_panel" | "top_logo_bottom_cta" | "poster_clean";
+  hero_show_logo: boolean;
+  hero_show_title: boolean;
+  hero_show_description: boolean;
+  hero_show_cta: boolean;
   confirmation_title: string;
   confirmation_message: string;
   whatsapp_message_template: string;
@@ -92,6 +97,11 @@ const DEFAULT_EVENT: ReservationEvent = {
   event_subtitle: "",
   event_includes: [],
   event_theme_color: "#75aadb",
+  hero_layout: "center_bottom",
+  hero_show_logo: true,
+  hero_show_title: true,
+  hero_show_description: true,
+  hero_show_cta: true,
   confirmation_title: "Reserva recibida",
   confirmation_message: "Te vamos a contactar por WhatsApp con los detalles.",
   whatsapp_message_template:
@@ -180,6 +190,11 @@ function cleanEvent(row: any): ReservationEvent {
     deposit_amount: row.deposit_amount ?? "",
     event_includes: Array.isArray(row.event_includes) ? row.event_includes : [],
     event_theme_color: row.event_theme_color || DEFAULT_EVENT.event_theme_color,
+    hero_layout: row.hero_layout || DEFAULT_EVENT.hero_layout,
+    hero_show_logo: row.hero_show_logo ?? DEFAULT_EVENT.hero_show_logo,
+    hero_show_title: row.hero_show_title ?? DEFAULT_EVENT.hero_show_title,
+    hero_show_description: row.hero_show_description ?? DEFAULT_EVENT.hero_show_description,
+    hero_show_cta: row.hero_show_cta ?? DEFAULT_EVENT.hero_show_cta,
   };
 }
 
@@ -381,6 +396,11 @@ export default function ReservationsPage() {
       event_subtitle: selectedEvent.event_subtitle || null,
       event_includes: cleanEventIncludes(selectedEvent.event_includes),
       event_theme_color: selectedEvent.event_theme_color || null,
+      hero_layout: selectedEvent.hero_layout || "center_bottom",
+      hero_show_logo: selectedEvent.hero_show_logo ?? true,
+      hero_show_title: selectedEvent.hero_show_title ?? true,
+      hero_show_description: selectedEvent.hero_show_description ?? true,
+      hero_show_cta: selectedEvent.hero_show_cta ?? true,
       confirmation_title: selectedEvent.confirmation_title || null,
       confirmation_message: selectedEvent.confirmation_message || null,
       whatsapp_message_template: selectedEvent.whatsapp_message_template || null,
@@ -538,6 +558,21 @@ export default function ReservationsPage() {
                 <Field label="Titulo"><input className="input" value={selectedEvent.title || ""} onChange={(e) => updateEvent("title", e.target.value)} /></Field>
                 <Field label="URL del evento"><input className="input" value={selectedEvent.slug || ""} onChange={(e) => updateEvent("slug", slugify(e.target.value))} placeholder="sobremesa-del-mediodia" /></Field>
                 <Field label="Imagen hero"><input className="input" value={selectedEvent.hero_image_url || ""} onChange={(e) => updateEvent("hero_image_url", e.target.value)} placeholder="https://..." /></Field>
+                <Field label="Formato del hero">
+                  <select className="input" value={selectedEvent.hero_layout || "center_bottom"} onChange={(e) => updateEvent("hero_layout", e.target.value)}>
+                    <option value="center_bottom">Centro abajo sobre imagen</option>
+                    <option value="center_card">Caja oscura centrada</option>
+                    <option value="left_panel">Panel negro lateral</option>
+                    <option value="top_logo_bottom_cta">Logo arriba, boton abajo</option>
+                    <option value="poster_clean">Solo imagen / poster limpio</option>
+                  </select>
+                </Field>
+                <div className="grid grid-cols-2 gap-2 md:col-span-2">
+                  <ToggleField label="Mostrar logo" checked={selectedEvent.hero_show_logo ?? true} onChange={(value) => updateEvent("hero_show_logo", value)} />
+                  <ToggleField label="Mostrar titulo" checked={selectedEvent.hero_show_title ?? true} onChange={(value) => updateEvent("hero_show_title", value)} />
+                  <ToggleField label="Mostrar descripcion" checked={selectedEvent.hero_show_description ?? true} onChange={(value) => updateEvent("hero_show_description", value)} />
+                  <ToggleField label="Mostrar boton" checked={selectedEvent.hero_show_cta ?? true} onChange={(value) => updateEvent("hero_show_cta", value)} />
+                </div>
                 {selectedEvent.reservation_type === "event" && (
                   <>
                     <Field label="Badge"><input className="input" value={selectedEvent.event_badge || ""} onChange={(e) => updateEvent("event_badge", e.target.value)} placeholder="5K participativo" /></Field>
@@ -723,6 +758,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <label className="space-y-1">
       <span className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</span>
       {children}
+    </label>
+  );
+}
+
+function ToggleField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300">
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 accent-white" />
     </label>
   );
 }

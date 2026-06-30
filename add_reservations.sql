@@ -73,6 +73,11 @@ create table if not exists public.reservation_events (
   event_subtitle text,
   event_includes jsonb not null default '[]'::jsonb,
   event_theme_color text,
+  hero_layout text not null default 'center_bottom',
+  hero_show_logo boolean not null default true,
+  hero_show_title boolean not null default true,
+  hero_show_description boolean not null default true,
+  hero_show_cta boolean not null default true,
   confirmation_title text,
   confirmation_message text,
   whatsapp_message_template text,
@@ -92,7 +97,12 @@ alter table public.reservation_events
   add column if not exists event_badge text,
   add column if not exists event_subtitle text,
   add column if not exists event_includes jsonb not null default '[]'::jsonb,
-  add column if not exists event_theme_color text;
+  add column if not exists event_theme_color text,
+  add column if not exists hero_layout text not null default 'center_bottom',
+  add column if not exists hero_show_logo boolean not null default true,
+  add column if not exists hero_show_title boolean not null default true,
+  add column if not exists hero_show_description boolean not null default true,
+  add column if not exists hero_show_cta boolean not null default true;
 
 alter table public.reservation_events
 drop constraint if exists reservation_events_type_check;
@@ -107,6 +117,13 @@ drop constraint if exists reservation_events_time_mode_check;
 alter table public.reservation_events
 add constraint reservation_events_time_mode_check
 check (time_mode in ('interval', 'single', 'none'));
+
+alter table public.reservation_events
+drop constraint if exists reservation_events_hero_layout_check;
+
+alter table public.reservation_events
+add constraint reservation_events_hero_layout_check
+check (hero_layout in ('center_bottom', 'center_card', 'left_panel', 'top_logo_bottom_cta', 'poster_clean'));
 
 alter table public.reservation_settings
   add column if not exists time_mode text not null default 'interval';
