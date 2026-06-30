@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Plus, Trash2, ChevronUp, ChevronDown, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown, AlertCircle, Eye, EyeOff, Volume2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -121,6 +121,20 @@ export default function KDSConfigPage() {
     loadData();
   };
 
+  const updateKdsItem = async (id: string, values: Record<string, any>) => {
+    setError("");
+    const { error: err } = await supabase.from("kds_config").update(values).eq("id", id);
+    if (err) {
+      setError(
+        err.message.includes("schema cache") || err.message.includes("column")
+          ? `${err.message}. Ejecuta add_kds_voice_config.sql en Supabase y recarga esta vista.`
+          : err.message,
+      );
+      return;
+    }
+    loadData();
+  };
+
   const moveCategory = async (idx: number, direction: -1 | 1) => {
     const targetIdx = idx + direction;
     if (targetIdx < 0 || targetIdx >= categories.length) return;
@@ -162,7 +176,7 @@ export default function KDSConfigPage() {
         {config.length === 0 ? (
           <div className="text-center py-12 text-gray-400 text-sm">No hay ingredientes configurados</div>
         ) : config.map((item, idx) => (
-          <div key={item.id} className="bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 flex items-center justify-between">
+          <div key={item.id} className="bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">{item.icon || "🍔"}</span>
               <div>
@@ -170,7 +184,45 @@ export default function KDSConfigPage() {
                 <p className="text-xs text-gray-400">{item.ingredients?.name || "—"}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-1 flex-col gap-2 rounded-xl border border-gray-800 bg-gray-950/70 p-3 lg:max-w-xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-gray-400">
+                  <Volume2 size={14} /> Voz KDS
+                </span>
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={item.voice_enabled ?? true}
+                    onChange={(e) => updateKdsItem(item.id, { voice_enabled: e.target.checked })}
+                  />
+                  anunciar
+                </label>
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={item.voice_repeat ?? true}
+                    onChange={(e) => updateKdsItem(item.id, { voice_repeat: e.target.checked })}
+                  />
+                  repetir
+                </label>
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={item.voice_include_total ?? true}
+                    onChange={(e) => updateKdsItem(item.id, { voice_include_total: e.target.checked })}
+                  />
+                  decir total
+                </label>
+              </div>
+              <input
+                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                placeholder={`Nombre para voz: ${item.name}`}
+                value={item.voice_label || ""}
+                onChange={(e) => updateKdsItem(item.id, { voice_label: e.target.value || null })}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-1">
               <button onClick={() => moveUp(idx)} className="p-1.5 rounded hover:bg-gray-800 text-gray-400 disabled:opacity-20" disabled={idx === 0} title="Subir">
                 <ChevronUp size={16} />
               </button>

@@ -26,6 +26,10 @@ type KdsCounter = {
   icon: string;
   name: string;
   sortOrder: number;
+  voiceEnabled: boolean;
+  voiceLabel?: string | null;
+  voiceRepeat: boolean;
+  voiceIncludeTotal: boolean;
 };
 
 type ExpandedKdsItem = {
@@ -115,6 +119,19 @@ export default function KDSTab() {
     playTone(1175, 0.28);
   };
 
+  const speakKdsText = (text: string, force = false) => {
+    if ((!force && !soundEnabled) || typeof window === "undefined") return;
+    if (!("speechSynthesis" in window)) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "es-AR";
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    window.speechSynthesis.speak(utterance);
+  };
+
   const enableSound = async () => {
     setSoundEnabled(true);
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -123,15 +140,18 @@ export default function KDSTab() {
       audioContextRef.current = context;
       if (context.state === "suspended") await context.resume();
     }
-    setTimeout(() => void playKdsBeep(true), 0);
+    setTimeout(() => {
+      void playKdsBeep(true);
+      speakKdsText("Voz KDS activada", true);
+    }, 0);
   };
 
   useEffect(() => {
     const currentIds = new Set(preparing.map((order) => order.id));
-    const hasNewPreparing = [...currentIds].some((id) => !preparingIdsRef.current.has(id));
+    const newPreparingOrders = preparing.filter((order) => !preparingIdsRef.current.has(order.id));
 
-    if (preparingWatchReadyRef.current && hasNewPreparing) {
-      void playKdsBeep();
+    if (preparingWatchReadyRef.current && newPreparingOrders.length > 0) {
+      void playKdsAlert(newPreparingOrders);
     }
 
     preparingIdsRef.current = currentIds;
@@ -158,7 +178,7 @@ export default function KDSTab() {
     const [{ data }, { data: combos }] = await Promise.all([
       supabase
         .from("orders")
-        .select("*, order_items(*, products(*), combos(*))")
+        .select("*, order_items(*, products(*, product_variants(id, is_default)), combos(*))")
         .eq("branch_id", branchId)
         .gte("created_at", since)
         .in("status", ["confirmed", "preparing", "ready"])
@@ -198,15 +218,16 @@ export default function KDSTab() {
             const variantId = getDefaultVariantId(comboProduct.products);
             if (variantId) variantIds.add(variantId);
           });
-        } else if (i.variant_id) {
-          variantIds.add(i.variant_id);
+        } else {
+          const variantId = i.variant_id || getDefaultVariantId(i.products);
+          if (variantId) variantIds.add(variantId);
         }
       }),
     );
     if (variantIds.size > 0) {
       const { data: recipes } = await supabase
         .from("product_recipes")
-        .select("variant_id, quantity, ingredients(id, name)")
+        .select("variant_id, ingredient_id, quantity, ingredients(id, name)")
         .in("variant_id", [...variantIds]);
       const map: Record<string, any[]> = {};
       (recipes || []).forEach((r) => {
@@ -388,6 +409,7 @@ export default function KDSTab() {
       if (!combo) {
         expanded.push({
           ...item,
+          variant_id: item.variant_id || getDefaultVariantId(item.products),
           extras: normalizeItemExtras(item.extras || [], item.products?.name),
         });
         return;
@@ -467,22 +489,30 @@ export default function KDSTab() {
   };
 
   const getRecipe = (item: any) => recipeMap[item.variant_id] || [];
+  const getRecipeIngredientId = (recipeItem: any) =>
+    recipeItem.ingredient_id || recipeItem.ingredients?.id || null;
 
   // Total ingredients across all preparing orders
   const totalIngredientCounts: Record<string, KdsCounter> = {};
   preparing.forEach((order) => {
     expandOrderItemsForKds(order).forEach((item) => {
       getRecipe(item).forEach((r: any) => {
-        const kdsItem = kdsIngredients[r.ingredient_id];
+        const ingredientId = getRecipeIngredientId(r);
+        if (!ingredientId) return;
+        const kdsItem = kdsIngredients[ingredientId];
         if (kdsItem) {
-          if (!totalIngredientCounts[r.ingredient_id])
-            totalIngredientCounts[r.ingredient_id] = {
+          if (!totalIngredientCounts[ingredientId])
+            totalIngredientCounts[ingredientId] = {
               count: 0,
               icon: kdsItem.icon || "🍔",
               name: kdsItem.name || r.ingredients?.name,
               sortOrder: kdsItem.sort_order ?? 0,
+              voiceEnabled: kdsItem.voice_enabled ?? true,
+              voiceLabel: kdsItem.voice_label,
+              voiceRepeat: kdsItem.voice_repeat ?? true,
+              voiceIncludeTotal: kdsItem.voice_include_total ?? true,
             };
-          totalIngredientCounts[r.ingredient_id].count +=
+          totalIngredientCounts[ingredientId].count +=
             (r.quantity || 0) * (item.quantity || 1);
         }
       });
@@ -558,16 +588,22 @@ export default function KDSTab() {
     const counts: Record<string, KdsCounter> = {};
     expandOrderItemsForKds(order).forEach((item) => {
       getRecipe(item).forEach((r: any) => {
-        const kdsItem = kdsIngredients[r.ingredient_id];
+        const ingredientId = getRecipeIngredientId(r);
+        if (!ingredientId) return;
+        const kdsItem = kdsIngredients[ingredientId];
         if (kdsItem) {
-          if (!counts[r.ingredient_id])
-            counts[r.ingredient_id] = {
+          if (!counts[ingredientId])
+            counts[ingredientId] = {
               count: 0,
               icon: kdsItem.icon || "🍔",
               name: kdsItem.name || r.ingredients?.name,
               sortOrder: kdsItem.sort_order ?? 0,
+              voiceEnabled: kdsItem.voice_enabled ?? true,
+              voiceLabel: kdsItem.voice_label,
+              voiceRepeat: kdsItem.voice_repeat ?? true,
+              voiceIncludeTotal: kdsItem.voice_include_total ?? true,
             };
-          counts[r.ingredient_id].count +=
+          counts[ingredientId].count +=
             (r.quantity || 0) * (item.quantity || 1);
         }
       });
@@ -595,9 +631,52 @@ export default function KDSTab() {
     ([, a], [, b]) => (a as KdsCounter).sortOrder - (b as KdsCounter).sortOrder,
   );
 
+  const getCounterVoiceName = (info: KdsCounter) =>
+    (info.voiceLabel || info.name || "").trim();
+
+  const formatVoiceCounter = (info: KdsCounter) => {
+    const name = getCounterVoiceName(info);
+    return name ? `${info.count} ${name}` : `${info.count}`;
+  };
+
+  const buildKdsVoiceText = (newOrders: any[]) => {
+    const orderParts: string[] = [];
+    const totalParts: string[] = [];
+    let shouldRepeat = false;
+
+    newOrders.forEach((order) => {
+      const ingredientCounts = calcIngredients(order)
+        .map(([, info]) => info as KdsCounter)
+        .filter((info) => info.voiceEnabled !== false && info.count > 0);
+
+      if (ingredientCounts.length === 0) return;
+      shouldRepeat = shouldRepeat || ingredientCounts.some((info) => info.voiceRepeat !== false);
+      orderParts.push(ingredientCounts.map(formatVoiceCounter).join(", "));
+    });
+
+    sortedTotalIngredients
+      .map(([, info]) => info as KdsCounter)
+      .filter((info) => info.voiceEnabled !== false && info.voiceIncludeTotal !== false && info.count > 0)
+      .forEach((info) => totalParts.push(formatVoiceCounter(info)));
+
+    if (orderParts.length === 0) return "";
+
+    const orderText = orderParts.join(". ");
+    const repeatText = shouldRepeat ? `, repito, ${orderText}` : "";
+    const totalText = totalParts.length > 0 ? `. Total en cocina: ${totalParts.join(", ")}` : "";
+
+    return `${orderText}${repeatText}${totalText}`;
+  };
+
+  const playKdsAlert = async (newOrders: any[]) => {
+    await playKdsBeep();
+    const text = buildKdsVoiceText(newOrders);
+    if (text) speakKdsText(text);
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-gray-950 p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-800 bg-gray-900 px-5 py-4">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-gray-800 bg-gray-900/95 px-5 py-4 shadow-lg backdrop-blur">
         <div className="flex items-center gap-3">
           <ChefHat size={22} className="text-emerald-300" />
           <div>
@@ -606,35 +685,37 @@ export default function KDSTab() {
           </div>
           <RealtimeBadge status={realtimeStatus} />
         </div>
-        <button
-          type="button"
-          onClick={() => soundEnabled ? setSoundEnabled(false) : void enableSound()}
-          className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-black transition ${
-            soundEnabled
-              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
-              : "border-gray-700 bg-gray-950 text-gray-300 hover:bg-gray-800"
-          }`}
-        >
-          {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
-          {soundEnabled ? "Sonido ON" : "Activar sonido"}
-        </button>
-      </div>
-
-      {/* Totales sticky */}
-      {sortedTotalIngredients.length > 0 && (
-        <div className="flex flex-wrap gap-4 items-center bg-gray-900 rounded-2xl px-6 py-5 border border-gray-800 sticky top-0 z-10 shadow-lg">
-          <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">En cocina</span>
-          {sortedTotalIngredients.map(([id, info]) => (
-            <span
-              key={id}
-              className="text-xl px-4 py-1.5 bg-gray-800 rounded-full text-gray-100 font-bold flex items-center gap-2"
-            >
-              {info.icon} <span className="text-3xl font-black">{info.count}</span>{" "}
-              <span className="text-base font-medium text-gray-300">{info.name}</span>
-            </span>
-          ))}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+          {sortedTotalIngredients.length > 0 && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+                Total en preparacion
+              </span>
+              {sortedTotalIngredients.map(([id, info]) => (
+                <span
+                  key={id}
+                  className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-gray-100"
+                >
+                  <span className="text-lg">{info.icon}</span>
+                  <span className="text-2xl font-black tabular-nums">{info.count}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => soundEnabled ? setSoundEnabled(false) : void enableSound()}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-black transition ${
+              soundEnabled
+                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                : "border-gray-700 bg-gray-950 text-gray-300 hover:bg-gray-800"
+            }`}
+          >
+            {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
+            {soundEnabled ? "Voz ON" : "Activar voz"}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Confirmados compactos */}
       {confirmed.length > 0 && (
@@ -839,25 +920,29 @@ function PreparingCard({
             {order.customer_name || ""}
           </p>
         </div>
-        <div className={`flex items-center gap-2 text-2xl font-black flex-shrink-0 ${getTimeColor(order.created_at)}`}>
-          <Clock size={24} />
-          <span>{formatTime(order.created_at)}</span>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className={`flex items-center gap-2 text-2xl font-black ${getTimeColor(order.created_at)}`}>
+            <Clock size={24} />
+            <span>{formatTime(order.created_at)}</span>
+          </div>
+          {ingredientCounts.length > 0 && (
+            <div className="flex max-w-[260px] flex-wrap justify-end gap-1.5">
+              {ingredientCounts.map(([id, info]) => (
+                <span
+                  key={id}
+                  className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-gray-100"
+                >
+                  <span>{info.icon}</span>
+                  <span className="text-lg font-black tabular-nums">{info.count}</span>
+                  <span className="max-w-[92px] truncate text-xs font-bold text-gray-300">
+                    {info.name}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Ingredient counters */}
-      {ingredientCounts.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {ingredientCounts.map(([id, info]) => (
-            <span
-              key={id}
-              className="text-sm px-3 py-1 bg-gray-800 rounded-full text-gray-200 font-bold flex items-center gap-1.5"
-            >
-              {info.icon} <span className="text-xl">{info.count}</span> {info.name}
-            </span>
-          ))}
-        </div>
-      )}
 
       {/* Items */}
       <div className="space-y-2">
