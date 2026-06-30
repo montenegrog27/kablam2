@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { printOrder } from "@/lib/printOrder";
-import { Printer } from "lucide-react";
+import { Bike, MapPin, Printer, Tag, X } from "lucide-react";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-AR").format(value || 0);
@@ -33,6 +33,37 @@ function getGoogleMapsUrl(order: any) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
+function normalizeWhatsappPhone(phone: string) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("54")) return digits;
+  return `549${digits.replace(/^0/, "")}`;
+}
+
+function getCustomerWhatsappUrl(order: any) {
+  const phone = normalizeWhatsappPhone(order.customer_phone || "");
+  if (!phone) return "Sin telefono";
+  const text = `Hola, soy tu repartidor del pedido #${order.id.slice(-6).toUpperCase()}. Estoy en camino.`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+}
+
+function buildRiderWhatsappMessage(order: any) {
+  const mapsUrl = getGoogleMapsUrl(order);
+  const paymentLabel = getPaymentLabel(order);
+  return [
+    `Pedido #${order.id.slice(-6).toUpperCase()}`,
+    "",
+    `Cliente: ${order.customer_name || "Cliente"}`,
+    `Telefono: ${order.customer_phone || "Sin telefono"}`,
+    `Direccion: ${order.address || "No especificada"}`,
+    `Indicaciones: ${order.notes || order.note || "Sin indicaciones"}`,
+    mapsUrl ? `Mapa: ${mapsUrl}` : "",
+    `Importe: $${formatCurrency(Number(order.total || 0))}`,
+    `Metodo de pago: ${paymentLabel}`,
+    `Mensaje al cliente: ${getCustomerWhatsappUrl(order)}`,
+  ].filter(Boolean).join("\n");
+}
+
 export default function OrderCard({
   order,
   selected,
@@ -42,7 +73,6 @@ export default function OrderCard({
   onMarkAsPaid,
   onMessages,
   onAssignRider,
-  onNotifyRider,
   canChangeRider = true,
   userRecord,
 }: any) {
@@ -53,6 +83,9 @@ export default function OrderCard({
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [customerTag, setCustomerTag] = useState(order.customer_tag || "");
+  const [editingTag, setEditingTag] = useState(false);
+  const [savingTag, setSavingTag] = useState(false);
 
   const paid = order.paid_amount || 0;
   const remaining = order.total - paid;
@@ -120,6 +153,11 @@ export default function OrderCard({
     setLoading(false);
 
     if (onAssignRider) onAssignRider(order.id, selectedRider);
+    if (selectedRider?.phone) {
+      const riderPhone = normalizeWhatsappPhone(selectedRider.phone);
+      const url = `https://wa.me/${riderPhone}?text=${encodeURIComponent(buildRiderWhatsappMessage(order))}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   };
 
 const handleNotifyRider = () => {
@@ -156,6 +194,30 @@ ${customerWhatsappUrl}`;
 
   window.open(url, "_blank");
 };
+
+  const saveCustomerTag = async () => {
+    if (!order.customer_id) {
+      alert("Este pedido no tiene cliente asociado.");
+      return;
+    }
+    setSavingTag(true);
+    const value = customerTag.trim();
+    const { error } = await supabase
+      .from("customers")
+      .update({ cashier_tag: value || null })
+      .eq("id", order.customer_id);
+    setSavingTag(false);
+    if (error) {
+      alert(
+        error.message.includes("cashier_tag")
+          ? "Falta ejecutar add_customer_cashier_tag.sql en Supabase."
+          : error.message,
+      );
+      return;
+    }
+    setCustomerTag(value);
+    setEditingTag(false);
+  };
 
   const canCancel = ["unconfirmed", "confirmed", "preparing"].includes(order.status);
 
@@ -279,6 +341,55 @@ ${customerWhatsappUrl}`;
             {order.customer_name || "Cliente sin nombre"}
           </div>
 
+          <div className="flex flex-wrap items-center gap-2">
+            {customerTag && !editingTag && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                <Tag size={12} /> {customerTag}
+              </span>
+            )}
+            {editingTag ? (
+              <div className="flex items-center gap-1">
+                <input
+                  value={customerTag}
+                  onChange={(e) => setCustomerTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void saveCustomerTag();
+                    if (e.key === "Escape") {
+                      setCustomerTag(order.customer_tag || "");
+                      setEditingTag(false);
+                    }
+                  }}
+                  placeholder="Etiqueta cliente"
+                  className="h-7 w-44 rounded-lg border border-gray-300 px-2 text-xs text-gray-800 outline-none focus:border-amber-400"
+                  autoFocus
+                />
+                <button
+                  onClick={saveCustomerTag}
+                  disabled={savingTag}
+                  className="h-7 rounded-lg bg-amber-500 px-2 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  {savingTag ? "..." : "OK"}
+                </button>
+                <button
+                  onClick={() => {
+                    setCustomerTag(order.customer_tag || "");
+                    setEditingTag(false);
+                  }}
+                  className="h-7 rounded-lg border border-gray-300 px-2 text-xs text-gray-500"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditingTag(true)}
+                className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
+              >
+                <Tag size={12} /> {customerTag ? "Editar etiqueta" : "Etiqueta"}
+              </button>
+            )}
+          </div>
+
           <div className="text-md text-gray-500">
             {isFullyPaid
               ? "Pago completo"
@@ -317,32 +428,6 @@ ${customerWhatsappUrl}`;
 
         </div>
       </div>
-
-      {/* RIDER SELECTOR */}
-      {canChange && showRiderSelect && (
-        <div className="bg-gray-50 p-3 rounded-lg space-y-2">
-          <select
-            className="w-full border p-2 rounded text-sm"
-            onChange={(e) => {
-              if (e.target.value) handleAssignRider(e.target.value);
-            }}
-            defaultValue=""
-          >
-            <option value="">Seleccionar repartidor</option>
-            {riders.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name} - {r.phone}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => setShowRiderSelect(false)}
-            className="text-xs text-gray-500 underline"
-          >
-            Cancelar
-          </button>
-        </div>
-      )}
 
       {/* ACTIONS */}
       <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
@@ -390,73 +475,33 @@ ${customerWhatsappUrl}`;
             {mapsUrl && (
               <button
                 onClick={() => window.open(mapsUrl, "_blank", "noopener,noreferrer")}
-                className="
-                  px-3 py-1.5
-                  text-sm font-medium
-                  rounded-lg
-                  bg-indigo-500
-                  text-white
-                  hover:bg-indigo-600
-                  transition
-                "
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500 text-white transition hover:bg-indigo-600"
+                title="Ver ubicacion"
               >
-                Ver ubicación
+                <MapPin size={16} />
               </button>
             )}
 
-            {!rider && !showRiderSelect && canChange && (
-              <button
-                onClick={() => setShowRiderSelect(true)}
-                className="
-                  px-3 py-1.5
-                  text-sm font-medium
-                  rounded-lg
-                  bg-blue-500
-                  text-white
-                  hover:bg-blue-600
-                  transition
-                "
-              >
-                Asignar Rider
-              </button>
-            )}
-
-            {rider && (
-              <>
-                {canChange && (
-                  <button
-                    onClick={() => setShowRiderSelect(true)}
-                    className="
-                      px-3 py-1.5
-                      text-sm font-medium
-                      rounded-lg
-                      bg-gray-500
-                      text-white
-                      hover:bg-gray-600
-                      transition
-                    "
-                  >
-                    Cambiar Rider
-                  </button>
-                )}
-
-                <button
-                  onClick={handleNotifyRider}
+            {canChange && (
+              <label className="inline-flex h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 text-xs font-medium text-gray-600">
+                <Bike size={14} />
+                <select
+                  value={rider?.id || order.rider_id || ""}
                   disabled={loading}
-                  className="
-                    px-3 py-1.5
-                    text-sm font-medium
-                    rounded-lg
-                    bg-green-500
-                    text-white
-                    hover:bg-green-600
-                    disabled:opacity-50
-                    transition
-                  "
+                  onChange={(e) => {
+                    if (e.target.value) void handleAssignRider(e.target.value);
+                  }}
+                  className="max-w-[150px] bg-transparent text-xs outline-none disabled:opacity-50"
+                  title="Asignar rider"
                 >
-                  {loading ? "Enviando..." : "Notificar Rider"}
-                </button>
-              </>
+                  <option value="">Rider</option>
+                  {riders.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
           </>
         )}

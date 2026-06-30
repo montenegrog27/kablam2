@@ -263,6 +263,7 @@ export default function OrdersBoard({
 
   const handleAssignRider = (orderId: string, rider: any) => {
     console.log("Rider asignado:", orderId, rider);
+    reloadOrders();
   };
   const getOrdersByStatus = (status: string) =>
     boardOrders.filter((o: any) => o.status === status);
@@ -465,8 +466,8 @@ export default function OrdersBoard({
         });
       }
 
-      // Auto-notificar al rider
-      if (order.rider_id) {
+      // Rider notification is handled manually through WhatsApp Web from the order card.
+      if (false && order.rider_id) {
         const { data: rider } = await supabase
           .from("riders")
           .select("*")
@@ -570,7 +571,6 @@ export default function OrdersBoard({
 
                           onMessages(order);
                         }}
-                        onNotifyRider={handleNotifyRider}
                         onAssignRider={handleAssignRider}
                         canChangeRider={
                           order.status !== "sent" &&

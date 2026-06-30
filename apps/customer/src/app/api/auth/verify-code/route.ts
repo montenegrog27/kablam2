@@ -56,6 +56,16 @@ export async function POST(req: NextRequest) {
       name: customer?.name || undefined,
     });
 
+    if (branch?.id) {
+      await supabase.from("customer_login_logs").insert({
+        customer_id: loginCode.customer_id,
+        branch_id: branch.id,
+        login_method: "whatsapp",
+        ip_address: req.headers.get("x-forwarded-for") || "unknown",
+        user_agent: req.headers.get("user-agent") || "unknown",
+      });
+    }
+
     return NextResponse.json({
       success: true,
       returnTo: loginCode.return_to || `/${loginCode.branch_slug}/account/profile`,

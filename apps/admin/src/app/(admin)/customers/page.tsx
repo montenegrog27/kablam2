@@ -8,11 +8,14 @@ import {
 } from "lucide-react";
 
 type Order = { id: string; customer_id?: string | null; customer_name?: string | null; customer_phone?: string | null; total?: number | null; status?: string | null; type?: string | null; created_at: string; };
-type Customer = { id: string; name?: string | null; phone?: string | null; address?: string | null; created_at?: string | null; };
+type Customer = { id: string; name?: string | null; phone?: string | null; address?: string | null; created_at?: string | null; loyalty_points?: number | null; };
+type CustomerAccessMeta = { hasLoggedIn: boolean; hasActiveSession: boolean; lastAccessAt: string | null; method?: string | null };
+type SortKey = "points" | "ltv" | "orders" | "last_order" | "avg_ticket" | "account_access" | "name";
 
 type CustomerCRM = {
   id: string; name: string; phone: string; address: string;
-  totalOrders: number; totalSpent: number; avgTicket: number;
+  totalOrders: number; totalSpent: number; avgTicket: number; loyaltyPoints: number;
+  hasLoggedIn: boolean; hasActiveSession: boolean; lastAccountAccessAt: string | null; accountAccessMethod?: string | null;
   firstOrderAt: string; lastOrderAt: string; createdAt: string;
   daysSinceLastOrder: number; daysSinceFirstOrder: number; frequencyDays: number;
   ltv: number; last3Avg: number; ticketTrend: number;
@@ -26,7 +29,10 @@ const fmt = (n: number) => n.toLocaleString("es-AR");
 const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 function daysAgo(dateStr: string) {
-  return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000));
+  if (!dateStr) return 9999;
+  const time = new Date(dateStr).getTime();
+  if (Number.isNaN(time)) return 9999;
+  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
 }
 
 function getSegment(days: number, totalOrders: number, isNew: boolean, isRecovered: boolean): CustomerCRM["segment"] {
@@ -52,10 +58,12 @@ export default function CustomersPage() {
   const [tenantId, setTenantId] = useState("");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [accessByCustomer, setAccessByCustomer] = useState<Record<string, CustomerAccessMeta>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerCRM | null>(null);
   const [segmentFilter, setSegmentFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<SortKey>("ltv");
   const [activeTab, setActiveTab] = useState<"health" | "retention" | "value" | "opportunities" | "cohorts">("health");
 
   useEffect(() => { load(); }, []);
@@ -68,11 +76,54 @@ export default function CustomersPage() {
     setTenantId(r.tenant_id);
 
     const [{ data: custs }, { data: ords }] = await Promise.all([
-      supabase.from("customers").select("id, name, phone, address, created_at").eq("tenant_id", r.tenant_id).order("name"),
-      supabase.from("orders").select("id, customer_id, customer_name, total, status, type, created_at").eq("tenant_id", r.tenant_id).in("status", ["delivered", "sent", "ready"]).order("created_at", { ascending: false }),
+      supabase.from("customers").select("id, name, phone, address, created_at, loyalty_points").eq("tenant_id", r.tenant_id).order("name"),
+      supabase.from("orders").select("id, customer_id, customer_name, customer_phone, total, status, type, created_at").eq("tenant_id", r.tenant_id).in("status", ["delivered", "sent", "ready"]).order("created_at", { ascending: false }),
     ]);
-    setCustomers(custs || []);
+    const customerRows = (custs || []) as Customer[];
+    const customerIds = customerRows.map((customer) => customer.id);
+    const [{ data: sessions }, { data: loginLogs }] = customerIds.length
+      ? await Promise.all([
+          supabase
+            .from("customer_sessions")
+            .select("customer_id, created_at, expires_at")
+            .in("customer_id", customerIds)
+            .order("created_at", { ascending: false })
+            .then((res) => (res.error ? { data: [] } : res)),
+          supabase
+            .from("customer_login_logs")
+            .select("customer_id, created_at, login_method")
+            .in("customer_id", customerIds)
+            .order("created_at", { ascending: false })
+            .then((res) => (res.error ? { data: [] } : res)),
+        ])
+      : [{ data: [] }, { data: [] }];
+
+    const accessMap: Record<string, CustomerAccessMeta> = {};
+    const nowIso = new Date().toISOString();
+    (sessions || []).forEach((session: any) => {
+      const existing = accessMap[session.customer_id];
+      const createdAt = session.created_at || null;
+      accessMap[session.customer_id] = {
+        hasLoggedIn: true,
+        hasActiveSession: existing?.hasActiveSession || session.expires_at >= nowIso,
+        lastAccessAt: !existing?.lastAccessAt || (createdAt && createdAt > existing.lastAccessAt) ? createdAt : existing.lastAccessAt,
+        method: existing?.method || "sesion",
+      };
+    });
+    (loginLogs || []).forEach((log: any) => {
+      const existing = accessMap[log.customer_id];
+      const createdAt = log.created_at || null;
+      accessMap[log.customer_id] = {
+        hasLoggedIn: true,
+        hasActiveSession: existing?.hasActiveSession || false,
+        lastAccessAt: !existing?.lastAccessAt || (createdAt && createdAt > existing.lastAccessAt) ? createdAt : existing.lastAccessAt,
+        method: log.login_method || existing?.method || "login",
+      };
+    });
+
+    setCustomers(customerRows);
     setOrders(ords || []);
+    setAccessByCustomer(accessMap);
     setLoading(false);
   };
 
@@ -85,12 +136,12 @@ export default function CustomersPage() {
     });
 
     const customerMap = new Map(customers.map((c) => [c.id, c]));
-    const now = Date.now();
-    const thirtyDaysAgo = new Date(now - 30 * 86400000).toISOString();
+    const processedOrderKeys = new Set<string>();
     const result: CustomerCRM[] = [];
 
     Object.entries(customerOrders).forEach(([cid, ords]) => {
       const customer = customerMap.get(cid);
+      processedOrderKeys.add(cid);
       const name = customer?.name || ords[0]?.customer_name || "Anónimo";
       const phone = customer?.phone || ords[0]?.customer_phone || "";
       const address = customer?.address || "";
@@ -112,9 +163,15 @@ export default function CustomersPage() {
       const isNew = totalOrders === 1 && daysSinceLastOrder <= 7;
       const isRecovered = totalOrders >= 2 && daysSinceFirstOrder > 60 && daysSinceLastOrder <= 15;
       const isVip = totalOrders >= 5 || ltv > 100000;
+      const access = customer?.id ? accessByCustomer[customer.id] : undefined;
 
       result.push({
         id: cid, name, phone, address, totalOrders, totalSpent, avgTicket,
+        loyaltyPoints: Number(customer?.loyalty_points || 0),
+        hasLoggedIn: access?.hasLoggedIn || false,
+        hasActiveSession: access?.hasActiveSession || false,
+        lastAccountAccessAt: access?.lastAccessAt || null,
+        accountAccessMethod: access?.method || null,
         firstOrderAt, lastOrderAt, createdAt, daysSinceLastOrder, daysSinceFirstOrder,
         frequencyDays, ltv, last3Avg, ticketTrend,
         segment: getSegment(daysSinceLastOrder, totalOrders, isNew, isRecovered),
@@ -122,8 +179,40 @@ export default function CustomersPage() {
       });
     });
 
+    customers.forEach((customer) => {
+      if (processedOrderKeys.has(customer.id)) return;
+      result.push({
+        id: customer.id,
+        name: customer.name || "Sin nombre",
+        phone: customer.phone || "",
+        address: customer.address || "",
+        totalOrders: 0,
+        totalSpent: 0,
+        avgTicket: 0,
+        loyaltyPoints: Number(customer.loyalty_points || 0),
+        hasLoggedIn: accessByCustomer[customer.id]?.hasLoggedIn || false,
+        hasActiveSession: accessByCustomer[customer.id]?.hasActiveSession || false,
+        lastAccountAccessAt: accessByCustomer[customer.id]?.lastAccessAt || null,
+        accountAccessMethod: accessByCustomer[customer.id]?.method || null,
+        firstOrderAt: "",
+        lastOrderAt: "",
+        createdAt: customer.created_at || "",
+        daysSinceLastOrder: 9999,
+        daysSinceFirstOrder: customer.created_at ? daysAgo(customer.created_at) : 9999,
+        frequencyDays: 999,
+        ltv: 0,
+        last3Avg: 0,
+        ticketTrend: 0,
+        segment: "lost",
+        isNew: false,
+        isRecovered: false,
+        isVip: false,
+        orders: [],
+      });
+    });
+
     return result.sort((a, b) => b.ltv - a.ltv);
-  }, [customers, orders]);
+  }, [customers, orders, accessByCustomer]);
 
   // === METRICS ===
   const uniqueCustomers = crmData.length;
@@ -141,6 +230,9 @@ export default function CustomersPage() {
   const recurringShare = totalRevenue > 0 ? recurringRevenue / totalRevenue : 0;
   const top20 = crmData.slice(0, 20);
   const top20Ltv = top20.reduce((s, c) => s + c.ltv, 0);
+  const loggedInCustomers = crmData.filter((c) => c.hasLoggedIn).length;
+  const activeSessionCustomers = crmData.filter((c) => c.hasActiveSession).length;
+  const customersWithPointsUnaware = crmData.filter((c) => c.loyaltyPoints > 0 && !c.hasLoggedIn).length;
 
   const segments = ["new", "active", "at_risk", "dormant", "lost", "recovered"];
   const segmentCounts: Record<string, number> = {};
@@ -199,8 +291,16 @@ export default function CustomersPage() {
       const q = search.toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q) || c.phone.includes(q));
     }
-    return list;
-  }, [crmData, segmentFilter, search]);
+    return [...list].sort((a, b) => {
+      if (sortBy === "points") return b.loyaltyPoints - a.loyaltyPoints;
+      if (sortBy === "orders") return b.totalOrders - a.totalOrders;
+      if (sortBy === "last_order") return a.daysSinceLastOrder - b.daysSinceLastOrder;
+      if (sortBy === "avg_ticket") return b.avgTicket - a.avgTicket;
+      if (sortBy === "account_access") return Number(b.hasLoggedIn) - Number(a.hasLoggedIn) || b.loyaltyPoints - a.loyaltyPoints;
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      return b.ltv - a.ltv;
+    });
+  }, [crmData, segmentFilter, search, sortBy]);
 
   const SegBadge = ({ seg }: { seg: string }) => (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${SEGMENT_COLORS[seg]}/20 ${SEGMENT_TEXT_COLORS[seg]}`}>
@@ -214,6 +314,10 @@ export default function CustomersPage() {
     const allData = crmData.slice(0, 2000).map((c) => ({
       nombre: c.name, telefono: c.phone, direccion: c.address,
       segmento: c.segment, es_vip: c.isVip, es_nuevo: c.isNew, es_recuperado: c.isRecovered,
+      puntos: c.loyaltyPoints,
+      ingreso_a_cuenta: c.hasLoggedIn,
+      sesion_activa: c.hasActiveSession,
+      ultimo_ingreso_cuenta: c.lastAccountAccessAt,
       pedidos_totales: c.totalOrders, gasto_total: Math.round(c.ltv),
       ticket_promedio: Math.round(c.avgTicket),
       ticket_promedio_ultimos_3: Math.round(c.last3Avg),
@@ -241,7 +345,7 @@ export default function CustomersPage() {
         valor_recuperable_estimado: Math.round(recoverableValue),
       },
       top_20_ltv: crmData.slice(0, 20).map((c, i) => ({
-        rank: i + 1, nombre: c.name, telefono: c.phone, ltv: Math.round(c.ltv), pedidos: c.totalOrders, segmento: c.segment,
+        rank: i + 1, nombre: c.name, telefono: c.phone, ltv: Math.round(c.ltv), puntos: c.loyaltyPoints, pedidos: c.totalOrders, segmento: c.segment,
       })),
       cohortes: cohorts.map((c) => ({ mes: c.month, nuevos: c.total, recurrentes: c.returning, retencion_pct: Math.round(c.retention * 10000) / 100 })),
       clientes: allData,
@@ -252,9 +356,9 @@ export default function CustomersPage() {
   };
 
   const exportCSV = () => {
-    const headers = ["Nombre", "Teléfono", "Dirección", "Segmento", "VIP", "Pedidos", "Gasto Total", "Ticket Prom.", "Ticket Últimos 3", "Tendencia (%)", "Primer Pedido", "Último Pedido", "Días sin comprar", "Días desde 1ra compra", "Frecuencia (días)"];
+    const headers = ["Nombre", "Teléfono", "Dirección", "Segmento", "VIP", "Puntos", "Ingresó a cuenta", "Último ingreso", "Pedidos", "Gasto Total", "Ticket Prom.", "Ticket Últimos 3", "Tendencia (%)", "Primer Pedido", "Último Pedido", "Días sin comprar", "Días desde 1ra compra", "Frecuencia (días)"];
     const rows = crmData.slice(0, 2000).map((c) => [
-      c.name, c.phone, c.address, c.segment, c.isVip ? "Sí" : "No", c.totalOrders.toString(),
+      c.name, c.phone, c.address, c.segment, c.isVip ? "Sí" : "No", c.loyaltyPoints.toString(), c.hasLoggedIn ? "Sí" : "No", c.lastAccountAccessAt || "", c.totalOrders.toString(),
       Math.round(c.ltv).toString(), Math.round(c.avgTicket).toString(), Math.round(c.last3Avg).toString(),
       Math.round(c.ticketTrend * 100).toString(), c.firstOrderAt, c.lastOrderAt,
       c.daysSinceLastOrder.toString(), c.daysSinceFirstOrder.toString(),
@@ -312,14 +416,48 @@ export default function CustomersPage() {
               </button>
             ))}
           </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <MetricCard label="Ingresaron a cuenta" value={fmt(loggedInCustomers)} icon={Users} color="text-blue-300" />
+            <MetricCard label="Sesiones activas" value={fmt(activeSessionCustomers)} icon={Zap} color="text-emerald-300" />
+            <MetricCard label="Con puntos sin verlos" value={fmt(customersWithPointsUnaware)} icon={AlertTriangle} color="text-amber-300" />
+          </div>
           {/* Customer list by segment */}
           <div className="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
+            <div className="flex flex-col gap-3 border-b border-gray-800 p-3 md:flex-row md:items-center md:justify-between">
+              <div className="relative w-full md:max-w-sm">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar cliente o teléfono"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 py-2 pl-9 pr-3 text-sm text-gray-100 placeholder-gray-500 outline-none transition focus:border-gray-500"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Ordenar</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortKey)}
+                  className="rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm font-medium text-gray-100 outline-none transition focus:border-gray-500"
+                >
+                  <option value="ltv">Mayor LTV</option>
+                  <option value="points">Más puntos</option>
+                  <option value="orders">Más pedidos</option>
+                  <option value="avg_ticket">Mayor ticket</option>
+                  <option value="account_access">Ingresaron a cuenta</option>
+                  <option value="last_order">Compra más reciente</option>
+                  <option value="name">Nombre A-Z</option>
+                </select>
+              </div>
+            </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-left text-sm">
+              <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-800">
                   <tr>
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3">Segmento</th>
+                    <th className="px-4 py-3">Cuenta</th>
+                    <th className="px-4 py-3 text-right">Puntos</th>
                     <th className="px-4 py-3 text-right">Pedidos</th>
                     <th className="px-4 py-3 text-right">Ticket</th>
                     <th className="px-4 py-3 text-right">LTV</th>
@@ -332,6 +470,29 @@ export default function CustomersPage() {
                     <tr key={c.id} className="hover:bg-white/[0.02]">
                       <td className="px-4 py-3"><p className="font-medium text-gray-100">{c.name}</p><p className="text-[10px] text-gray-500">{c.phone}</p></td>
                       <td className="px-4 py-3"><SegBadge seg={c.segment} /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
+                            c.hasLoggedIn
+                              ? "bg-emerald-500/10 text-emerald-300"
+                              : c.loyaltyPoints > 0
+                                ? "bg-amber-500/10 text-amber-300"
+                                : "bg-gray-800 text-gray-500"
+                          }`}>
+                            {c.hasLoggedIn ? "Ingresó" : c.loyaltyPoints > 0 ? "No vio puntos" : "Sin ingreso"}
+                          </span>
+                          {c.lastAccountAccessAt && (
+                            <span className="text-[10px] text-gray-500">
+                              {new Date(c.lastAccountAccessAt).toLocaleDateString("es-AR")}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="inline-flex items-center justify-end rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-black tabular-nums text-amber-300">
+                          {fmt(c.loyaltyPoints)} pts
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-right text-gray-100">{c.totalOrders}</td>
                       <td className="px-4 py-3 text-right text-gray-300">{currency.format(c.avgTicket)}</td>
                       <td className="px-4 py-3 text-right font-bold text-emerald-400">{currency.format(c.ltv)}</td>
@@ -506,10 +667,12 @@ export default function CustomersPage() {
               <button onClick={() => setSelectedCustomer(null)} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-5">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <StatBox label="Pedidos" value={selectedCustomer.totalOrders.toString()} />
+                <StatBox label="Puntos" value={`${fmt(selectedCustomer.loyaltyPoints)} pts`} color="text-amber-300" />
                 <StatBox label="Ticket prom." value={currency.format(selectedCustomer.avgTicket)} color="text-emerald-400" />
                 <StatBox label="LTV" value={currency.format(selectedCustomer.ltv)} color="text-purple-400" />
+                <StatBox label="Cuenta" value={selectedCustomer.hasLoggedIn ? "Ingresó" : "No ingresó"} color={selectedCustomer.hasLoggedIn ? "text-emerald-300" : "text-amber-300"} />
                 <StatBox label={SEGMENT_LABELS[selectedCustomer.segment] || selectedCustomer.segment} value="" color={SEGMENT_TEXT_COLORS[selectedCustomer.segment]}>
                   <SegBadge seg={selectedCustomer.segment} />
                 </StatBox>
@@ -527,6 +690,7 @@ export default function CustomersPage() {
                   <Row label="Días desde último" value={`${selectedCustomer.daysSinceLastOrder}d`} />
                   <Row label="Frecuencia" value={selectedCustomer.frequencyDays < 999 ? `${Math.round(selectedCustomer.frequencyDays)}d` : "1 sola vez"} />
                   <Row label="Últimos 3 tickets" value={currency.format(selectedCustomer.last3Avg)} />
+                  <Row label="Último ingreso" value={selectedCustomer.lastAccountAccessAt ? new Date(selectedCustomer.lastAccountAccessAt).toLocaleString("es-AR") : "Nunca"} color={selectedCustomer.hasLoggedIn ? "text-emerald-300" : "text-amber-300"} />
                   <Row label="Tendencia" value={selectedCustomer.ticketTrend !== 0 ? `${selectedCustomer.ticketTrend > 0 ? "↑" : "↓"} ${Math.abs(Math.round(selectedCustomer.ticketTrend * 100))}%` : "-"}
                     color={selectedCustomer.ticketTrend > 0 ? "text-emerald-400" : "text-red-400"} />
                 </div>

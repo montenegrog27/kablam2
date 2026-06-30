@@ -1,0 +1,3 @@
+ALTER TABLE customers
+ADD COLUMN IF NOT EXISTS cashier_tag TEXT;
+

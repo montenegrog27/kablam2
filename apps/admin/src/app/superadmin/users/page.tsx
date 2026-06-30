@@ -20,22 +20,49 @@ type User = {
   created_at: string;
 };
 
+type MembershipSummary = {
+  count: number;
+  activeTenantName?: string;
+};
+
 export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
+  const [membershipSummary, setMembershipSummary] = useState<Record<string, MembershipSummary>>({});
 
   useEffect(() => {
     async function loadUsers() {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*, tenants(name), branches(name)")
-        .order("created_at", { ascending: false });
+      const [{ data, error }, { data: memberships, error: membershipsError }] =
+        await Promise.all([
+          supabase
+            .from("users")
+            .select("*, tenants(name), branches(name)")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("user_tenant_memberships")
+            .select("user_id, is_active, tenants(name)"),
+        ]);
 
       if (error) {
         console.error("Error loading users:", error);
       } else {
         setUsers(data || []);
       }
+
+      if (!membershipsError && memberships) {
+        const nextSummary: Record<string, MembershipSummary> = {};
+        memberships.forEach((membership: any) => {
+          const userId = membership.user_id;
+          const current = nextSummary[userId] || { count: 0 };
+          current.count += 1;
+          if (membership.is_active) {
+            current.activeTenantName = membership.tenants?.name || undefined;
+          }
+          nextSummary[userId] = current;
+        });
+        setMembershipSummary(nextSummary);
+      }
+
       setLoading(false);
     }
 
@@ -104,6 +131,7 @@ export default function UsersPage() {
                 <th className="text-left p-4">Email</th>
                 <th className="text-left p-4">Rol</th>
                 <th className="text-left p-4">Tenant</th>
+                <th className="text-left p-4">Accesos</th>
                 <th className="text-left p-4">Branch</th>
                 <th className="text-left p-4">Creado</th>
                 <th className="text-left p-4">Acciones</th>
@@ -136,8 +164,14 @@ export default function UsersPage() {
                       href={`/superadmin/tenants`}
                       className="text-blue-600 hover:underline"
                     >
-                      {user.tenants?.name}
+                      {membershipSummary[user.id]?.activeTenantName || user.tenants?.name}
                     </Link>
+                  </td>
+                  <td className="p-4">
+                    <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                      {membershipSummary[user.id]?.count || 1} tenant
+                      {(membershipSummary[user.id]?.count || 1) === 1 ? "" : "s"}
+                    </span>
                   </td>
                   <td className="p-4">
                     {user.branches?.name || (

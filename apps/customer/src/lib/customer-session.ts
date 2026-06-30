@@ -52,6 +52,7 @@ export async function createCustomerSession(
     await supabase.from("customer_sessions").upsert({
       customer_id: sessionData.customerId,
       branch_id: sessionData.branchId,
+      tenant_id: sessionData.tenantId,
       session_token: sessionValue,
       expires_at: new Date(expiresAt * 1000).toISOString(),
     });

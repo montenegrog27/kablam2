@@ -82,6 +82,14 @@ export async function GET(req: NextRequest) {
       phone: payload.phone,
     });
 
+    await supabase.from("customer_login_logs").insert({
+      customer_id: payload.customerId,
+      branch_id: payload.branchId,
+      login_method: "whatsapp",
+      ip_address: req.headers.get("x-forwarded-for") || "unknown",
+      user_agent: req.headers.get("user-agent") || "unknown",
+    });
+
     const sessionToken = jwt.sign(
       {
         customerId: payload.customerId,

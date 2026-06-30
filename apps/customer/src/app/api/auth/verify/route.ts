@@ -139,6 +139,14 @@ export async function GET(req: Request) {
       name: customer.name || undefined,
     });
 
+    await supabase.from("customer_login_logs").insert({
+      customer_id: customer.id,
+      branch_id: branch.id,
+      login_method: "whatsapp",
+      ip_address: req.headers.get("x-forwarded-for") || "unknown",
+      user_agent: req.headers.get("user-agent") || "unknown",
+    });
+
     // 4. Redirigir a perfil o página principal
     return NextResponse.redirect(
       new URL(getSafeReturnTo(returnToParam, branch.slug), req.url),

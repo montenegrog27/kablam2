@@ -36,6 +36,17 @@ export default function SalesTab({ session }: any) {
 
     const orders = ordersData ?? [];
     const conversations = conversationsData ?? [];
+    const customerIds = [...new Set(orders.map((order: any) => order.customer_id).filter(Boolean))];
+    const { data: customersData } = customerIds.length
+      ? await supabase
+          .from("customers")
+          .select("id, cashier_tag")
+          .in("id", customerIds)
+      : { data: [] };
+    const customerTagMap: Record<string, string> = {};
+    (customersData || []).forEach((customer: any) => {
+      customerTagMap[customer.id] = customer.cashier_tag || "";
+    });
 
     const conversationMap: Record<string, string> = {};
 
@@ -47,6 +58,7 @@ export default function SalesTab({ session }: any) {
 
     const ordersWithConversation = orders.map((o: any) => ({
       ...o,
+      customer_tag: o.customer_id ? customerTagMap[o.customer_id] || "" : "",
       conversation_id: o.customer_id
         ? conversationMap[o.customer_id] || null
         : null,
