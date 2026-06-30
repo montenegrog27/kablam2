@@ -100,6 +100,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [userRole, setUserRole] = useState("");
   const [permissionKeys, setPermissionKeys] = useState<string[] | null>(null);
   const [tenantHiddenNavKeys, setTenantHiddenNavKeys] = useState<Set<string>>(new Set());
+  const [contextError, setContextError] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarSearch, setSidebarSearch] = useState("");
   const router = useRouter();
@@ -111,11 +112,39 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       const user = userData?.user;
       if (!user) { router.push("/login"); return; }
 
-      const { data: userRecord } = await supabase
-        .from("users")
-        .select("*, tenants(*), roles(role_permissions(permissions(key)))")
-        .eq("id", user.id)
-        .single();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      let userRecord: any = null;
+      if (token) {
+        const response = await fetch("/api/admin/tenant-context", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (response.status === 403) {
+          setContextError(result.message || "Tu usuario no tiene acceso a este tenant.");
+          setLoading(false);
+          return;
+        }
+
+        if (response.ok && result.user) {
+          userRecord = result.user;
+          if (result.switched) {
+            router.refresh();
+          }
+        }
+      }
+
+      if (!userRecord) {
+        const { data } = await supabase
+          .from("users")
+          .select("*, tenants(*), roles(role_permissions(permissions(key)))")
+          .eq("id", user.id)
+          .single();
+        userRecord = data;
+      }
       if (!userRecord) { router.push("/dashboard"); return; }
 
       setTenant(userRecord.tenants);
@@ -259,6 +288,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [permittedNavItems, sidebarSearch]);
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-950 text-gray-400">Cargando...</div>;
+
+  if (contextError) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-950 px-6 text-white">
+        <div className="max-w-md rounded-2xl border border-red-500/40 bg-gray-900 p-6">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-400">
+            Acceso denegado
+          </p>
+          <h1 className="mt-3 text-2xl font-black">Tenant no habilitado</h1>
+          <p className="mt-3 text-sm text-gray-300">{contextError}</p>
+          <Link
+            href="/superadmin/users"
+            className="mt-5 inline-flex rounded-lg bg-white px-4 py-2 text-sm font-bold text-gray-950 hover:bg-gray-200"
+          >
+            Ir a Superadmin
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex bg-gray-950 text-white">
