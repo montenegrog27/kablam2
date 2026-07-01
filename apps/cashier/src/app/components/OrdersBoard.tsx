@@ -337,6 +337,30 @@ export default function OrdersBoard({
       });
     }
 
+    const directCategoryIds = [...categoryIds];
+    if (directCategoryIds.length > 0) {
+      const { data: allCategories } = await supabase
+        .from("categories")
+        .select("id, name, parent_id")
+        .eq("tenant_id", order.tenant_id);
+
+      const categoryById = new Map((allCategories || []).map((category: any) => [category.id, category]));
+
+      directCategoryIds.forEach((categoryId) => {
+        let current = categoryById.get(categoryId);
+        const visited = new Set<string>();
+
+        while (current?.parent_id && !visited.has(current.parent_id)) {
+          visited.add(current.parent_id);
+          categoryIds.add(current.parent_id);
+          if (!matchedNamesByCategory.has(current.parent_id) && current.name) {
+            matchedNamesByCategory.set(current.parent_id, current.name);
+          }
+          current = categoryById.get(current.parent_id);
+        }
+      });
+    }
+
     const categoryAlertIds = alertRows
       .filter((alert: any) => alert.target_type === "category" && categoryIds.has(alert.target_id))
       .map((alert: any) => alert.target_id);
