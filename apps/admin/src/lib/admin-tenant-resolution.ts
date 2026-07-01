@@ -48,6 +48,26 @@ function getPlatformTenantSlug(host: string) {
   return subdomain;
 }
 
+function getFallbackTenantSlugForHost(host: string) {
+  const normalizedHost = normalizeAdminHost(host);
+  const fallbackSlug = (
+    process.env.ADMIN_FALLBACK_TENANT_SLUG ||
+    process.env.NEXT_PUBLIC_ADMIN_FALLBACK_TENANT_SLUG ||
+    "kablam"
+  ).trim();
+
+  const fallbackHosts = (
+    process.env.ADMIN_FALLBACK_HOSTS ||
+    process.env.NEXT_PUBLIC_ADMIN_FALLBACK_HOSTS ||
+    "kablam2-admin.vercel.app"
+  )
+    .split(",")
+    .map((item) => normalizeAdminHost(item))
+    .filter(Boolean);
+
+  return fallbackSlug && fallbackHosts.includes(normalizedHost) ? fallbackSlug : null;
+}
+
 function getDomainCandidates(host: string) {
   const normalizedHost = normalizeAdminHost(host);
   const customerHost = withoutAdmin(normalizedHost);
@@ -73,7 +93,19 @@ export async function resolveAdminTenantFromHost(
   supabase: SupabaseLike,
   host: string,
 ): Promise<ResolvedAdminTenant | null> {
-  if (!host || isLocalAdminHost(host)) return null;
+  if (!host) return null;
+
+  const fallbackSlug = getFallbackTenantSlugForHost(host);
+  if (fallbackSlug) {
+    const { data } = await supabase
+      .from("tenants")
+      .select("id,name,slug")
+      .eq("slug", fallbackSlug)
+      .maybeSingle();
+    if (data) return data;
+  }
+
+  if (isLocalAdminHost(host)) return null;
 
   const domainCandidates = [...new Set(getDomainCandidates(host))];
   const { data: domainRows, error: domainError } = await supabase
