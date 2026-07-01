@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 
 type PricingMode = "unit" | "kg" | "portion";
+type CatalogPriceMode = "priced" | "consult";
 type PriceOption = { label: string; price: string };
 
 const pricingModeLabels: Record<PricingMode, string> = {
@@ -44,11 +45,15 @@ export default function ProductsPage() {
   const [showInMenu, setShowInMenu] = useState(true);
   const [qrVisible, setQrVisible] = useState(true);
   const [catalogVisible, setCatalogVisible] = useState(true);
+  const [catalogPriceMode, setCatalogPriceMode] = useState<CatalogPriceMode>("priced");
+  const [catalogCtaLabel, setCatalogCtaLabel] = useState("Consultar por WhatsApp");
   const [isFeatured, setIsFeatured] = useState(false);
   const [isHero, setIsHero] = useState(false);
   const [isPreparable, setIsPreparable] = useState(true);
   const [hasRecipe, setHasRecipe] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [existingGalleryImages, setExistingGalleryImages] = useState<string[]>([]);
   const [dayParts, setDayParts] = useState<any[]>([]);
   const [modifierGroups, setModifierGroups] = useState<any[]>([]);
   const [productGroups, setProductGroups] = useState<Record<string, string[]>>(
@@ -156,6 +161,10 @@ export default function ProductsPage() {
   };
 
   const normalizePriceOptions = () => {
+    if (catalogPriceMode === "consult" && pricingMode === "unit") {
+      return [{ label: name || "Unidad", price: price || "0" }];
+    }
+
     if (pricingMode === "unit") {
       return [{ label: name || "Unidad", price }];
     }
@@ -255,6 +264,24 @@ export default function ProductsPage() {
     if (error) throw error;
   };
 
+  const uploadProductImages = async (files: File[]) => {
+    const urls: string[] = [];
+
+    for (const file of files) {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const { error } = await supabase.storage.from("product-images").upload(fileName, file, {
+        cacheControl: "31536000",
+      });
+      if (error) throw error;
+
+      const { data } = supabase.storage.from("product-images").getPublicUrl(fileName);
+      if (data.publicUrl) urls.push(data.publicUrl);
+    }
+
+    return urls;
+  };
+
   const getProductKitchenOverride = (productId: string) => {
     const override = kitchenProducts.find((kp) => kp.product_id === productId);
     return override ? override.kitchen_id : "";
@@ -304,18 +331,10 @@ export default function ProductsPage() {
       return;
     }
 
-    let imageUrl = null;
-    if (imageFile) {
-      const fileExt = imageFile.name.split(".").pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      await supabase.storage.from("product-images").upload(fileName, imageFile, {
-        cacheControl: "31536000",
-      });
-      const { data } = supabase.storage
-        .from("product-images")
-        .getPublicUrl(fileName);
-      imageUrl = data.publicUrl;
-    }
+    const uploadedGallery = await uploadProductImages(galleryFiles);
+    const uploadedMain = imageFile ? await uploadProductImages([imageFile]) : [];
+    const imageUrl = uploadedMain[0] || uploadedGallery[0] || null;
+    const galleryImages = Array.from(new Set([imageUrl, ...uploadedGallery].filter(Boolean)));
 
     const { data: newProduct, error: productError } = await supabase
       .from("products")
@@ -335,6 +354,9 @@ export default function ProductsPage() {
         is_preparable: isPreparable,
         has_recipe: hasRecipe,
         pricing_mode: pricingMode,
+        catalog_price_mode: catalogPriceMode,
+        catalog_cta_label: catalogPriceMode === "consult" ? catalogCtaLabel.trim() || "Consultar por WhatsApp" : null,
+        gallery_images: galleryImages,
       })
       .select()
       .single();
@@ -380,7 +402,11 @@ export default function ProductsPage() {
     setShowInMenu(true);
     setQrVisible(true);
     setCatalogVisible(true);
+    setCatalogPriceMode("priced");
+    setCatalogCtaLabel("Consultar por WhatsApp");
     setImageFile(null);
+    setGalleryFiles([]);
+    setExistingGalleryImages([]);
 
     const { data: prods } = await supabase
       .from("products")
@@ -464,12 +490,16 @@ export default function ProductsPage() {
     setShowInMenu(product.show_in_menu !== false);
     setQrVisible(product.qr_visible !== false);
     setCatalogVisible(product.catalog_visible !== false);
+    setCatalogPriceMode(product.catalog_price_mode === "consult" ? "consult" : "priced");
+    setCatalogCtaLabel(product.catalog_cta_label || "Consultar por WhatsApp");
     setIsSuggestable(product.is_suggestable);
     setIsFeatured(product.is_featured);
     setIsHero(product.is_hero);
     setIsPreparable(product.is_preparable !== false);
     setHasRecipe(product.has_recipe !== false);
     setPricingMode(product.pricing_mode || "unit");
+    setExistingGalleryImages(Array.isArray(product.gallery_images) ? product.gallery_images.filter(Boolean).map(String) : []);
+    setGalleryFiles([]);
 
     // Obtener la variante principal (primera o default)
     const variants = sortVariants(product.product_variants || []);
@@ -500,6 +530,10 @@ export default function ProductsPage() {
     setShowInMenu(true);
     setQrVisible(true);
     setCatalogVisible(true);
+    setCatalogPriceMode("priced");
+    setCatalogCtaLabel("Consultar por WhatsApp");
+    setGalleryFiles([]);
+    setExistingGalleryImages([]);
     resetPricing();
   };
 
@@ -542,18 +576,10 @@ export default function ProductsPage() {
       return;
     }
 
-    let imageUrl = editingProduct.product_variants?.[0]?.image_url || null;
-    if (imageFile) {
-      const fileExt = imageFile.name.split(".").pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      await supabase.storage.from("product-images").upload(fileName, imageFile, {
-        cacheControl: "31536000",
-      });
-      const { data } = supabase.storage
-        .from("product-images")
-        .getPublicUrl(fileName);
-      imageUrl = data.publicUrl;
-    }
+    const uploadedGallery = await uploadProductImages(galleryFiles);
+    const uploadedMain = imageFile ? await uploadProductImages([imageFile]) : [];
+    const imageUrl = uploadedMain[0] || editingProduct.product_variants?.[0]?.image_url || existingGalleryImages[0] || null;
+    const galleryImages = Array.from(new Set([imageUrl, ...existingGalleryImages, ...uploadedGallery].filter(Boolean)));
 
     // Actualizar producto
     const { error: productError } = await supabase
@@ -572,6 +598,9 @@ export default function ProductsPage() {
         is_preparable: isPreparable,
         has_recipe: hasRecipe,
         pricing_mode: pricingMode,
+        catalog_price_mode: catalogPriceMode,
+        catalog_cta_label: catalogPriceMode === "consult" ? catalogCtaLabel.trim() || "Consultar por WhatsApp" : null,
+        gallery_images: galleryImages,
       })
       .eq("id", editingProduct.id);
 
@@ -826,6 +855,7 @@ export default function ProductsPage() {
                   mode={pricingMode}
                   price={price}
                   options={priceOptions}
+                  priceOptional={catalogPriceMode === "consult"}
                   onModeChange={changePricingMode}
                   onPriceChange={setPrice}
                   onOptionChange={updatePriceOption}
@@ -855,6 +885,36 @@ export default function ProductsPage() {
                       ? "Si la receta no tiene costo, se usa este valor como respaldo."
                       : "Se usa directo para CMV, reportes, combos y promociones."}
                   </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+                <h4 className="text-sm font-semibold text-gray-100">Catalogo</h4>
+                <p className="mt-1 text-xs text-gray-500">
+                  Define si este producto muestra precio o si se consulta por WhatsApp en /catalogo.
+                </p>
+                <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr]">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-300">Precio en catalogo</span>
+                    <select
+                      value={catalogPriceMode}
+                      onChange={(e) => setCatalogPriceMode(e.target.value as CatalogPriceMode)}
+                      className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-3 text-sm text-gray-100"
+                    >
+                      <option value="priced">Mostrar precio</option>
+                      <option value="consult">Consultar por WhatsApp</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-gray-300">Texto del boton</span>
+                    <input
+                      value={catalogCtaLabel}
+                      onChange={(e) => setCatalogCtaLabel(e.target.value)}
+                      disabled={catalogPriceMode !== "consult"}
+                      className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-3 text-sm text-gray-100 disabled:opacity-50"
+                      placeholder="Consultar por WhatsApp"
+                    />
+                  </label>
                 </div>
               </div>
 
@@ -899,6 +959,38 @@ export default function ProductsPage() {
                   </label>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Galeria del producto
+                </label>
+                <div className="rounded-lg border-2 border-dashed border-gray-600 p-5">
+                  <input
+                    id="gallery-upload"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => setGalleryFiles(Array.from(e.target.files || []))}
+                  />
+                  <label htmlFor="gallery-upload" className="block cursor-pointer text-center">
+                    <span className="text-sm font-semibold text-gray-200">Cargar varias fotos</span>
+                    <span className="mt-1 block text-xs text-gray-500">
+                      Se muestran como carrusel en /catalogo.
+                    </span>
+                  </label>
+                  {galleryFiles.length > 0 && (
+                    <div className="mt-4 grid grid-cols-3 gap-2 md:grid-cols-6">
+                      {galleryFiles.map((file, index) => (
+                        <div key={`${file.name}-${index}`} className="rounded-lg border border-gray-700 bg-gray-900 p-2 text-xs text-gray-300">
+                          <p className="truncate">{file.name}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -1164,6 +1256,7 @@ export default function ProductsPage() {
                           mode={pricingMode}
                           price={price}
                           options={priceOptions}
+                          priceOptional={catalogPriceMode === "consult"}
                           onModeChange={changePricingMode}
                           onPriceChange={setPrice}
                           onOptionChange={updatePriceOption}
@@ -1210,6 +1303,67 @@ export default function ProductsPage() {
                               Imagen actual
                             </span>
                           </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+                        <h4 className="text-sm font-semibold text-gray-100">Catalogo</h4>
+                        <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr]">
+                          <label className="block">
+                            <span className="mb-2 block text-xs font-bold uppercase text-gray-500">Precio</span>
+                            <select
+                              value={catalogPriceMode}
+                              onChange={(e) => setCatalogPriceMode(e.target.value as CatalogPriceMode)}
+                              className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100"
+                            >
+                              <option value="priced">Mostrar precio</option>
+                              <option value="consult">Consultar</option>
+                            </select>
+                          </label>
+                          <label className="block">
+                            <span className="mb-2 block text-xs font-bold uppercase text-gray-500">Texto del boton</span>
+                            <input
+                              value={catalogCtaLabel}
+                              onChange={(e) => setCatalogCtaLabel(e.target.value)}
+                              disabled={catalogPriceMode !== "consult"}
+                              className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100 disabled:opacity-50"
+                              placeholder="Consultar por WhatsApp"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Galeria del producto
+                        </label>
+                        {existingGalleryImages.length > 0 && (
+                          <div className="mb-3 grid grid-cols-3 gap-2 md:grid-cols-5">
+                            {existingGalleryImages.map((url, index) => (
+                              <div key={`${url}-${index}`} className="relative overflow-hidden rounded-lg border border-gray-700 bg-gray-900">
+                                <img src={url} alt="" className="h-20 w-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => setExistingGalleryImages((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                                  className="absolute right-1 top-1 rounded-full bg-black/80 px-2 py-1 text-[10px] font-bold text-white"
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="w-full rounded-lg border border-gray-600 px-4 py-2 text-sm"
+                          onChange={(e) => setGalleryFiles(Array.from(e.target.files || []))}
+                        />
+                        {galleryFiles.length > 0 && (
+                          <p className="mt-2 text-xs text-gray-400">
+                            {galleryFiles.length} foto(s) nueva(s) para agregar.
+                          </p>
                         )}
                       </div>
 
@@ -1590,6 +1744,7 @@ function PricingOptionsEditor({
   mode,
   price,
   options,
+  priceOptional = false,
   onModeChange,
   onPriceChange,
   onOptionChange,
@@ -1599,6 +1754,7 @@ function PricingOptionsEditor({
   mode: PricingMode;
   price: string;
   options: PriceOption[];
+  priceOptional?: boolean;
   onModeChange: (mode: PricingMode) => void;
   onPriceChange: (value: string) => void;
   onOptionChange: (
@@ -1648,7 +1804,7 @@ function PricingOptionsEditor({
               placeholder="0.00"
               value={price}
               onChange={(e) => onPriceChange(e.target.value)}
-              required
+              required={!priceOptional}
               min="0"
               step="0.01"
             />

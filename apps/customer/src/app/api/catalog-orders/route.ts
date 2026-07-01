@@ -149,6 +149,7 @@ function buildCustomerMessage(args: {
   branchName: string;
   productName: string;
   total: number;
+  isConsultProduct?: boolean;
   requestedDate: string;
   address: string;
   fulfillmentType: string;
@@ -163,7 +164,7 @@ function buildCustomerMessage(args: {
     `Hola! Recibimos tu encargo en ${args.branchName}.`,
     "",
     `Producto: ${args.productName}`,
-    `Total estimado: ${money(args.total)}`,
+    args.isConsultProduct ? "Importe: a confirmar" : `Total estimado: ${money(args.total)}`,
     `Fecha solicitada: ${args.requestedDate}`,
     `${args.fulfillmentType === "pickup" ? "Retiro" : args.fulfillmentType === "coordinate" ? "Coordinacion" : "Entrega"}: ${args.address}`,
     args.notes ? `Nota: ${args.notes}` : null,
@@ -188,6 +189,7 @@ function buildBranchMessage(args: {
   customerPhone: string;
   productName: string;
   total: number;
+  isConsultProduct?: boolean;
   requestedDate: string;
   address: string;
   fulfillmentType: string;
@@ -202,7 +204,7 @@ function buildBranchMessage(args: {
     `Cliente: ${args.customerName}`,
     `WhatsApp: ${args.customerPhone}`,
     `Producto: ${args.productName}`,
-    `Total: ${money(args.total)}`,
+    args.isConsultProduct ? "Importe: a confirmar" : `Total: ${money(args.total)}`,
     args.depositRequired
       ? `Sena requerida: ${args.depositPercent}% (${money(args.depositAmount)})`
       : "Sin sena configurada",
@@ -283,7 +285,7 @@ export async function POST(req: Request) {
         supabase
           .from("products")
           .select(
-            "id, name, branch_id, is_active, catalog_visible, product_variants(id, name, price, is_default)",
+            "id, name, branch_id, is_active, catalog_visible, catalog_price_mode, catalog_cta_label, product_variants(id, name, price, is_default)",
           )
           .eq("id", productId)
           .eq("branch_id", branch.id)
@@ -306,7 +308,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const total = Number(variant.price || 0);
+    const isConsultProduct = product.catalog_price_mode === "consult";
+    const total = isConsultProduct ? 0 : Number(variant.price || 0);
     const productLabel =
       variant.name && variant.name !== product.name
         ? `${product.name} - ${variant.name}`
@@ -356,7 +359,7 @@ export async function POST(req: Request) {
       fulfillmentType === "coordinate"
         ? "A coordinar por WhatsApp"
         : requestedAddress;
-    const depositRequired = Boolean(settings?.catalog_order_deposit_enabled);
+    const depositRequired = Boolean(settings?.catalog_order_deposit_enabled) && !isConsultProduct;
     const depositPercent = depositRequired
       ? Math.max(
           0,
@@ -408,7 +411,13 @@ export async function POST(req: Request) {
         deposit_amount: depositAmount,
         transfer_alias: transferAlias,
         status: "pending",
-        raw: { source: "customer_catalog", branchSlug, variantId: variant.id },
+        raw: {
+          source: "customer_catalog",
+          branchSlug,
+          variantId: variant.id,
+          catalogPriceMode: product.catalog_price_mode || "priced",
+          catalogCtaLabel: product.catalog_cta_label || null,
+        },
       })
       .select("id")
       .single();
@@ -419,6 +428,7 @@ export async function POST(req: Request) {
       branchName: branch.name,
       productName: productLabel,
       total,
+      isConsultProduct,
       requestedDate,
       address: deliveryAddress,
       fulfillmentType,
@@ -435,6 +445,7 @@ export async function POST(req: Request) {
       customerPhone,
       productName: productLabel,
       total,
+      isConsultProduct,
       requestedDate,
       address: deliveryAddress,
       fulfillmentType,

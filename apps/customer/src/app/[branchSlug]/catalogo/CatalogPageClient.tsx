@@ -54,6 +54,7 @@ function formatDayLabel(value: string) {
 export default function CatalogPageClient({ data, branchSlug }: Props) {
   const [selectedProduct, setSelectedProduct] = useState<QrMenuProduct | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState("");
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [form, setForm] = useState<OrderForm>(() => ({ ...emptyForm, date: todayInput() }));
   const [query, setQuery] = useState("");
   const [sent, setSent] = useState(false);
@@ -72,7 +73,12 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
     selectedProduct?.variants?.find((variant) => variant.isDefault) ||
     selectedProduct?.variants?.[0];
   const selectedPrice = Number(selectedVariant?.price ?? selectedProduct?.price ?? 0);
-  const depositAmount = selectedProduct ? Math.round(selectedPrice * depositPercent) / 100 : 0;
+  const isConsultProduct = selectedProduct?.catalogPriceMode === "consult";
+  const selectedImages = selectedProduct?.galleryImages?.length
+    ? selectedProduct.galleryImages
+    : [selectedVariant?.imageUrl || selectedProduct?.imageUrl].filter(Boolean) as string[];
+  const selectedImage = selectedImages[selectedImageIndex] || selectedImages[0] || "";
+  const depositAmount = selectedProduct && !isConsultProduct ? Math.round(selectedPrice * depositPercent) / 100 : 0;
   const pickupAddresses = data.catalogOrder?.pickup_addresses || [];
   const showDeliveryAddress = data.catalogOrder?.show_delivery_address !== false;
   const showPickupAddresses = Boolean(data.catalogOrder?.show_pickup_addresses && pickupAddresses.length > 0);
@@ -106,6 +112,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
 
   const openProduct = (product: QrMenuProduct) => {
     setSelectedProduct(product);
+    setSelectedImageIndex(0);
     const defaultVariant =
       product.variants?.find((variant) => variant.isDefault) ||
       product.variants?.[0];
@@ -124,6 +131,21 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
     setSent(false);
     setResultMessage("");
     setErrorMessage("");
+  };
+
+  const getProductPriceLabel = (product: QrMenuProduct) => {
+    if (product.catalogPriceMode === "consult") {
+      return product.catalogCtaLabel || "Consultar";
+    }
+
+    if (product.pricingMode && product.pricingMode !== "unit") {
+      return (product.variants || [])
+        .slice(0, 2)
+        .map((variant) => `${variant.name} - ${variant.originalPrice && variant.originalPrice > variant.price ? `${money(variant.originalPrice)} -> ` : ""}${money(variant.price)}`)
+        .join(" | ");
+    }
+
+    return money(product.price);
   };
 
   const closeProduct = () => {
@@ -310,11 +332,12 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                         </h3>
                         <div className="mt-3 flex items-center justify-between gap-2">
                           <span className="text-base font-black" style={{ color: product.originalPrice ? "#dc2626" : accentColor }}>
-                            {product.pricingMode && product.pricingMode !== "unit"
-                              ? (product.variants || [])
-                                  .slice(0, 2)
-                                  .map((variant) => `${variant.name} - ${variant.originalPrice && variant.originalPrice > variant.price ? `${money(variant.originalPrice)} -> ` : ""}${money(variant.price)}`)
-                                  .join(" | ")
+                            {product.catalogPriceMode === "consult" ? (
+                              <span className="rounded-full bg-stone-950 px-3 py-1 text-xs font-black uppercase text-white">
+                                {getProductPriceLabel(product)}
+                              </span>
+                            ) : product.pricingMode && product.pricingMode !== "unit"
+                              ? getProductPriceLabel(product)
                               : (
                                 <span className="flex flex-col">
                                   {product.saleBadge && <span className="text-[10px] font-black uppercase text-red-600">{product.saleBadge}</span>}
@@ -342,8 +365,8 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
           <div className="mx-auto flex h-full max-w-3xl flex-col overflow-hidden bg-white shadow-2xl md:h-auto md:max-h-[92dvh] md:rounded-3xl">
             <div className="relative flex-shrink-0">
               <div className="aspect-[16/10] bg-stone-100 md:aspect-[21/9]">
-                {selectedProduct.imageUrl ? (
-                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="h-full w-full object-cover" />
+                {selectedImage ? (
+                  <img src={selectedImage} alt={selectedProduct.name} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-sm font-black uppercase tracking-wide text-stone-400">
                     {data.branch.name}
@@ -371,7 +394,11 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   )}
                 </div>
                 <p className="whitespace-nowrap text-xl font-black" style={{ color: accentColor }}>
-                  {selectedVariant?.originalPrice && selectedVariant.originalPrice > selectedPrice ? (
+                  {isConsultProduct ? (
+                    <span className="rounded-full bg-stone-950 px-4 py-2 text-sm font-black uppercase text-white">
+                      {selectedProduct.catalogCtaLabel || "Consultar"}
+                    </span>
+                  ) : selectedVariant?.originalPrice && selectedVariant.originalPrice > selectedPrice ? (
                     <span className="flex flex-col items-end">
                       <span className="text-sm font-bold text-stone-400 line-through">{money(selectedVariant.originalPrice)}</span>
                       <span className="text-xl font-black text-red-600">{money(selectedPrice)}</span>
@@ -382,6 +409,24 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                 </p>
               </div>
 
+              {selectedImages.length > 1 && (
+                <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                  {selectedImages.map((image, index) => (
+                    <button
+                      key={`${image}-${index}`}
+                      type="button"
+                      onClick={() => setSelectedImageIndex(index)}
+                      className={`h-16 w-20 flex-shrink-0 overflow-hidden rounded-2xl border-2 bg-stone-100 transition ${
+                        selectedImageIndex === index ? "border-stone-950" : "border-transparent opacity-70"
+                      }`}
+                      aria-label={`Ver foto ${index + 1}`}
+                    >
+                      <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <form onSubmit={submitOrder} className="mt-6 space-y-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">
                 <div>
                   <h3 className="text-base font-black text-stone-950">Encargar</h3>
@@ -390,7 +435,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   </p>
                 </div>
 
-                {depositEnabled && (
+                {depositEnabled && !isConsultProduct && (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
                     <p className="font-black">Seña para confirmar: {depositPercent}% ({money(depositAmount)})</p>
                     {data.catalogOrder?.transfer_alias && (
@@ -400,7 +445,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   </div>
                 )}
 
-                {selectedProduct.variants?.length > 1 && (
+                {selectedProduct.variants?.length > 1 && !isConsultProduct && (
                   <div>
                     <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">
                       Elegi una opcion
@@ -581,7 +626,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   style={{ backgroundColor: accentColor }}
                 >
                   <Send size={17} />
-                  {submitting ? "Enviando..." : "Encargar"}
+                  {submitting ? "Enviando..." : isConsultProduct ? selectedProduct.catalogCtaLabel || "Consultar por WhatsApp" : "Encargar"}
                 </button>
 
                 {sent && resultMessage && (

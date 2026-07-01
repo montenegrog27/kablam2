@@ -17,6 +17,9 @@ type ProductRow = {
   name: string;
   description: string | null;
   category_id: string | null;
+  gallery_images: string[] | null;
+  catalog_price_mode: "priced" | "consult" | null;
+  catalog_cta_label: string | null;
   pricing_mode: "unit" | "kg" | "portion" | null;
   qr_position: number | null;
   qr_visible: boolean | null;
@@ -37,10 +40,13 @@ export type QrMenuProduct = {
   name: string;
   description?: string;
   price: number;
+  catalogPriceMode?: "priced" | "consult";
+  catalogCtaLabel?: string;
   originalPrice?: number;
   salePrice?: number;
   saleBadge?: string;
   imageUrl?: string;
+  galleryImages?: string[];
   pricingMode?: "unit" | "kg" | "portion";
   variants: Array<{
     id: string;
@@ -127,6 +133,14 @@ function getSaleBadge(sale: any) {
   return sale.display_type === "label" ? sale.display_label : `-${sale.discount_percentage}%`;
 }
 
+function normalizeGalleryImages(product: ProductRow, mainImage?: string | null) {
+  const gallery = Array.isArray(product.gallery_images)
+    ? product.gallery_images.filter(Boolean).map(String)
+    : [];
+  const allImages = [mainImage || "", ...gallery].filter(Boolean);
+  return Array.from(new Set(allImages));
+}
+
 export async function loadQrMenu(
   branchSlug: string,
   mode: "qr" | "catalog" = "qr",
@@ -164,6 +178,9 @@ export async function loadQrMenu(
           name,
           description,
           category_id,
+          gallery_images,
+          catalog_price_mode,
+          catalog_cta_label,
           pricing_mode,
           qr_position,
           qr_visible,
@@ -215,16 +232,20 @@ export async function loadQrMenu(
       const sale = saleByCategory.get(product.category_id);
       const price = Number(variant.price || 0);
       const salePrice = sale ? getSalePrice(price, sale) : price;
+      const galleryImages = normalizeGalleryImages(product, variant.image_url);
       const current = productsByCategory.get(product.category_id) || [];
       current.push({
         id: product.id,
         name: product.name,
         description: product.description || undefined,
         price: salePrice,
+        catalogPriceMode: product.catalog_price_mode || "priced",
+        catalogCtaLabel: product.catalog_cta_label || undefined,
         originalPrice: sale ? price : undefined,
         salePrice: sale ? salePrice : undefined,
         saleBadge: getSaleBadge(sale),
-        imageUrl: variant.image_url || undefined,
+        imageUrl: galleryImages[0] || undefined,
+        galleryImages,
         pricingMode: product.pricing_mode || "unit",
         variants: (product.product_variants || [])
           .sort(
