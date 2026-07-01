@@ -56,6 +56,7 @@ export default function OrdersBoard({
   const [loading, setLoading] = useState(false);
   const [unread, setUnread] = useState<any>({});
   const [boardOrders, setBoardOrders] = useState<any[]>(orders);
+  const [pendingAlert, setPendingAlert] = useState<any>(null);
   useEffect(() => {
     setBoardOrders(orders);
   }, [orders]);
@@ -277,6 +278,96 @@ export default function OrdersBoard({
     const index = STATUSES.indexOf(current);
     return STATUSES[index + 1] || current;
   };
+
+  const findDeliveryAlertsForOrder = async (order: any) => {
+    if (!order?.tenant_id) return [];
+    const { data: alertRows, error: alertError } = await supabase
+      .from("cashier_delivery_alerts")
+      .select("*")
+      .eq("tenant_id", order.tenant_id)
+      .eq("is_active", true)
+      .or(`branch_id.eq.${order.branch_id},branch_id.is.null`);
+
+    if (alertError) {
+      if (!alertError.message.includes("does not exist") && !alertError.message.includes("schema cache")) {
+        console.error("Error loading cashier delivery alerts:", alertError);
+      }
+      return [];
+    }
+
+    if (!alertRows?.length) return [];
+
+    const { data: items } = await supabase
+      .from("order_items")
+      .select("product_id, combo_id, products(id, name, category_id), combos(id, name)")
+      .eq("order_id", order.id);
+
+    const productIds = new Set<string>();
+    const categoryIds = new Set<string>();
+    const matchedNamesByProduct = new Map<string, string>();
+    const matchedNamesByCategory = new Map<string, string>();
+    const comboIds = (items || []).map((item: any) => item.combo_id).filter(Boolean);
+
+    (items || []).forEach((item: any) => {
+      if (item.product_id) {
+        productIds.add(item.product_id);
+        if (item.products?.name) matchedNamesByProduct.set(item.product_id, item.products.name);
+      }
+      if (item.products?.category_id) {
+        categoryIds.add(item.products.category_id);
+        if (item.products?.name) matchedNamesByCategory.set(item.products.category_id, item.products.name);
+      }
+    });
+
+    if (comboIds.length) {
+      const { data: comboProducts } = await supabase
+        .from("combo_products")
+        .select("combo_id, product_id, products(id, name, category_id)")
+        .in("combo_id", comboIds);
+
+      (comboProducts || []).forEach((item: any) => {
+        if (item.product_id) {
+          productIds.add(item.product_id);
+          if (item.products?.name) matchedNamesByProduct.set(item.product_id, item.products.name);
+        }
+        if (item.products?.category_id) {
+          categoryIds.add(item.products.category_id);
+          if (item.products?.name) matchedNamesByCategory.set(item.products.category_id, item.products.name);
+        }
+      });
+    }
+
+    const categoryAlertIds = alertRows
+      .filter((alert: any) => alert.target_type === "category" && categoryIds.has(alert.target_id))
+      .map((alert: any) => alert.target_id);
+
+    const { data: categoryRows } = categoryAlertIds.length
+      ? await supabase.from("categories").select("id, name").in("id", categoryAlertIds)
+      : { data: [] };
+    const categoryNameById = new Map((categoryRows || []).map((category: any) => [category.id, category.name]));
+
+    return alertRows
+      .filter((alert: any) =>
+        alert.target_type === "product"
+          ? productIds.has(alert.target_id)
+          : categoryIds.has(alert.target_id),
+      )
+      .map((alert: any) => {
+        const targetName =
+          alert.target_type === "product"
+            ? matchedNamesByProduct.get(alert.target_id)
+            : categoryNameById.get(alert.target_id) || matchedNamesByCategory.get(alert.target_id);
+
+        return {
+          ...alert,
+          targetName: targetName || (alert.target_type === "product" ? "producto configurado" : "categoria configurada"),
+        };
+      });
+  };
+
+  const shouldWarnOnStatusChange = (current: string, next: string) =>
+    (current === "ready" && (next === "sent" || next === "delivered")) ||
+    (current === "sent" && next === "delivered");
   const handleMarkAsPaid = async (order: any) => {
     console.log("Order ID:", order.id);
 
@@ -326,11 +417,20 @@ export default function OrdersBoard({
     setLoading(false);
     reloadOrders();
   };
-  const handleNextStatus = async (order: any) => {
+  const handleNextStatus = async (order: any, options?: { skipDeliveryAlert?: boolean }) => {
     if (loading) return;
     setLoading(true);
 
     const nextStatus = getNextStatus(order.status, order.type);
+
+    if (!options?.skipDeliveryAlert && shouldWarnOnStatusChange(order.status, nextStatus)) {
+      const matches = await findDeliveryAlertsForOrder(order);
+      if (matches.length > 0) {
+        setPendingAlert({ order, nextStatus, matches });
+        setLoading(false);
+        return;
+      }
+    }
 
     // Validación: Delivery ready → sent requiere rider asignado
     if (order.status === "ready" && nextStatus === "sent" && order.type === "delivery") {
@@ -510,7 +610,14 @@ export default function OrdersBoard({
     reloadOrders();
   };
 
+  const cashierName =
+    userRecord?.full_name ||
+    userRecord?.name ||
+    userRecord?.email?.split("@")[0] ||
+    "Equipo";
+
   return (
+    <>
     <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-8">
       {STATUSES.map((status) => {
         const list = getOrdersByStatus(status);
@@ -587,5 +694,63 @@ export default function OrdersBoard({
         );
       })}
     </div>
+    {pendingAlert && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-6">
+        <div className="w-full max-w-4xl rounded-[2rem] border-4 border-red-500 bg-red-600 p-8 text-center text-white shadow-2xl">
+          <p className="text-sm font-black uppercase tracking-[0.35em] text-white/80">
+            Atencion antes de entregar
+          </p>
+          <h2 className="mt-4 text-4xl font-black uppercase leading-none tracking-tight md:text-7xl">
+            {cashierName}
+          </h2>
+          <p className="mt-5 text-2xl font-black uppercase md:text-5xl">
+            RECORDA QUE EL PEDIDO TIENE
+          </p>
+
+          <div className="mt-6 space-y-3">
+            {pendingAlert.matches.map((match: any) => (
+              <div
+                key={match.id}
+                className="rounded-2xl border-2 border-white bg-black px-5 py-4 text-left"
+              >
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-black uppercase text-red-600">
+                    {match.target_type === "product" ? "Producto" : "Categoria"}
+                  </span>
+                  <span className="text-2xl font-black uppercase md:text-4xl">
+                    {match.targetName}
+                  </span>
+                </div>
+                {match.message && (
+                  <p className="mt-2 text-lg font-bold text-white/90 md:text-2xl">
+                    {match.message}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={() => setPendingAlert(null)}
+              className="rounded-2xl border-2 border-white px-8 py-4 text-lg font-black uppercase text-white hover:bg-white/10"
+            >
+              Revisar pedido
+            </button>
+            <button
+              onClick={() => {
+                const order = pendingAlert.order;
+                setPendingAlert(null);
+                void handleNextStatus(order, { skipDeliveryAlert: true });
+              }}
+              className="rounded-2xl bg-white px-8 py-4 text-lg font-black uppercase text-red-600 hover:bg-red-50"
+            >
+              Ya lo recorde, continuar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
