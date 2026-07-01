@@ -302,7 +302,10 @@ ${customerWhatsappUrl}`;
     }
   };
 
-  const canDelete = userRecord && ["owner", "admin"].includes(userRecord.role);
+  const canDelete =
+    userRecord &&
+    ["owner", "admin"].includes(userRecord.role) &&
+    !userRecord.role_id;
 
   return (
     <div
@@ -517,7 +520,11 @@ ${customerWhatsappUrl}`;
           </>
         )}
 
-        {!isFullyPaid && (
+        {isFullyPaid ? (
+          <span className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700">
+            Pagado
+          </span>
+        ) : (
           <button
             onClick={() => onMarkAsPaid(order)}
             className="
@@ -560,7 +567,7 @@ ${customerWhatsappUrl}`;
               transition
             "
           >
-            {cancelling ? "..." : "Cancelar"}
+            {cancelling ? "..." : "X"}
           </button>
         )}
 
