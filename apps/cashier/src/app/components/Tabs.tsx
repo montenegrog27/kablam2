@@ -113,9 +113,19 @@ export default function CashierTabs({ session }: any) {
   const [riders, setRiders] = useState<any[]>([]);
   const [savingRiders, setSavingRiders] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const { currentBranch, allBranches, changeBranch } = useBranch();
+  const { currentBranch, allBranches, changeBranch, userRecord } = useBranch();
   const { can, loading: permissionsLoading } = usePermissions();
   const isOwnerMode = userRole === "owner" && !session;
+  const displayName =
+    userRecord?.full_name ||
+    userRecord?.name ||
+    userRecord?.email?.split("@")[0] ||
+    "Usuario";
+  const displayRole =
+    userRecord?.roles?.name ||
+    userRecord?.role_name ||
+    userRecord?.role ||
+    "sin rol";
 
   const allTabs = [
     { id: "orders", label: "Pedidos", perm: "cashier.orders.view" },
@@ -208,22 +218,37 @@ export default function CashierTabs({ session }: any) {
         </div>
 
         {/* SETTINGS */}
-        <div className="relative">
-          <button onClick={() => setShowSettings(!showSettings)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-            <Settings size={18} className="text-gray-600 dark:text-gray-400" />
-          </button>
-          {showSettings && (
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border z-50 min-w-40 py-1">
-              <button onClick={() => { setShowSettings(false); loadRiders(); setShowRiderModal(true); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition">Riders</button>
-              <button
-                onClick={handleLogout}
-                className="flex w-full items-center gap-2 border-t border-gray-100 px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 dark:border-gray-700 dark:text-red-400 dark:hover:bg-red-950/30"
-              >
-                <LogOut size={15} />
-                Cerrar sesion
-              </button>
-            </div>
-          )}
+        <div className="flex items-center gap-3">
+          <div className="hidden min-w-0 text-right sm:block">
+            <p className="truncate text-sm font-bold text-gray-900 dark:text-white">
+              {displayName}
+            </p>
+            <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              {displayRole}
+            </p>
+          </div>
+
+          <div className="relative">
+            <button onClick={() => setShowSettings(!showSettings)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+              <Settings size={18} className="text-gray-600 dark:text-gray-400" />
+            </button>
+            {showSettings && (
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border z-50 min-w-40 py-1">
+                <div className="border-b border-gray-100 px-4 py-2.5 dark:border-gray-700 sm:hidden">
+                  <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{displayName}</p>
+                  <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{displayRole}</p>
+                </div>
+                <button onClick={() => { setShowSettings(false); loadRiders(); setShowRiderModal(true); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition">Riders</button>
+                <button
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 border-t border-gray-100 px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 dark:border-gray-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                >
+                  <LogOut size={15} />
+                  Cerrar sesion
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">

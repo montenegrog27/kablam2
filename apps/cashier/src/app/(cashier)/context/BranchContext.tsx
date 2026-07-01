@@ -17,7 +17,7 @@ export function BranchProvider({ children }: any) {
 
     const { data: userData } = await supabase
       .from("users")
-      .select("*, tenants(*)")
+      .select("*, tenants(*), roles(name)")
       .eq("id", authUser.id)
       .single();
 
