@@ -30,6 +30,8 @@ const STATUS_META: Record<
 export default function DeliveredBoard({
   orders,
   onSelect,
+  reloadOrders,
+  userRecord,
 }: any) {
   const getOrdersByStatus = (status: string) =>
     orders.filter((o: any) => o.status === status);
@@ -85,6 +87,9 @@ export default function DeliveredBoard({
                     key={order.id}
                     order={order}
                     onSelect={onSelect}
+                    userRecord={userRecord}
+                    canDeleteOrder={userRecord?.role === "owner"}
+                    onDeleted={() => reloadOrders?.()}
                   />
                 ))
               )}

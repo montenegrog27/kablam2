@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 import { useEffect, useState, useMemo } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
-import { Search, ChevronDown, ChevronUp, Download, Calendar, Filter, X } from "lucide-react";
+import { Search, ChevronDown, ChevronUp, Download, Calendar, Filter, X, Trash2 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   unconfirmed: "Pendiente", confirmed: "Confirmado", preparing: "Preparando",
@@ -120,6 +120,8 @@ export default function VentasPage() {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState("");
+  const [userRole, setUserRole] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   const [branchHours, setBranchHours] = useState<BranchHour[]>([]);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -172,9 +174,10 @@ export default function VentasPage() {
   const loadMeta = async () => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { data: r } = await supabase.from("users").select("tenant_id, branch_id").eq("id", u.user.id).single();
+    const { data: r } = await supabase.from("users").select("tenant_id, branch_id, role").eq("id", u.user.id).single();
     if (!r) return;
     setTenantId(r.tenant_id);
+    setUserRole(r.role || "");
 
     const [{ data: pm }, { data: rd }, { data: cp }, { data: branches }] = await Promise.all([
       supabase.from("payment_methods").select("*").eq("is_active", true).or(`tenant_id.eq.${r.tenant_id},tenant_id.is.null`),
@@ -327,6 +330,36 @@ export default function VentasPage() {
   };
 
   const allStatuses = ["unconfirmed", "confirmed", "preparing", "ready", "sent", "delivered", "cancelled"];
+  const canDeleteSales = userRole === "owner";
+
+  const deleteOrder = async (order: any) => {
+    if (!canDeleteSales || deletingId) return;
+
+    const label = `#${order.id.slice(-8).toUpperCase()} - ${order.customer_name || "sin cliente"}`;
+    if (!confirm(`Eliminar la venta ${label}? Esta accion borra la orden y sus items/pagos. No se puede deshacer.`)) return;
+
+    setDeletingId(order.id);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("No hay sesion activa.");
+
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.details || result.error || "No se pudo eliminar la venta.");
+
+      if (expandedId === order.id) setExpandedId(null);
+      await load();
+    } catch (error: any) {
+      alert("No se pudo eliminar la venta: " + error.message);
+    } finally {
+      setDeletingId("");
+    }
+  };
+
   return (
     <div>
       {/* Header */}
@@ -465,7 +498,7 @@ export default function VentasPage() {
       <div className="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
         {/* Table header - scrollable horizontally on mobile */}
         <div className="overflow-x-auto">
-          <div className="min-w-[1000px] grid grid-cols-12 gap-1 px-4 py-3 border-b border-gray-700 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+          <div className="min-w-[1080px] grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 px-4 py-3 border-b border-gray-700 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
             <div className="col-span-2">Pedido</div>
             <div className="col-span-2">Cliente</div>
             <div className="col-span-1">Tipo</div>
@@ -475,6 +508,7 @@ export default function VentasPage() {
             <div className="col-span-1 text-right">Envío</div>
             <div className="col-span-1 text-right">Subtotal</div>
             <div className="col-span-1 text-right">Venta</div>
+            <div className="col-span-1 text-right">Acciones</div>
           </div>
         </div>
 
@@ -495,7 +529,7 @@ export default function VentasPage() {
                     onClick={() => setExpandedId(isExpanded ? null : order.id)}
                     className="overflow-x-auto cursor-pointer hover:bg-gray-800/30 transition"
                   >
-                    <div className="min-w-[1000px] grid grid-cols-12 gap-1 px-4 py-3 items-center">
+                    <div className="min-w-[1080px] grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 px-4 py-3 items-center">
                       <div className="col-span-2 flex items-center gap-1.5">
                         {isExpanded ? <ChevronUp size={12} className="text-gray-600 flex-shrink-0" /> : <ChevronDown size={12} className="text-gray-600 flex-shrink-0" />}
                         <span className="text-xs font-medium text-gray-100">#{order.id.slice(-8).toUpperCase()}</span>
@@ -538,6 +572,24 @@ export default function VentasPage() {
                       </div>
                       <div className="col-span-1 text-xs font-semibold text-gray-100 text-right tabular-nums">
                         ${Math.max(0, Number(order.total || 0) - Number(order.shipping_cost || 0)).toLocaleString("es-AR")}
+                      </div>
+                      <div className="col-span-1 flex justify-end">
+                        {canDeleteSales ? (
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void deleteOrder(order);
+                            }}
+                            disabled={deletingId === order.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-2 py-1 text-[11px] font-bold text-red-300 transition hover:bg-red-500/10 disabled:opacity-40"
+                            title="Eliminar venta"
+                          >
+                            <Trash2 size={12} />
+                            {deletingId === order.id ? "..." : "Eliminar"}
+                          </button>
+                        ) : (
+                          <span className="text-gray-700">-</span>
+                        )}
                       </div>
                     </div>
                   </div>

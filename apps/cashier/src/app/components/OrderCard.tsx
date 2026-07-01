@@ -83,6 +83,8 @@ export default function OrderCard({
   onMarkAsPaid,
   onMessages,
   onAssignRider,
+  onDeleted,
+  canDeleteOrder,
   canChangeRider = true,
   userRecord,
 }: any) {
@@ -273,7 +275,30 @@ ${customerWhatsappUrl}`;
 
   const handleDelete = async () => {
     if (!confirm("¿Eliminar este pedido permanentemente? Esta acción no se puede deshacer.")) return;
-    await supabase.from("orders").delete().eq("id", order.id);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        throw new Error("No hay sesion activa.");
+      }
+
+      const response = await fetch(`/api/orders/${order.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.details || result.error || "No se pudo eliminar el pedido.");
+      }
+
+      onDeleted?.(order.id);
+    } catch (error: any) {
+      alert(`No se pudo eliminar el pedido: ${error.message}`);
+    }
   };
 
   const handleReprintComanda = async () => {
@@ -303,9 +328,11 @@ ${customerWhatsappUrl}`;
   };
 
   const canDelete =
-    userRecord &&
-    ["owner", "admin"].includes(userRecord.role) &&
-    !userRecord.role_id;
+    typeof canDeleteOrder === "boolean"
+      ? canDeleteOrder
+      : userRecord &&
+        ["owner", "admin"].includes(userRecord.role) &&
+        !userRecord.role_id;
 
   return (
     <div

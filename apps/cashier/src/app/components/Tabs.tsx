@@ -320,7 +320,7 @@ export default function CashierTabs({ session }: any) {
 
         {tab === "kds" && can("cashier.kds.view") && <KDSTab />}
 
-        {tab === "delivered" && can("cashier.orders.view") && <DeliveredTab session={session} />}
+        {tab === "delivered" && can("cashier.orders.view") && <DeliveredTab session={{ ...session, userRecord }} />}
 
         {tab === "whatsapp" && can("cashier.chat.view") && (
           <CustomerChatList

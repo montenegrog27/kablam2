@@ -47,6 +47,7 @@ return (
         orders={orders}
         onSelect={setSelectedOrder}
         reloadOrders={loadOrders}
+        userRecord={session?.userRecord}
       />
     </div>
 
