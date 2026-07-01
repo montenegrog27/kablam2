@@ -82,6 +82,10 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
   const pickupAddresses = data.catalogOrder?.pickup_addresses || [];
   const showDeliveryAddress = data.catalogOrder?.show_delivery_address !== false;
   const showPickupAddresses = Boolean(data.catalogOrder?.show_pickup_addresses && pickupAddresses.length > 0);
+  const showDateField = data.catalogOrder?.show_date !== false;
+  const showNoteField = data.catalogOrder?.show_note !== false;
+  const formTitle = data.catalogOrder?.form_title || "Encargar";
+  const configuredSubmitLabel = data.catalogOrder?.submit_label || "Encargar";
   const advanceDays = Math.max(1, Number(data.catalogOrder?.advance_days || 10));
   const minAdvanceDays = Math.max(0, Number(data.catalogOrder?.min_advance_days || 0));
   const availableDates = useMemo(
@@ -193,7 +197,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
           },
           fulfillmentType: form.fulfillmentType,
           requestedDate: form.date,
-          notes: form.note,
+          notes: showNoteField ? form.note : "",
         }),
       });
 
@@ -430,7 +434,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
 
               <form onSubmit={submitOrder} className="mt-6 space-y-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">
                 <div>
-                  <h3 className="text-base font-black text-stone-950">Encargar</h3>
+                  <h3 className="text-base font-black text-stone-950">{formTitle}</h3>
                   <p className="mt-1 text-xs leading-5 text-stone-500">
                     Completa tus datos. Te contactaremos por WhatsApp para confirmar disponibilidad, horario y pago.
                   </p>
@@ -586,39 +590,43 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   </div>
                 )}
 
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">
-                    Fecha del pedido
-                  </span>
-                  <input required value={form.date} onChange={() => undefined} className="sr-only" />
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {availableDates.map((date) => (
-                      <button
-                        key={date}
-                        type="button"
-                        onClick={() => updateForm("date", date)}
-                        className={`flex items-center gap-2 rounded-2xl border px-3 py-3 text-left text-sm font-black transition ${
-                          form.date === date
-                            ? "border-stone-900 bg-white text-stone-950 shadow-sm"
-                            : "border-stone-200 bg-white/70 text-stone-600"
-                        }`}
-                      >
-                        <CalendarDays size={16} className="shrink-0 text-stone-400" />
-                        <span className="capitalize">{formatDayLabel(date)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </label>
+                {showDateField && (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">
+                      Fecha del pedido
+                    </span>
+                    <input required value={form.date} onChange={() => undefined} className="sr-only" />
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {availableDates.map((date) => (
+                        <button
+                          key={date}
+                          type="button"
+                          onClick={() => updateForm("date", date)}
+                          className={`flex items-center gap-2 rounded-2xl border px-3 py-3 text-left text-sm font-black transition ${
+                            form.date === date
+                              ? "border-stone-900 bg-white text-stone-950 shadow-sm"
+                              : "border-stone-200 bg-white/70 text-stone-600"
+                          }`}
+                        >
+                          <CalendarDays size={16} className="shrink-0 text-stone-400" />
+                          <span className="capitalize">{formatDayLabel(date)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </label>
+                )}
 
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Nota</span>
-                  <textarea
-                    value={form.note}
-                    onChange={(event) => updateForm("note", event.target.value)}
-                    className="min-h-24 w-full rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-stone-500"
-                    placeholder="Horario aproximado, aclaraciones o detalle del pedido"
-                  />
-                </label>
+                {showNoteField && (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-stone-500">Nota</span>
+                    <textarea
+                      value={form.note}
+                      onChange={(event) => updateForm("note", event.target.value)}
+                      className="min-h-24 w-full rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-stone-500"
+                      placeholder="Horario aproximado, aclaraciones o detalle del pedido"
+                    />
+                  </label>
+                )}
 
                 <button
                   type="submit"
@@ -627,7 +635,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
                   style={{ backgroundColor: accentColor }}
                 >
                   <Send size={17} />
-                  {submitting ? "Enviando..." : isConsultProduct ? selectedProduct.catalogCtaLabel || "Consultar por WhatsApp" : "Encargar"}
+                  {submitting ? "Enviando..." : isConsultProduct ? selectedProduct.catalogCtaLabel || data.catalogOrder?.submit_label || "Consultar por WhatsApp" : configuredSubmitLabel}
                 </button>
 
                 {sent && resultMessage && (

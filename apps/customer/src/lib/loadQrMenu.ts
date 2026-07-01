@@ -120,6 +120,10 @@ export type QrMenuData = {
     pickup_addresses?: string[] | null;
     advance_days?: number | null;
     min_advance_days?: number | null;
+    show_date?: boolean | null;
+    show_note?: boolean | null;
+    form_title?: string | null;
+    submit_label?: string | null;
   };
   categories: QrMenuCategory[];
 };
@@ -197,7 +201,7 @@ export async function loadQrMenu(
   const [{ data: branding }, { data: categories }, { data: products }, { data: combos }, { data: flashSales }] = await Promise.all([
     supabase
       .from("branch_settings")
-      .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days, catalog_order_min_advance_days")
+      .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days, catalog_order_min_advance_days, catalog_order_show_date, catalog_order_show_note, catalog_order_form_title, catalog_order_submit_label")
       .eq("branch_id", branch.id)
       .maybeSingle(),
     supabase
@@ -384,6 +388,10 @@ export async function loadQrMenu(
         : [],
       advance_days: Math.max(1, Number(branding?.catalog_order_advance_days || 10)),
       min_advance_days: Math.max(0, Number(branding?.catalog_order_min_advance_days || 0)),
+      show_date: branding?.catalog_order_show_date ?? true,
+      show_note: branding?.catalog_order_show_note ?? true,
+      form_title: branding?.catalog_order_form_title || null,
+      submit_label: branding?.catalog_order_submit_label || null,
     },
     categories: menuCategories,
   };

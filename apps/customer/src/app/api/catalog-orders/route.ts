@@ -62,6 +62,12 @@ function isDateWithinOrderWindow(value: string, minAdvanceDays: number, advanceD
   return date.getTime() >= minDate.getTime() && date.getTime() <= maxDate.getTime();
 }
 
+function dateInputFromOffset(offset: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + Math.max(0, offset));
+  return date.toISOString().split("T")[0];
+}
+
 function getDefaultVariant(product: any) {
   return (
     product.product_variants?.find((variant: any) => variant.is_default) ||
@@ -252,8 +258,8 @@ export async function POST(req: Request) {
     const customerPhone = normalizeArgWhatsapp(body.customer?.phone);
     const requestedFulfillmentType = body.fulfillmentType || "delivery";
     const requestedAddress = String(body.customer?.address || "").trim();
-    const requestedDate = String(body.requestedDate || "").trim();
-    const notes = String(body.notes || "").trim();
+    const rawRequestedDate = String(body.requestedDate || "").trim();
+    const rawNotes = String(body.notes || "").trim();
 
     if (!branchSlug || !productId) {
       return NextResponse.json(
@@ -264,8 +270,7 @@ export async function POST(req: Request) {
 
     if (
       !customerName ||
-      !customerPhone ||
-      !isValidDate(requestedDate)
+      !customerPhone
     ) {
       return NextResponse.json(
         { error: "customer_data_required" },
@@ -300,7 +305,7 @@ export async function POST(req: Request) {
         supabase
           .from("branch_settings")
           .select(
-            "catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days, catalog_order_min_advance_days",
+            "catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days, catalog_order_min_advance_days, catalog_order_show_date, catalog_order_show_note",
           )
           .eq("branch_id", branch.id)
           .maybeSingle(),
@@ -349,8 +354,13 @@ export async function POST(req: Request) {
     const pickupAddresses = Array.isArray(settings?.catalog_order_pickup_addresses)
       ? settings.catalog_order_pickup_addresses.filter(Boolean).map(String)
       : [];
+    const showDateField = settings?.catalog_order_show_date !== false;
+    const showNoteField = settings?.catalog_order_show_note !== false;
     const advanceDays = Math.max(1, Number(settings?.catalog_order_advance_days || 10));
     const minAdvanceDays = Math.max(0, Number(settings?.catalog_order_min_advance_days || 0));
+    const requestedDate = showDateField ? rawRequestedDate : dateInputFromOffset(minAdvanceDays);
+    const notes = showNoteField ? rawNotes : "";
+
     if (!isDateWithinOrderWindow(requestedDate, minAdvanceDays, advanceDays)) {
       return NextResponse.json(
         { error: "requested_date_not_available" },

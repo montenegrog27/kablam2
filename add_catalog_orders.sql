@@ -7,7 +7,12 @@ add column if not exists catalog_order_instructions text,
 add column if not exists catalog_order_show_delivery_address boolean not null default true,
 add column if not exists catalog_order_show_pickup_addresses boolean not null default false,
 add column if not exists catalog_order_pickup_addresses jsonb not null default '[]'::jsonb,
-add column if not exists catalog_order_advance_days integer not null default 10;
+add column if not exists catalog_order_advance_days integer not null default 10,
+add column if not exists catalog_order_min_advance_days integer not null default 0,
+add column if not exists catalog_order_show_date boolean not null default true,
+add column if not exists catalog_order_show_note boolean not null default true,
+add column if not exists catalog_order_form_title text,
+add column if not exists catalog_order_submit_label text;
 
 create table if not exists public.catalog_orders (
   id uuid primary key default gen_random_uuid(),

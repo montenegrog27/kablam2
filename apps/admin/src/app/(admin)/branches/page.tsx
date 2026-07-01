@@ -281,6 +281,14 @@ export default function BranchesPage() {
             branchSettings.catalog_order_transfer_alias || null,
           catalog_order_instructions:
             branchSettings.catalog_order_instructions || null,
+          catalog_order_show_date:
+            branchSettings.catalog_order_show_date ?? true,
+          catalog_order_show_note:
+            branchSettings.catalog_order_show_note ?? true,
+          catalog_order_form_title:
+            branchSettings.catalog_order_form_title || null,
+          catalog_order_submit_label:
+            branchSettings.catalog_order_submit_label || null,
           catalog_order_show_delivery_address:
             branchSettings.catalog_order_show_delivery_address ?? true,
           catalog_order_show_pickup_addresses:
@@ -326,6 +334,10 @@ export default function BranchesPage() {
             "ADD COLUMN IF NOT EXISTS catalog_order_deposit_percent NUMERIC,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_transfer_alias TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_instructions TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_show_date BOOLEAN,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_show_note BOOLEAN,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_form_title TEXT,\n" +
+            "ADD COLUMN IF NOT EXISTS catalog_order_submit_label TEXT,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_show_delivery_address BOOLEAN,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_show_pickup_addresses BOOLEAN,\n" +
             "ADD COLUMN IF NOT EXISTS catalog_order_pickup_addresses JSONB,\n" +
@@ -1145,6 +1157,48 @@ export default function BranchesPage() {
                     />
                   </div>
 
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      Titulo del formulario
+                    </label>
+                    <input
+                      placeholder="Encargar / Consultar"
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                      value={branchSettings.catalog_order_form_title || ""}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_form_title",
+                          e.target.value,
+                        )
+                      }
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Texto principal del formulario en customer.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-400">
+                      Texto del boton
+                    </label>
+                    <input
+                      placeholder="Encargar / Consultar / Solicitar info"
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500"
+                      value={branchSettings.catalog_order_submit_label || ""}
+                      onChange={(e) =>
+                        updateLocalSettings(
+                          branch.id,
+                          "catalog_order_submit_label",
+                          e.target.value,
+                        )
+                      }
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Ideal para catalogos no gastronomicos, por ejemplo &quot;Consultar&quot;.
+                    </p>
+                  </div>
+
                   <ToggleSwitch
                     label="Requiere sena"
                     description="El cliente recibe el importe a transferir para confirmar"
@@ -1166,6 +1220,32 @@ export default function BranchesPage() {
                       updateLocalSettings(
                         branch.id,
                         "catalog_order_show_delivery_address",
+                        v,
+                      )
+                    }
+                  />
+
+                  <ToggleSwitch
+                    label="Mostrar fecha de pedido"
+                    description="Muestra el selector de fecha en el formulario"
+                    checked={branchSettings.catalog_order_show_date ?? true}
+                    onChange={(v) =>
+                      updateLocalSettings(
+                        branch.id,
+                        "catalog_order_show_date",
+                        v,
+                      )
+                    }
+                  />
+
+                  <ToggleSwitch
+                    label="Mostrar nota"
+                    description="Permite que el cliente agregue aclaraciones"
+                    checked={branchSettings.catalog_order_show_note ?? true}
+                    onChange={(v) =>
+                      updateLocalSettings(
+                        branch.id,
+                        "catalog_order_show_note",
                         v,
                       )
                     }
