@@ -183,6 +183,7 @@ export default function CatalogPageClient({ data, branchSlug }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           branchSlug,
+          itemType: selectedProduct.itemType || "product",
           productId: selectedProduct.id,
           variantId: selectedVariant?.id,
           customer: {

@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 type CatalogOrderBody = {
   branchSlug?: string;
+  itemType?: "product" | "combo";
   productId?: string;
   variantId?: string;
   customer?: {
@@ -73,6 +74,26 @@ function getRequestedVariant(product: any, variantId?: string) {
     product.product_variants?.find((variant: any) => variant.id === variantId) ||
     getDefaultVariant(product)
   );
+}
+
+function getComboAsProduct(combo: any) {
+  return {
+    id: combo.id,
+    name: combo.name,
+    branch_id: combo.branch_id,
+    is_active: combo.is_active,
+    catalog_visible: true,
+    catalog_price_mode: "priced",
+    catalog_cta_label: null,
+    product_variants: [
+      {
+        id: `${combo.id}-combo`,
+        name: combo.name,
+        price: Number(combo.price || 0),
+        is_default: true,
+      },
+    ],
+  };
 }
 
 async function sendWhatsapp({
@@ -224,6 +245,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as CatalogOrderBody;
     const branchSlug = String(body.branchSlug || "").trim();
+    const itemType = body.itemType === "combo" ? "combo" : "product";
     const productId = String(body.productId || "").trim();
     const variantId = String(body.variantId || "").trim();
     const customerName = String(body.customer?.name || "").trim();
@@ -273,7 +295,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "tenant_not_found" }, { status: 404 });
     }
 
-    const [{ data: settings, error: settingsError }, { data: product, error: productError }] =
+    const [{ data: settings, error: settingsError }, itemResponse] =
       await Promise.all([
         supabase
           .from("branch_settings")
@@ -282,19 +304,29 @@ export async function POST(req: Request) {
           )
           .eq("branch_id", branch.id)
           .maybeSingle(),
-        supabase
-          .from("products")
-          .select(
-            "id, name, branch_id, is_active, catalog_visible, catalog_price_mode, catalog_cta_label, product_variants(id, name, price, is_default)",
-          )
-          .eq("id", productId)
-          .eq("branch_id", branch.id)
-          .eq("is_active", true)
-          .neq("catalog_visible", false)
-          .maybeSingle(),
+        itemType === "combo"
+          ? supabase
+              .from("combos")
+              .select("id, name, branch_id, is_active, price")
+              .eq("id", productId)
+              .eq("branch_id", branch.id)
+              .eq("is_active", true)
+              .maybeSingle()
+          : supabase
+              .from("products")
+              .select(
+                "id, name, branch_id, is_active, catalog_visible, catalog_price_mode, catalog_cta_label, product_variants(id, name, price, is_default)",
+              )
+              .eq("id", productId)
+              .eq("branch_id", branch.id)
+              .eq("is_active", true)
+              .neq("catalog_visible", false)
+              .maybeSingle(),
       ]);
 
     if (settingsError) throw new Error(settingsError.message);
+    const productError = itemResponse.error;
+    const product: any = itemType === "combo" && itemResponse.data ? getComboAsProduct(itemResponse.data) : itemResponse.data;
     if (productError) throw new Error(productError.message);
     if (!product) {
       return NextResponse.json({ error: "product_not_found" }, { status: 404 });
@@ -394,7 +426,8 @@ export async function POST(req: Request) {
       .insert({
         tenant_id: branch.tenant_id,
         branch_id: branch.id,
-        product_id: product.id,
+        product_id: itemType === "product" ? product.id : null,
+        combo_id: itemType === "combo" ? product.id : null,
         product_name: productLabel,
         unit_price: total,
         quantity: 1,
@@ -414,6 +447,7 @@ export async function POST(req: Request) {
         raw: {
           source: "customer_catalog",
           branchSlug,
+          itemType,
           variantId: variant.id,
           catalogPriceMode: product.catalog_price_mode || "priced",
           catalogCtaLabel: product.catalog_cta_label || null,

@@ -14,6 +14,7 @@ create table if not exists public.catalog_orders (
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   branch_id uuid not null references public.branches(id) on delete cascade,
   product_id uuid references public.products(id) on delete set null,
+  combo_id uuid references public.combos(id) on delete set null,
   product_name text not null,
   unit_price numeric(12, 2) not null default 0,
   quantity integer not null default 1,
@@ -44,7 +45,8 @@ create table if not exists public.catalog_orders (
 
 alter table public.catalog_orders
 add column if not exists fulfillment_type text not null default 'delivery',
-add column if not exists pickup_address text;
+add column if not exists pickup_address text,
+add column if not exists combo_id uuid references public.combos(id) on delete set null;
 
 alter table public.catalog_orders
 drop constraint if exists catalog_orders_fulfillment_type_check;

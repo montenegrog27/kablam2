@@ -35,8 +35,34 @@ type ProductRow = {
   }>;
 };
 
+type ComboRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  category_id: string | null;
+  price: number | null;
+  is_active: boolean | null;
+  combo_products?: Array<{
+    product_id: string;
+    quantity: number | null;
+    products?: {
+      id: string;
+      name: string;
+      product_variants?: Array<{
+        id: string;
+        name: string;
+        price: number;
+        image_url: string | null;
+        is_default: boolean;
+        sort_order: number | null;
+      }>;
+    } | null;
+  }>;
+};
+
 export type QrMenuProduct = {
   id: string;
+  itemType?: "product" | "combo";
   name: string;
   description?: string;
   price: number;
@@ -141,6 +167,16 @@ function normalizeGalleryImages(product: ProductRow, mainImage?: string | null) 
   return Array.from(new Set(allImages));
 }
 
+function getComboImage(combo: ComboRow) {
+  for (const item of combo.combo_products || []) {
+    const product = Array.isArray(item.products) ? item.products[0] : item.products;
+    const variants = product?.product_variants || [];
+    const variant = variants.find((row: { is_default?: boolean }) => row.is_default) || variants[0];
+    if (variant?.image_url) return variant.image_url;
+  }
+  return undefined;
+}
+
 export async function loadQrMenu(
   branchSlug: string,
   mode: "qr" | "catalog" = "qr",
@@ -158,7 +194,7 @@ export async function loadQrMenu(
 
   const saleChannelColumn = mode === "catalog" ? "show_in_catalog" : "show_in_qr";
   const now = new Date().toISOString();
-  const [{ data: branding }, { data: categories }, { data: products }, { data: flashSales }] = await Promise.all([
+  const [{ data: branding }, { data: categories }, { data: products }, { data: combos }, { data: flashSales }] = await Promise.all([
     supabase
       .from("branch_settings")
       .select("logo_url, loading_icon_url, background_color, brand_color, accent_color, font_family, font_url, catalog_order_whatsapp_phone, catalog_order_deposit_enabled, catalog_order_deposit_percent, catalog_order_transfer_alias, catalog_order_instructions, catalog_order_show_delivery_address, catalog_order_show_pickup_addresses, catalog_order_pickup_addresses, catalog_order_advance_days, catalog_order_min_advance_days")
@@ -192,6 +228,30 @@ export async function loadQrMenu(
       .eq("branch_id", branch.id)
       .eq("is_active", true)
       .order(fields.productPosition, { ascending: true })
+      .order("name", { ascending: true }),
+    supabase
+      .from("combos")
+      .select(
+        `
+          id,
+          name,
+          description,
+          category_id,
+          price,
+          is_active,
+          combo_products(
+            product_id,
+            quantity,
+            products(
+              id,
+              name,
+              product_variants(id, name, price, image_url, is_default, sort_order)
+            )
+          )
+        `,
+      )
+      .eq("branch_id", branch.id)
+      .eq("is_active", true)
       .order("name", { ascending: true }),
     supabase
       .from("flash_sales")
@@ -236,6 +296,7 @@ export async function loadQrMenu(
       const current = productsByCategory.get(product.category_id) || [];
       current.push({
         id: product.id,
+        itemType: "product",
         name: product.name,
         description: product.description || undefined,
         price: salePrice,
@@ -264,6 +325,38 @@ export async function loadQrMenu(
           })),
       });
       productsByCategory.set(product.category_id, current);
+    });
+
+  ((combos || []) as unknown as ComboRow[])
+    .filter((combo) => combo.category_id && categoryById.has(combo.category_id))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((combo) => {
+      if (!combo.category_id) return;
+      const price = Number(combo.price || 0);
+      const imageUrl = getComboImage(combo);
+      const current = productsByCategory.get(combo.category_id) || [];
+
+      current.push({
+        id: combo.id,
+        itemType: "combo",
+        name: combo.name,
+        description: combo.description || undefined,
+        price,
+        catalogPriceMode: "priced",
+        imageUrl,
+        galleryImages: imageUrl ? [imageUrl] : [],
+        pricingMode: "unit",
+        variants: [
+          {
+            id: `${combo.id}-combo`,
+            name: combo.name,
+            price,
+            imageUrl,
+            isDefault: true,
+          },
+        ],
+      });
+      productsByCategory.set(combo.category_id, current);
     });
 
   const menuCategories = visibleCategories
