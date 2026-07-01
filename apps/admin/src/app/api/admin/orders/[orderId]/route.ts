@@ -10,6 +10,16 @@ const CHILD_TABLES = [
   "kds_order_events",
 ];
 
+function isMissingOptionalRelation(error: { code?: string; message?: string }) {
+  return (
+    error.code === "42P01" ||
+    error.code === "42703" ||
+    error.code === "PGRST205" ||
+    /Could not find the table/i.test(error.message || "") ||
+    /Could not find .* in the schema cache/i.test(error.message || "")
+  );
+}
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ orderId: string }> },
@@ -50,7 +60,7 @@ export async function DELETE(
 
   for (const table of CHILD_TABLES) {
     const { error } = await auth.supabase.from(table).delete().eq("order_id", orderId);
-    if (error && error.code !== "42P01" && error.code !== "42703") {
+    if (error && !isMissingOptionalRelation(error)) {
       return NextResponse.json(
         { error: "child_delete_failed", table, details: error.message },
         { status: 500 },
