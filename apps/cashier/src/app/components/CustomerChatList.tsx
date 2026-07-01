@@ -22,7 +22,7 @@ type Conversation = {
   last_message?: string;
   last_media_type?: string;
   unread_count: number;
-  customers: { id: string; name: string; phone: string; address?: string; tags?: string[] };
+  customers: { id: string; name: string; phone: string; address?: string; tags?: string[]; cashier_tag?: string | null };
 };
 
 type Message = {
@@ -101,6 +101,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
   const [editName, setEditName] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editTags, setEditTags] = useState<string[]>([]);
+  const [editCashierTag, setEditCashierTag] = useState("");
   const [tagInput, setTagInput] = useState("");
   const messagesRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -196,7 +197,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
 
     const ids = [...new Set(data.map((c: any) => c.customer_id).filter(Boolean))];
     const { data: customers } = ids.length
-      ? await supabase.from("customers").select("id, name, phone").in("id", ids)
+      ? await supabase.from("customers").select("id, name, phone, cashier_tag").in("id", ids)
       : { data: [] };
     const map: Record<string, any> = {}; (customers || []).forEach((c: any) => map[c.id] = c);
     const withLastMsg = await Promise.all(data.map(async (conv: any) => {
@@ -239,7 +240,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
 
     const { data: customer } = await supabase
       .from("customers")
-      .select("id, name, phone, address, tags")
+      .select("id, name, phone, address, tags, cashier_tag")
       .eq("id", conv.customer_id)
       .maybeSingle();
 
@@ -600,6 +601,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
     const matchesSearch = !q || [
       conv.customers.name,
       conv.customers.phone,
+      conv.customers.cashier_tag,
       conv.last_message,
       ...(conv.customers.tags || []),
     ].some((value) => value?.toLowerCase().includes(q));
@@ -661,6 +663,11 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="font-medium text-sm truncate">{conv.customers.name || conv.customers.phone}</span>
+                      {conv.customers.cashier_tag && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full whitespace-nowrap">
+                          {conv.customers.cashier_tag}
+                        </span>
+                      )}
                       {(conv.customers.tags || []).slice(0, 2).map((tag) => (
                         <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded-full whitespace-nowrap">{tag}</span>
                       ))}
@@ -708,6 +715,7 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
                 setEditName(fullCustomer.name || "");
                 setEditAddress(fullCustomer.address || "");
                 setEditTags(fullCustomer.tags || []);
+                setEditCashierTag(fullCustomer.cashier_tag || "");
                 if (!fullCustomer.address) {
                   const { data: lastOrder } = await supabase.from("orders").select("address").eq("customer_id", activeConv.customers.id).eq("type", "delivery").not("address", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
                   if (lastOrder?.address) setEditAddress(lastOrder.address);
@@ -716,13 +724,21 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
                 setEditName(activeConv.customers.name || "");
                 setEditAddress("");
                 setEditTags([]);
+                setEditCashierTag(activeConv.customers.cashier_tag || "");
               }
               setShowCustomerInfo(true);
             }} className="flex items-center gap-3 flex-1 min-w-0 text-left">
               <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0"><span className="text-gray-600 font-medium text-sm">{activeConv.customers.name?.[0]?.toUpperCase() || "?"}</span></div>
               <div className="min-w-0">
                 <p className="font-medium text-sm truncate">{activeConv.customers.name || "Sin nombre"}</p>
-                <p className="text-[11px] text-gray-500">{activeConv.customers.phone}</p>
+                <div className="flex flex-wrap items-center gap-1">
+                  <p className="text-[11px] text-gray-500">{activeConv.customers.phone}</p>
+                  {activeConv.customers.cashier_tag && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      {activeConv.customers.cashier_tag}
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
             <a href={`tel:${activeConv.customers.phone}`} className="p-2 rounded-full hover:bg-gray-100"><Phone size={18} className="text-gray-600" /></a>
@@ -749,6 +765,8 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
                   <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Sin dirección" className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
                 </div>
                 <div>
+                  <label className="text-xs text-gray-500">Etiqueta del cashier</label>
+                  <input value={editCashierTag} onChange={(e) => setEditCashierTag(e.target.value)} placeholder="Ej: necesita descuento, cliente muy bueno" className="mb-2 w-full border border-amber-200 bg-amber-50 rounded-lg px-3 py-2 text-sm text-amber-950 outline-none focus:ring-2 focus:ring-amber-400" />
                   <label className="text-xs text-gray-500">Etiquetas</label>
                   <div className="flex flex-wrap gap-1 mb-1">
                     {editTags.map((tag, i) => (
@@ -765,10 +783,15 @@ export default function CustomerChatList({ branchId, tenantId, onClose, onUnread
                 </div>
                 <button
                   onClick={async () => {
-                    await supabase.from("customers").update({ name: editName, address: editAddress || null, tags: editTags }).eq("id", activeConv.customers.id);
+                    const cashierTag = editCashierTag.trim();
+                    const { error } = await supabase.from("customers").update({ name: editName, address: editAddress || null, tags: editTags, cashier_tag: cashierTag || null }).eq("id", activeConv.customers.id);
+                    if (error) {
+                      alert(error.message.includes("cashier_tag") ? "Falta ejecutar add_customer_cashier_tag.sql en Supabase." : error.message);
+                      return;
+                    }
                     setShowCustomerInfo(false);
-                    setConversations((prev) => prev.map((c) => c.id === activeConv.id ? { ...c, customers: { ...c.customers, name: editName, tags: editTags } } : c));
-                    setActiveConv((prev) => prev ? { ...prev, customers: { ...prev.customers, name: editName, tags: editTags } } : null);
+                    setConversations((prev) => prev.map((c) => c.id === activeConv.id ? { ...c, customers: { ...c.customers, name: editName, tags: editTags, cashier_tag: cashierTag || null } } : c));
+                    setActiveConv((prev) => prev ? { ...prev, customers: { ...prev.customers, name: editName, tags: editTags, cashier_tag: cashierTag || null } } : null);
                   }}
                   className="w-full py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition"
                 >Guardar</button>
