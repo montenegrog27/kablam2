@@ -40,16 +40,26 @@ function normalizeWhatsappPhone(phone: string) {
   return `549${digits.replace(/^0/, "")}`;
 }
 
-function getCustomerWhatsappUrl(order: any) {
+function getTenantName(order: any, userRecord?: any) {
+  return (
+    order.tenant_name ||
+    order.tenants?.name ||
+    userRecord?.tenants?.name ||
+    "Kablam"
+  );
+}
+
+function getCustomerWhatsappUrl(order: any, tenantName?: string) {
   const phone = normalizeWhatsappPhone(order.customer_phone || "");
   if (!phone) return "Sin telefono";
-  const text = `Hola, soy tu repartidor del pedido #${order.id.slice(-6).toUpperCase()}. Estoy en camino.`;
+  const text = `Hola, soy el repartidor de ${tenantName || getTenantName(order)}, y estoy en camino con tu pedido!`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
 
-function buildRiderWhatsappMessage(order: any) {
+function buildRiderWhatsappMessage(order: any, tenantName?: string) {
   const mapsUrl = getGoogleMapsUrl(order);
   const paymentLabel = getPaymentLabel(order);
+  const resolvedTenantName = tenantName || getTenantName(order);
   return [
     `Pedido #${order.id.slice(-6).toUpperCase()}`,
     "",
@@ -60,7 +70,7 @@ function buildRiderWhatsappMessage(order: any) {
     mapsUrl ? `Mapa: ${mapsUrl}` : "",
     `Importe: $${formatCurrency(Number(order.total || 0))}`,
     `Metodo de pago: ${paymentLabel}`,
-    `Mensaje al cliente: ${getCustomerWhatsappUrl(order)}`,
+    `Mensaje al cliente: ${getCustomerWhatsappUrl(order, resolvedTenantName)}`,
   ].filter(Boolean).join("\n");
 }
 
@@ -93,6 +103,7 @@ export default function OrderCard({
   const isDelivery = order.type === "delivery";
   const canChange = canChangeRider && isDelivery;
   const paymentLabel = getPaymentLabel(order);
+  const tenantName = getTenantName(order, userRecord);
   const promotionNames = Array.isArray(order.promotion_names)
     ? order.promotion_names.filter(Boolean)
     : [];
@@ -155,7 +166,7 @@ export default function OrderCard({
     if (onAssignRider) onAssignRider(order.id, selectedRider);
     if (selectedRider?.phone) {
       const riderPhone = normalizeWhatsappPhone(selectedRider.phone);
-      const url = `https://wa.me/${riderPhone}?text=${encodeURIComponent(buildRiderWhatsappMessage(order))}`;
+      const url = `https://wa.me/${riderPhone}?text=${encodeURIComponent(buildRiderWhatsappMessage(order, tenantName))}`;
       window.open(url, "_blank", "noopener,noreferrer");
     }
   };
@@ -385,7 +396,7 @@ ${customerWhatsappUrl}`;
                 onClick={() => setEditingTag(true)}
                 className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
               >
-                <Tag size={12} /> {customerTag ? "Editar etiqueta" : "Etiqueta"}
+                <Tag size={12} /> {customerTag ? "" : ""}
               </button>
             )}
           </div>
