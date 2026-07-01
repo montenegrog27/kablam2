@@ -44,16 +44,45 @@ export function getPlatformTenantSlug(host: string) {
   return subdomain;
 }
 
+function getFallbackTenantSlugForHost(host: string) {
+  const normalizedHost = normalizeHost(host);
+  const fallbackSlug = (
+    process.env.CUSTOMER_FALLBACK_TENANT_SLUG ||
+    process.env.NEXT_PUBLIC_CUSTOMER_FALLBACK_TENANT_SLUG ||
+    "kablam"
+  ).trim();
+
+  const fallbackHosts = (
+    process.env.CUSTOMER_FALLBACK_HOSTS ||
+    process.env.NEXT_PUBLIC_CUSTOMER_FALLBACK_HOSTS ||
+    "kablam2-customer.vercel.app"
+  )
+    .split(",")
+    .map((item) => normalizeHost(item))
+    .filter(Boolean);
+
+  return fallbackSlug && fallbackHosts.includes(normalizedHost) ? fallbackSlug : null;
+}
+
 export async function resolveTenantFromHost(
   supabase: SupabaseLike,
   host: string,
 ): Promise<ResolvedTenant | null> {
   const normalizedHost = normalizeHost(host);
+  const fallbackSlug = getFallbackTenantSlugForHost(host);
+
+  if (fallbackSlug) {
+    const { data } = await supabase
+      .from("tenants")
+      .select("id,name,slug")
+      .eq("slug", fallbackSlug)
+      .maybeSingle();
+    if (data) return data;
+  }
 
   if (
     normalizedHost === "localhost" ||
-    normalizedHost === "127.0.0.1" ||
-    normalizedHost.includes("kablam2-")
+    normalizedHost === "127.0.0.1"
   ) {
     const { data } = await supabase
       .from("tenants")
