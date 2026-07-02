@@ -6,6 +6,15 @@ import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 type PricingMode = "unit" | "kg" | "portion";
 type CatalogPriceMode = "priced" | "consult";
 type PriceOption = { label: string; price: string };
+const stockUnits = [
+  { value: "unit", label: "Unidades" },
+  { value: "kg", label: "Kilogramos" },
+  { value: "g", label: "Gramos" },
+  { value: "liter", label: "Litros" },
+  { value: "ml", label: "Mililitros" },
+  { value: "pack", label: "Packs" },
+  { value: "box", label: "Cajas" },
+];
 
 const pricingModeLabels: Record<PricingMode, string> = {
   unit: "Precio por unidad",
@@ -51,6 +60,9 @@ export default function ProductsPage() {
   const [isHero, setIsHero] = useState(false);
   const [isPreparable, setIsPreparable] = useState(true);
   const [hasRecipe, setHasRecipe] = useState(true);
+  const [managesStock, setManagesStock] = useState(false);
+  const [stockUnit, setStockUnit] = useState("unit");
+  const [stockLowThreshold, setStockLowThreshold] = useState("0");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [existingGalleryImages, setExistingGalleryImages] = useState<string[]>([]);
@@ -353,6 +365,9 @@ export default function ProductsPage() {
         is_hero: isHero,
         is_preparable: isPreparable,
         has_recipe: hasRecipe,
+        manages_stock: managesStock,
+        stock_unit: stockUnit,
+        stock_low_threshold: Number(stockLowThreshold || 0),
         pricing_mode: pricingMode,
         catalog_price_mode: catalogPriceMode,
         catalog_cta_label: catalogPriceMode === "consult" ? catalogCtaLabel.trim() || "Consultar por WhatsApp" : null,
@@ -399,6 +414,9 @@ export default function ProductsPage() {
     setAllowHalf(false);
     setIsPreparable(true);
     setHasRecipe(true);
+    setManagesStock(false);
+    setStockUnit("unit");
+    setStockLowThreshold("0");
     setShowInMenu(true);
     setQrVisible(true);
     setCatalogVisible(true);
@@ -497,6 +515,9 @@ export default function ProductsPage() {
     setIsHero(product.is_hero);
     setIsPreparable(product.is_preparable !== false);
     setHasRecipe(product.has_recipe !== false);
+    setManagesStock(product.manages_stock === true);
+    setStockUnit(product.stock_unit || "unit");
+    setStockLowThreshold(String(product.stock_low_threshold ?? 0));
     setPricingMode(product.pricing_mode || "unit");
     setExistingGalleryImages(Array.isArray(product.gallery_images) ? product.gallery_images.filter(Boolean).map(String) : []);
     setGalleryFiles([]);
@@ -527,6 +548,9 @@ export default function ProductsPage() {
     setDescription("");
     setCategoryId(null);
     setHasRecipe(true);
+    setManagesStock(false);
+    setStockUnit("unit");
+    setStockLowThreshold("0");
     setShowInMenu(true);
     setQrVisible(true);
     setCatalogVisible(true);
@@ -548,6 +572,8 @@ export default function ProductsPage() {
     await supabase.from("modifier_group_products").delete().eq("product_id", product.id);
     await supabase.from("product_day_parts").delete().eq("product_id", product.id);
     await supabase.from("kitchen_products").delete().eq("product_id", product.id);
+    await supabase.from("stock_movements").delete().eq("product_id", product.id);
+    await supabase.from("stock_items").delete().eq("product_id", product.id);
     await supabase.from("product_variants").delete().eq("product_id", product.id);
     await supabase.from("order_items").delete().eq("product_id", product.id);
     await supabase.from("products").delete().eq("id", product.id);
@@ -597,6 +623,9 @@ export default function ProductsPage() {
         is_hero: isHero,
         is_preparable: isPreparable,
         has_recipe: hasRecipe,
+        manages_stock: managesStock,
+        stock_unit: stockUnit,
+        stock_low_threshold: Number(stockLowThreshold || 0),
         pricing_mode: pricingMode,
         catalog_price_mode: catalogPriceMode,
         catalog_cta_label: catalogPriceMode === "consult" ? catalogCtaLabel.trim() || "Consultar por WhatsApp" : null,
@@ -917,6 +946,15 @@ export default function ProductsPage() {
                   </label>
                 </div>
               </div>
+
+              <StockSettingsEditor
+                managesStock={managesStock}
+                stockUnit={stockUnit}
+                stockLowThreshold={stockLowThreshold}
+                onManagesStockChange={setManagesStock}
+                onStockUnitChange={setStockUnit}
+                onStockLowThresholdChange={setStockLowThreshold}
+              />
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1279,6 +1317,15 @@ export default function ProductsPage() {
                           </p>
                         </div>
                       </div>
+
+                      <StockSettingsEditor
+                        managesStock={managesStock}
+                        stockUnit={stockUnit}
+                        stockLowThreshold={stockLowThreshold}
+                        onManagesStockChange={setManagesStock}
+                        onStockUnitChange={setStockUnit}
+                        onStockLowThresholdChange={setStockLowThreshold}
+                      />
 
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1864,6 +1911,74 @@ function PricingOptionsEditor({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StockSettingsEditor({
+  managesStock,
+  stockUnit,
+  stockLowThreshold,
+  onManagesStockChange,
+  onStockUnitChange,
+  onStockLowThresholdChange,
+}: {
+  managesStock: boolean;
+  stockUnit: string;
+  stockLowThreshold: string;
+  onManagesStockChange: (value: boolean) => void;
+  onStockUnitChange: (value: string) => void;
+  onStockLowThresholdChange: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h4 className="text-sm font-semibold text-gray-100">Stock</h4>
+          <p className="mt-1 max-w-xl text-xs text-gray-500">
+            Activalo para productos que deban descontarse al venderse. Soporta unidades, kg, gramos, litros, ml, packs y cajas.
+          </p>
+        </div>
+        <label className="flex items-center gap-3 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-600 text-black focus:ring-white"
+            checked={managesStock}
+            onChange={(event) => onManagesStockChange(event.target.checked)}
+          />
+          <span className="text-sm font-semibold text-gray-200">Maneja stock</span>
+        </label>
+      </div>
+
+      <div className={`mt-4 grid gap-4 md:grid-cols-2 ${managesStock ? "" : "opacity-50"}`}>
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-gray-300">Unidad de control</span>
+          <select
+            value={stockUnit}
+            onChange={(event) => onStockUnitChange(event.target.value)}
+            disabled={!managesStock}
+            className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-3 text-sm text-gray-100 disabled:cursor-not-allowed"
+          >
+            {stockUnits.map((unit) => (
+              <option key={unit.value} value={unit.value}>{unit.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-gray-300">Alerta de stock bajo</span>
+          <input
+            type="number"
+            min="0"
+            step="0.001"
+            value={stockLowThreshold}
+            onChange={(event) => onStockLowThresholdChange(event.target.value)}
+            disabled={!managesStock}
+            className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-3 text-sm text-gray-100 disabled:cursor-not-allowed"
+            placeholder="Ej: 5"
+          />
+        </label>
+      </div>
     </div>
   );
 }

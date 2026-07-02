@@ -261,15 +261,31 @@ ${customerWhatsappUrl}`;
     const reason = window.prompt("Motivo de cancelacion");
     if (!reason?.trim()) return;
     setCancelling(true);
-    await supabase
-      .from("orders")
-      .update({
-        status: "cancelled",
-        cancel_reason: reason.trim(),
-        cancelled_at: new Date().toISOString(),
-        cancelled_by: userRecord?.id || null,
-      })
-      .eq("id", order.id);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("No hay sesion activa.");
+
+      const response = await fetch(`/api/orders/${order.id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: "cancelled",
+          updates: {
+            cancel_reason: reason.trim(),
+            cancelled_at: new Date().toISOString(),
+            cancelled_by: userRecord?.id || null,
+          },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.details || result.error || "No se pudo cancelar.");
+    } catch (error: any) {
+      alert(error.message || "No se pudo cancelar el pedido.");
+    }
     setCancelling(false);
   };
 

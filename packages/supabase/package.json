@@ -7,7 +7,8 @@
     "./client": "./client.ts",
     "./server": "./server.ts",
     "./costs": "./costs.ts",
-    "./promotions": "./promotions.ts"
+    "./promotions": "./promotions.ts",
+    "./stock": "./stock.ts"
   }
 
 }

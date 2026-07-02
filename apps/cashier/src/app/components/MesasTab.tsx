@@ -198,15 +198,37 @@ export default function MesasTab() {
     const subtotal = [...confirmedItems, ...pendingCart].reduce((s, i) => s + i.price * i.qty, 0);
     const session = getSession(selectedTable);
 
-    await supabase.from("orders").update({
-      status: "delivered", subtotal, total: subtotal, paid_amount: subtotal, is_paid: true,
-    }).eq("id", localOrderId);
-
     if (pendingCart.length > 0) {
       await supabase.from("order_items").insert(pendingCart.map((item) => ({
         order_id: localOrderId, product_id: item.product_id, variant_id: item.variant_id,
         quantity: item.qty, unit_price: item.price, total: item.price * item.qty,
       })));
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      alert("No hay sesion activa.");
+      setLoading(false);
+      return;
+    }
+
+    const statusResponse = await fetch(`/api/orders/${localOrderId}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        status: "delivered",
+        updates: { subtotal, total: subtotal, paid_amount: subtotal, is_paid: true },
+      }),
+    });
+    if (!statusResponse.ok) {
+      const result = await statusResponse.json();
+      alert(result.details || result.error || "No se pudo cerrar la mesa.");
+      setLoading(false);
+      return;
     }
 
     await supabase.from("order_payments").insert({

@@ -44,6 +44,26 @@ function statusToRealtimeEvent(status: string) {
   return "orders.accepted";
 }
 
+async function updateOrderStatusViaApi(orderId: string, status: string, updates: Record<string, any>) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("No hay sesion activa.");
+
+  const response = await fetch(`/api/orders/${orderId}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ status, updates }),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.details || result.error || "No se pudo actualizar el pedido.");
+  }
+  return result;
+}
+
 export default function OrdersBoard({
   orders,
   activeConversationId,
@@ -515,10 +535,13 @@ export default function OrdersBoard({
     if (nextStatus === "confirmed") updates.confirmed_at = new Date().toISOString();
     if (nextStatus === "preparing") updates.preparing_at = new Date().toISOString();
 
-    await supabase
-      .from("orders")
-      .update(updates)
-      .eq("id", order.id);
+    try {
+      await updateOrderStatusViaApi(order.id, nextStatus, updates);
+    } catch (error: any) {
+      alert(error.message || "No se pudo actualizar el pedido.");
+      setLoading(false);
+      return;
+    }
 
     if (nextStatus === "confirmed") {
       const { error: loyaltyError } = await supabase.rpc("process_loyalty_for_order", {

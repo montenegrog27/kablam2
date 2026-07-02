@@ -15,11 +15,30 @@ export function BranchProvider({ children }: any) {
     const authUser = sessionData.session?.user;
     if (!authUser) return;
 
-    const { data: userData } = await supabase
-      .from("users")
-      .select("*, tenants(*), roles(name)")
-      .eq("id", authUser.id)
-      .single();
+    const token = sessionData.session?.access_token;
+    let userData: any = null;
+
+    if (token) {
+      const response = await fetch("/api/cashier/tenant-context", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        console.error("Cashier tenant context error:", result);
+        return;
+      }
+      userData = result.user;
+    }
+
+    if (!userData) {
+      const { data } = await supabase
+        .from("users")
+        .select("*, tenants(*), roles(name)")
+        .eq("id", authUser.id)
+        .single();
+      userData = data;
+    }
 
     if (!userData) return;
 

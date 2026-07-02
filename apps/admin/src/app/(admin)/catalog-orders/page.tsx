@@ -250,11 +250,35 @@ export default function CatalogOrdersPage() {
 
   async function updateOrder(order: CatalogOrder, patch: Partial<CatalogOrder>) {
     setSavingId(order.id);
-    const { error } = await supabase
-      .from("catalog_orders")
-      .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq("id", order.id)
-      .eq("tenant_id", tenantId);
+    let error: any = null;
+
+    if (patch.status) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) throw new Error("No hay sesion activa.");
+
+        const response = await fetch(`/api/catalog-orders/${order.id}/status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: patch.status, patch }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.details || result.error || "No se pudo actualizar el pedido.");
+      } catch (err: any) {
+        error = err;
+      }
+    } else {
+      const result = await supabase
+        .from("catalog_orders")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("id", order.id)
+        .eq("tenant_id", tenantId);
+      error = result.error;
+    }
 
     if (error) {
       alert(`No se pudo actualizar el pedido: ${error.message}`);

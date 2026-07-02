@@ -76,7 +76,7 @@ const { data: newSession, error } = await supabase
   .from("cash_sessions")
   .insert({
     tenant_id: userRecord.tenant_id,
-    branch_id: userRecord.branch_id,
+    branch_id: selectedRegister.branch_id || userRecord.branch_id,
     cash_register_id: selectedRegister.id,
     opened_by: userRecord.id,
     opening_amount: Number(amount),

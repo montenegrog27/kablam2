@@ -38,6 +38,7 @@ export default function CashierLayoutInner({ children }: any) {
     `,
       )
       .eq("opened_by", userRecord.id)
+      .eq("tenant_id", userRecord.tenant_id)
       .eq("status", "open")
       .maybeSingle();
 
@@ -56,11 +57,32 @@ export default function CashierLayoutInner({ children }: any) {
         return;
       }
 
-      const { data: userData } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+      const token = sessionData.session?.access_token;
+      let userData: any = null;
+
+      if (token) {
+        const response = await fetch("/api/cashier/tenant-context", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          console.error("Cashier tenant context error:", result);
+          await supabase.auth.signOut();
+          router.push("/login");
+          return;
+        }
+        userData = result.user;
+      }
+
+      if (!userData) {
+        const { data } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        userData = data;
+      }
 
       setUserRecord(userData);
     } catch (err) {

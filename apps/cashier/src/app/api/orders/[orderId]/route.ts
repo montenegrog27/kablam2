@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { applyOrderStockMovement } from "@kablam/supabase/stock";
 
 const CHILD_TABLES = [
   "order_payments",
@@ -71,7 +72,7 @@ export async function DELETE(
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, tenant_id")
+    .select("id, tenant_id, status")
     .eq("id", orderId)
     .maybeSingle();
 
@@ -88,6 +89,22 @@ export async function DELETE(
 
   if (order.tenant_id !== userRecord.tenant_id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  if (order.status === "delivered") {
+    try {
+      await applyOrderStockMovement({
+        supabase,
+        orderId,
+        action: "reversal",
+        userId: userRecord.id,
+      });
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: "stock_reversal_failed", details: error.message },
+        { status: 500 },
+      );
+    }
   }
 
   for (const table of CHILD_TABLES) {

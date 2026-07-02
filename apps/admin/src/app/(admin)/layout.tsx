@@ -69,6 +69,7 @@ const NAV_PERMISSIONS: Record<string, string> = {
   "/expenses": "admin.expenses.view",
   "/expense-categories": "admin.expenses.view",
   "/suppliers": "admin.suppliers.view",
+  "/stock": "admin.products.view",
   "/purchases": "admin.purchases.view",
   "/purchase-categories": "admin.purchases.view",
   "/roles": "admin.users.view",
@@ -236,6 +237,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       { href: "/suppliers", label: "Proveedores", icon: TruckIcon },
     ]},
     { section: "Stock", items: [
+      { href: "/stock", label: "Stock", icon: Package },
       { href: "/purchases", label: "Compras", icon: FileText },
       { href: "/purchase-categories", label: "Cat. Compras", icon: Tags },
     ]},

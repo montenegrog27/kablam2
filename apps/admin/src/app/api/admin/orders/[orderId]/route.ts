@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorStatus, getAdminUser } from "@/lib/ads-auth";
+import { applyOrderStockMovement } from "@kablam/supabase/stock";
 
 const CHILD_TABLES = [
   "order_payments",
@@ -39,7 +40,7 @@ export async function DELETE(
 
   const { data: order, error: orderError } = await auth.supabase
     .from("orders")
-    .select("id, tenant_id")
+    .select("id, tenant_id, status")
     .eq("id", orderId)
     .maybeSingle();
 
@@ -56,6 +57,22 @@ export async function DELETE(
 
   if (order.tenant_id !== auth.user.tenant_id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  if (order.status === "delivered") {
+    try {
+      await applyOrderStockMovement({
+        supabase: auth.supabase,
+        orderId,
+        action: "reversal",
+        userId: auth.user.id,
+      });
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: "stock_reversal_failed", details: error.message },
+        { status: 500 },
+      );
+    }
   }
 
   for (const table of CHILD_TABLES) {
