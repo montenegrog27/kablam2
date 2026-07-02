@@ -25,6 +25,14 @@ export default function MesasTab() {
   useEffect(() => { if (branchId) load(); }, [branchId]);
 
   useEffect(() => {
+    if (!branchId || !tenantId) return;
+    const interval = window.setInterval(() => {
+      void load();
+    }, 8000);
+    return () => window.clearInterval(interval);
+  }, [branchId, tenantId]);
+
+  useEffect(() => {
     if (!branchId) return;
     const channel = supabase
       .channel(`cashier-tables-${branchId}`)

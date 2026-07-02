@@ -61,11 +61,30 @@ async function expandStockLines(supabase: StockClient, lines: StockLine[]) {
 
 async function loadManagedProducts(supabase: StockClient, tenantId: string, productIds: string[]) {
   if (productIds.length === 0) return new Map<string, any>();
-  const { data, error } = await supabase
+
+  const withNegativeStockFlag = await supabase
     .from("products")
     .select("id, tenant_id, branch_id, name, manages_stock, stock_unit, stock_low_threshold, allow_negative_stock")
     .eq("tenant_id", tenantId)
     .in("id", productIds);
+
+  let data = withNegativeStockFlag.data;
+  let error = withNegativeStockFlag.error;
+
+  if (error?.code === "PGRST204" || String(error?.message || "").includes("allow_negative_stock")) {
+    const fallback = await supabase
+      .from("products")
+      .select("id, tenant_id, branch_id, name, manages_stock, stock_unit, stock_low_threshold")
+      .eq("tenant_id", tenantId)
+      .in("id", productIds);
+
+    data = (fallback.data || []).map((product: any) => ({
+      ...product,
+      allow_negative_stock: true,
+    }));
+    error = fallback.error;
+  }
+
   if (error) throw new Error(error.message);
   return new Map((data || []).filter((product: any) => product.manages_stock === true).map((product: any) => [product.id, product]));
 }

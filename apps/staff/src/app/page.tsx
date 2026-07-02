@@ -3,6 +3,7 @@
 import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  BellRing,
   Check,
   ChevronRight,
   Clock3,
@@ -21,6 +22,7 @@ import {
   Utensils,
   X,
 } from "lucide-react";
+import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { canManageTables, isAdminRole } from "@/lib/staffData";
 import PwaRegister from "./components/PwaRegister";
 
@@ -521,11 +523,41 @@ function WaiterTables() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [error, setError] = useState("");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const knownReadyOrdersRef = useRef<Set<string>>(new Set());
   const firstReadyCheckRef = useRef(true);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const notificationsEnabledRef = useRef(false);
 
   useEffect(() => {
     loadTables();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const enabled = "Notification" in window && Notification.permission === "granted";
+    notificationsEnabledRef.current = enabled;
+    setNotificationsEnabled(enabled);
+  }, []);
+
+  useEffect(() => {
+    notificationsEnabledRef.current = notificationsEnabled;
+  }, [notificationsEnabled]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("staff-tables-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
+        void loadTables({ silent: true });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "table_sessions" }, () => {
+        void loadTables({ silent: true });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -544,14 +576,76 @@ function WaiterTables() {
       setError(data.error || "No se pudieron cargar las mesas.");
       return;
     }
-    notifyReadyTableOrders(data.sessions || []);
+    notifyReadyTableOrders(data.sessions || [], data.tables || []);
     setTables(data.tables || []);
     setSessions(data.sessions || []);
     setProducts(data.products || []);
     setFloorObjects(data.floorObjects || []);
   };
 
-  const notifyReadyTableOrders = (nextSessions: any[]) => {
+  const getAudioContext = () => {
+    if (typeof window === "undefined") return null;
+    const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    if (!audioContextRef.current) audioContextRef.current = new AudioContextCtor();
+    return audioContextRef.current;
+  };
+
+  const playReadySound = async () => {
+    const context = getAudioContext();
+    if (!context) return;
+    try {
+      if (context.state === "suspended") await context.resume();
+      const now = context.currentTime;
+      [0, 0.2, 0.42].forEach((offset, index) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = index === 1 ? 980 : 740;
+        gain.gain.setValueAtTime(0.0001, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.15);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now + offset);
+        oscillator.stop(now + offset + 0.17);
+      });
+    } catch {}
+  };
+
+  const triggerReadyFeedback = () => {
+    void playReadySound();
+    try {
+      navigator.vibrate?.([260, 120, 260, 120, 420]);
+    } catch {}
+  };
+
+  const enableReadyAlerts = async () => {
+    await playReadySound();
+    try {
+      navigator.vibrate?.(120);
+    } catch {}
+
+    if (!("Notification" in window)) {
+      setError("Avisos con sonido activados. Este navegador no soporta notificaciones del sistema.");
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      notificationsEnabledRef.current = true;
+      setNotificationsEnabled(true);
+      setError("Avisos de mesas listos activados.");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    const enabled = permission === "granted";
+    notificationsEnabledRef.current = enabled;
+    setNotificationsEnabled(enabled);
+    setError(enabled ? "Avisos de mesas listos activados." : "Permiso de notificaciones denegado. Queda activo el aviso en pantalla.");
+  };
+
+  const notifyReadyTableOrders = (nextSessions: any[], nextTables: Table[]) => {
     const readySessions = nextSessions.filter((session) => session.order?.status === "ready" && session.order_id);
     const currentReadyIds = new Set(readySessions.map((session) => String(session.order_id)));
 
@@ -565,7 +659,7 @@ function WaiterTables() {
     knownReadyOrdersRef.current = currentReadyIds;
     if (newReadySessions.length === 0) return;
 
-    const tableById = new Map(tables.map((table) => [table.id, table]));
+    const tableById = new Map(nextTables.map((table) => [table.id, table]));
     const firstReady = newReadySessions[0];
     const table = tableById.get(firstReady.table_id);
     const title = `Mesa ${table?.number || ""} lista`.trim();
@@ -573,13 +667,10 @@ function WaiterTables() {
       ? `${newReadySessions.length} pedidos de mesa estan listos.`
       : "El pedido esta listo para llevar a la mesa.";
 
+    triggerReadyFeedback();
     try {
-      if ("Notification" in window && Notification.permission === "granted") {
+      if (notificationsEnabledRef.current && "Notification" in window && Notification.permission === "granted") {
         new Notification(title, { body, tag: `table-ready-${firstReady.order_id}` });
-      } else if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission().then((permission) => {
-          if (permission === "granted") new Notification(title, { body, tag: `table-ready-${firstReady.order_id}` });
-        });
       }
     } catch {}
 
@@ -763,6 +854,17 @@ function WaiterTables() {
               <StatusLegend color="bg-slate-700" label="Libre" />
               <StatusLegend color="bg-rose-500" label="Abierta" />
               <StatusLegend color="bg-sky-500" label="Cuenta" />
+              <button
+                onClick={enableReadyAlerts}
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-3 text-xs font-black uppercase active:scale-95 ${
+                  notificationsEnabled
+                    ? "border-emerald-500 bg-emerald-500 text-slate-950"
+                    : "border-amber-400/60 bg-amber-400/10 text-amber-200"
+                }`}
+              >
+                <BellRing size={16} />
+                {notificationsEnabled ? "Avisos activos" : "Activar avisos"}
+              </button>
               <button onClick={() => loadTables()} className="rounded-2xl border border-slate-700 bg-slate-900 p-3 text-slate-300 active:scale-95">
                 <RefreshCcw size={16} />
               </button>
