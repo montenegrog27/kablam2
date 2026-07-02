@@ -115,7 +115,6 @@ async function ensureOrder(tableSession: any, table: any, staffSession: any) {
       type: "dine-in",
       sales_channel: "staff",
       customer_name: `Mesa ${table.number}`,
-      notes: `Mesa ${table.number} - Mozo: ${staffSession.name}`,
       subtotal: 0,
       total: 0,
       paid_amount: 0,
