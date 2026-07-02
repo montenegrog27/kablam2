@@ -105,6 +105,14 @@ function getItemPromotion(order: any, item: any) {
   ) || breakdown[0];
 }
 
+function getPromotionCatalogItemId(promoItem: any) {
+  const rawId = String(promoItem?.targetId || promoItem?.productId || promoItem?.comboId || promoItem?.id || "");
+  const generatedIdMatch = rawId.match(
+    /^([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-\d+$/i,
+  );
+  return generatedIdMatch?.[1] || rawId;
+}
+
 function getOrderItemLabel(order: any, item: any) {
   if (item.products?.name) return item.products.name;
   if (item.combos?.name) return item.combos.name;
@@ -417,8 +425,10 @@ export async function GET(req: NextRequest) {
           const promotion = getItemPromotion(o, item);
 
           (promotion?.items || []).forEach((promoItem: any) => {
-            if (promoItem.itemType === "combo") promotionComboIds.push(promoItem.id);
-            else promotionProductIds.push(promoItem.id);
+            const catalogItemId = getPromotionCatalogItemId(promoItem);
+            if (!catalogItemId) return;
+            if (promoItem.itemType === "combo") promotionComboIds.push(catalogItemId);
+            else promotionProductIds.push(catalogItemId);
           });
           return;
         }
@@ -448,8 +458,9 @@ export async function GET(req: NextRequest) {
           const promotion = getItemPromotion(o, item);
 
           const unitCost = (promotion?.items || []).reduce((sum: number, promoItem: any) => {
-            if (promoItem.itemType === "combo") return sum + Number(promotionComboCosts[promoItem.id] || 0);
-            return sum + Number(promotionProductCosts[promoItem.id] || 0);
+            const catalogItemId = getPromotionCatalogItemId(promoItem);
+            if (promoItem.itemType === "combo") return sum + Number(promotionComboCosts[catalogItemId] || 0);
+            return sum + Number(promotionProductCosts[catalogItemId] || 0);
           }, 0);
           cost = unitCost * Number(item.quantity || promotion?.quantity || 1);
           detailType = cost > 0 ? "promo" : "promo sin costo configurado";
@@ -490,8 +501,10 @@ export async function GET(req: NextRequest) {
       if (isPromotionLikeItem(o, item)) {
         const promotion = getItemPromotion(o, item);
         (promotion?.items || []).forEach((promoItem: any) => {
-          if (promoItem.itemType === "combo") comboIdsForPackaging.add(promoItem.id);
-          else productIdsForPackaging.add(promoItem.id);
+          const catalogItemId = getPromotionCatalogItemId(promoItem);
+          if (!catalogItemId) return;
+          if (promoItem.itemType === "combo") comboIdsForPackaging.add(catalogItemId);
+          else productIdsForPackaging.add(catalogItemId);
         });
       } else if (item.combo_id) {
         comboIdsForPackaging.add(item.combo_id);

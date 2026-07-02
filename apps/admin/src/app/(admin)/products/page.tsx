@@ -63,6 +63,7 @@ export default function ProductsPage() {
   const [managesStock, setManagesStock] = useState(false);
   const [stockUnit, setStockUnit] = useState("unit");
   const [stockLowThreshold, setStockLowThreshold] = useState("0");
+  const [allowNegativeStock, setAllowNegativeStock] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [existingGalleryImages, setExistingGalleryImages] = useState<string[]>([]);
@@ -368,6 +369,7 @@ export default function ProductsPage() {
         manages_stock: managesStock,
         stock_unit: stockUnit,
         stock_low_threshold: Number(stockLowThreshold || 0),
+        allow_negative_stock: allowNegativeStock,
         pricing_mode: pricingMode,
         catalog_price_mode: catalogPriceMode,
         catalog_cta_label: catalogPriceMode === "consult" ? catalogCtaLabel.trim() || "Consultar por WhatsApp" : null,
@@ -417,6 +419,7 @@ export default function ProductsPage() {
     setManagesStock(false);
     setStockUnit("unit");
     setStockLowThreshold("0");
+    setAllowNegativeStock(true);
     setShowInMenu(true);
     setQrVisible(true);
     setCatalogVisible(true);
@@ -518,6 +521,7 @@ export default function ProductsPage() {
     setManagesStock(product.manages_stock === true);
     setStockUnit(product.stock_unit || "unit");
     setStockLowThreshold(String(product.stock_low_threshold ?? 0));
+    setAllowNegativeStock(product.allow_negative_stock !== false);
     setPricingMode(product.pricing_mode || "unit");
     setExistingGalleryImages(Array.isArray(product.gallery_images) ? product.gallery_images.filter(Boolean).map(String) : []);
     setGalleryFiles([]);
@@ -551,6 +555,7 @@ export default function ProductsPage() {
     setManagesStock(false);
     setStockUnit("unit");
     setStockLowThreshold("0");
+    setAllowNegativeStock(true);
     setShowInMenu(true);
     setQrVisible(true);
     setCatalogVisible(true);
@@ -626,6 +631,7 @@ export default function ProductsPage() {
         manages_stock: managesStock,
         stock_unit: stockUnit,
         stock_low_threshold: Number(stockLowThreshold || 0),
+        allow_negative_stock: allowNegativeStock,
         pricing_mode: pricingMode,
         catalog_price_mode: catalogPriceMode,
         catalog_cta_label: catalogPriceMode === "consult" ? catalogCtaLabel.trim() || "Consultar por WhatsApp" : null,
@@ -951,9 +957,11 @@ export default function ProductsPage() {
                 managesStock={managesStock}
                 stockUnit={stockUnit}
                 stockLowThreshold={stockLowThreshold}
+                allowNegativeStock={allowNegativeStock}
                 onManagesStockChange={setManagesStock}
                 onStockUnitChange={setStockUnit}
                 onStockLowThresholdChange={setStockLowThreshold}
+                onAllowNegativeStockChange={setAllowNegativeStock}
               />
 
               <div>
@@ -1322,9 +1330,11 @@ export default function ProductsPage() {
                         managesStock={managesStock}
                         stockUnit={stockUnit}
                         stockLowThreshold={stockLowThreshold}
+                        allowNegativeStock={allowNegativeStock}
                         onManagesStockChange={setManagesStock}
                         onStockUnitChange={setStockUnit}
                         onStockLowThresholdChange={setStockLowThreshold}
+                        onAllowNegativeStockChange={setAllowNegativeStock}
                       />
 
                       <div>
@@ -1919,16 +1929,20 @@ function StockSettingsEditor({
   managesStock,
   stockUnit,
   stockLowThreshold,
+  allowNegativeStock,
   onManagesStockChange,
   onStockUnitChange,
   onStockLowThresholdChange,
+  onAllowNegativeStockChange,
 }: {
   managesStock: boolean;
   stockUnit: string;
   stockLowThreshold: string;
+  allowNegativeStock: boolean;
   onManagesStockChange: (value: boolean) => void;
   onStockUnitChange: (value: string) => void;
   onStockLowThresholdChange: (value: string) => void;
+  onAllowNegativeStockChange: (value: boolean) => void;
 }) {
   return (
     <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4">
@@ -1979,6 +1993,22 @@ function StockSettingsEditor({
           />
         </label>
       </div>
+
+      <label className={`mt-4 flex items-start gap-3 rounded-lg border border-gray-700 bg-gray-900 p-3 ${managesStock ? "" : "opacity-50"}`}>
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 rounded border-gray-600 text-black focus:ring-white"
+          checked={allowNegativeStock}
+          disabled={!managesStock}
+          onChange={(event) => onAllowNegativeStockChange(event.target.checked)}
+        />
+        <span className="text-sm text-gray-300">
+          <span className="block font-semibold text-gray-100">Permitir vender sin stock</span>
+          <span className="text-xs text-gray-500">
+            Si lo desactivas, cashier y pedidos de catalogo no podran marcar como entregado cuando falte stock.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }

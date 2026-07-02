@@ -86,6 +86,7 @@ export type CartItem = {
     finalPrice: number;
     items: Array<{
       id: string;
+      targetId?: string;
       name: string;
       itemType?: "product" | "combo";
       price: number;

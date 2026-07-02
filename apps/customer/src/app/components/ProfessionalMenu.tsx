@@ -483,6 +483,7 @@ function normalizePromotionQuantity(value: unknown) {
         finalPrice: pricing.finalTotal,
         items: products.map((product, index) => ({
           id: `${product.comboId || product.id}-${index}`,
+          targetId: product.comboId || product.id,
           name: product.name,
           itemType: product.itemType === "combo" ? "combo" : "product",
           price: getPrice(product),

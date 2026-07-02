@@ -74,7 +74,7 @@ export default function StockPage() {
     const [productsRes, itemsRes, movementsRes] = await Promise.all([
       supabase
         .from("products")
-        .select("id, name, category_id, manages_stock, stock_unit, stock_low_threshold, categories(name)")
+        .select("id, name, category_id, manages_stock, stock_unit, stock_low_threshold, allow_negative_stock, categories(name)")
         .eq("tenant_id", tenantId)
         .eq("manages_stock", true)
         .order("name"),
@@ -287,7 +287,10 @@ export default function StockPage() {
                 <div key={row.id} className="grid gap-3 bg-black/30 p-4 md:grid-cols-[1fr_180px_180px_130px] md:items-center">
                   <div>
                     <p className="font-black uppercase tracking-tight text-gray-100">{row.name}</p>
-                    <p className="mt-1 text-xs text-gray-500">{row.categories?.name || "Sin categoria"} · Unidad: {unitLabels[row.unit] || row.unit}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {row.categories?.name || "Sin categoria"} · Unidad: {unitLabels[row.unit] || row.unit} ·{" "}
+                      {row.allow_negative_stock === false ? "Bloquea venta sin stock" : "Permite stock negativo"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs font-bold uppercase text-gray-500">Stock actual</p>

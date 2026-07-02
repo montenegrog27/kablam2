@@ -63,7 +63,7 @@ async function loadManagedProducts(supabase: StockClient, tenantId: string, prod
   if (productIds.length === 0) return new Map<string, any>();
   const { data, error } = await supabase
     .from("products")
-    .select("id, tenant_id, branch_id, name, manages_stock, stock_unit, stock_low_threshold")
+    .select("id, tenant_id, branch_id, name, manages_stock, stock_unit, stock_low_threshold, allow_negative_stock")
     .eq("tenant_id", tenantId)
     .in("id", productIds);
   if (error) throw new Error(error.message);
@@ -145,6 +145,16 @@ async function insertMovement({
   const before = Number(item.current_quantity || 0);
   const after = before + delta;
   const unit = item.unit || product.stock_unit || "unit";
+
+  if (
+    movementType === "sale" &&
+    product.allow_negative_stock === false &&
+    after < 0
+  ) {
+    throw new Error(
+      `Stock insuficiente para ${product.name}. Disponible: ${before} ${unit}. Requerido: ${Math.abs(delta)} ${unit}.`,
+    );
+  }
 
   const { error: itemError } = await supabase
     .from("stock_items")

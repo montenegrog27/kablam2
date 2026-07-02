@@ -4,7 +4,8 @@
 alter table public.products
   add column if not exists manages_stock boolean not null default false,
   add column if not exists stock_unit text not null default 'unit',
-  add column if not exists stock_low_threshold numeric not null default 0;
+  add column if not exists stock_low_threshold numeric not null default 0,
+  add column if not exists allow_negative_stock boolean not null default true;
 
 create table if not exists public.stock_items (
   id uuid primary key default gen_random_uuid(),

@@ -26,6 +26,7 @@ type OrderItemInput = {
     finalPrice: number;
     items: Array<{
       id: string;
+      targetId?: string;
       name: string;
       itemType?: "product" | "combo";
       price: number;
@@ -61,7 +62,7 @@ type OrderItemInsert = {
   quantity: number;
   unit_price: number;
   total: number;
-  extras: Array<{ type: string; name: string; price?: number; id?: string; itemType?: "product" | "combo" }>;
+  extras: Array<{ type: string; name: string; price?: number; id?: string; targetId?: string; itemType?: "product" | "combo" }>;
 };
 
 const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
@@ -550,6 +551,7 @@ export async function POST(req: Request) {
           ...((item.promotion.items || []).map((promoItem) => ({
             type: "incluye",
             id: promoItem.id,
+            targetId: promoItem.targetId,
             itemType: promoItem.itemType,
             name: promoItem.name,
             price: promoItem.price,
