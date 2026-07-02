@@ -1,18 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type ComponentType, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Check,
+  ChevronRight,
   Clock3,
   FileText,
   LogIn,
   LogOut,
+  Menu,
   Minus,
   Plus,
   RefreshCcw,
   Search,
+  ShieldCheck,
+  ShoppingBag,
   Store,
+  Table2,
   Utensils,
   X,
 } from "lucide-react";
@@ -123,64 +128,120 @@ function StaffSidebar({
   session,
   openAttendance,
   message,
+  open,
+  onClose,
   onClockOut,
   onLogout,
 }: {
   session: StaffSession;
   openAttendance: any | null;
   message: string;
+  open: boolean;
+  onClose: () => void;
   onClockOut: () => void;
   onLogout: () => void;
 }) {
   const admin = isAdminRole(session.role);
 
   return (
-    <aside className="border-b border-slate-800 bg-slate-950/95 p-3 backdrop-blur lg:sticky lg:top-0 lg:h-dvh lg:border-b-0 lg:border-r lg:p-4">
-      <div className="flex items-center justify-between gap-3 lg:block">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-black">{session.name}</p>
-          <p className="truncate text-xs text-slate-500">
-            {session.role} - {session.branchName}
-          </p>
-        </div>
-        <span className={`rounded-full px-3 py-1 text-xs font-black lg:mt-4 lg:inline-block ${admin ? "bg-sky-500/10 text-sky-300" : "bg-emerald-500/10 text-emerald-300"}`}>
-          {admin ? "ADMIN" : "En turno"}
-        </span>
-      </div>
-
-      {admin ? (
-        <div className="mt-3 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3 text-sm text-sky-100 lg:mt-5">
-          <p className="text-xs font-black uppercase tracking-wide text-sky-300">Admin</p>
-          <p className="mt-1 text-sky-100">Acceso sin ingreso ni egreso.</p>
-        </div>
-      ) : (
-        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-900 p-3 text-sm text-slate-400 lg:mt-5">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">Ingreso</p>
-          <p className="mt-1 font-bold text-slate-100">{formatTime(openAttendance?.clock_in_at)}</p>
-        </div>
-      )}
-
-      {message && <p className="mt-3 rounded-xl bg-slate-900 p-3 text-sm text-slate-300">{message}</p>}
-
-      <nav className={`mt-3 grid gap-2 lg:mt-5 lg:grid-cols-1 ${admin ? "grid-cols-1" : "grid-cols-2"}`}>
-        {!admin && (
-          <button
-            onClick={onClockOut}
-            className="flex items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-3 text-sm font-black text-rose-200 lg:justify-start"
-          >
-            <LogOut size={17} />
-            Egreso
+    <>
+      {open && <button aria-label="Cerrar menu" onClick={onClose} className="fixed inset-0 z-40 bg-black/70 lg:hidden" />}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-[86vw] max-w-sm flex-col border-r border-slate-800 bg-[#070b12] p-4 shadow-2xl transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-auto lg:max-w-none lg:translate-x-0 lg:shadow-none ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">Kablam Staff</p>
+            <p className="mt-2 truncate text-xl font-black leading-tight">{session.name}</p>
+            <p className="mt-1 truncate text-sm text-slate-500">
+              {session.role} - {session.branchName}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-2xl border border-slate-800 p-2 text-slate-400 lg:hidden">
+            <X size={18} />
           </button>
-        )}
-        <button
-          onClick={onLogout}
-          className="flex items-center justify-center gap-2 rounded-xl border border-slate-800 px-3 py-3 text-sm font-black text-slate-300 lg:justify-start"
-        >
-          <X size={17} />
-          Salir
-        </button>
-      </nav>
-    </aside>
+        </div>
+
+        <div className={`mt-5 rounded-[1.25rem] border p-4 ${admin ? "border-sky-500/25 bg-sky-500/10" : "border-emerald-500/20 bg-emerald-500/10"}`}>
+          <div className="flex items-center gap-3">
+            <span className={`rounded-2xl p-2 ${admin ? "bg-sky-500/15 text-sky-300" : "bg-emerald-500/15 text-emerald-300"}`}>
+              {admin ? <ShieldCheck size={18} /> : <Clock3 size={18} />}
+            </span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500">{admin ? "Modo admin" : "Turno activo"}</p>
+              <p className="text-sm font-black text-slate-100">{admin ? "Sin fichaje requerido" : formatTime(openAttendance?.clock_in_at)}</p>
+            </div>
+          </div>
+        </div>
+
+        {message && <p className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-3 text-sm text-slate-300">{message}</p>}
+
+        <nav className="mt-5 space-y-2">
+          <MenuAction icon={Table2} label="Mesas" hint="Salon y pedidos" onClick={onClose} />
+          {!admin && (
+            <MenuAction
+              icon={LogOut}
+              label="Registrar egreso"
+              hint="Finalizar turno"
+              danger
+              onClick={() => {
+                onClose();
+                onClockOut();
+              }}
+            />
+          )}
+          <MenuAction
+            icon={X}
+            label="Cerrar sesion"
+            hint="Salir de esta cuenta"
+            onClick={() => {
+              onClose();
+              onLogout();
+            }}
+          />
+        </nav>
+
+        <div className="mt-auto rounded-2xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-500">
+          App optimizada para telefono y tablet. Las acciones sensibles quedan en este menu.
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function MenuAction({
+  icon: Icon,
+  label,
+  hint,
+  danger,
+  onClick,
+}: {
+  icon: ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  hint: string;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition active:scale-[0.99] ${
+        danger
+          ? "border-rose-500/25 bg-rose-500/10 text-rose-100"
+          : "border-slate-800 bg-slate-950 text-slate-100 hover:border-emerald-500/40"
+      }`}
+    >
+      <span className={`rounded-xl p-2 ${danger ? "bg-rose-500/10 text-rose-300" : "bg-slate-900 text-emerald-300"}`}>
+        <Icon size={18} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-black">{label}</span>
+        <span className="block truncate text-xs text-slate-500">{hint}</span>
+      </span>
+      <ChevronRight size={16} className="text-slate-600" />
+    </button>
   );
 }
 
@@ -190,6 +251,7 @@ export default function StaffApp() {
   const [openAttendance, setOpenAttendance] = useState<any>(null);
   const [closedAttendance, setClosedAttendance] = useState<any>(null);
   const [message, setMessage] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const adminSession = isAdminRole(session?.role);
 
   useEffect(() => {
@@ -265,11 +327,30 @@ export default function StaffApp() {
                 session={session}
                 openAttendance={openAttendance}
                 message={message}
+                open={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
                 onClockOut={() => clock("clock_out")}
                 onLogout={logout}
               />
 
-              <section className="min-w-0 p-3 sm:p-4">
+              <section className="min-w-0">
+                <div className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 px-3 py-3 backdrop-blur lg:hidden">
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className="rounded-2xl border border-slate-800 bg-slate-900 p-3 text-slate-100"
+                    aria-label="Abrir menu"
+                  >
+                    <Menu size={20} />
+                  </button>
+                  <div className="min-w-0 px-3 text-center">
+                    <p className="truncate text-sm font-black">{session.branchName}</p>
+                    <p className="truncate text-xs text-slate-500">{session.name} - {session.role}</p>
+                  </div>
+                  <span className="rounded-2xl bg-emerald-500/10 px-3 py-2 text-xs font-black text-emerald-300">
+                    Staff
+                  </span>
+                </div>
+                <div className="p-2 sm:p-4">
                 {canManageTables(session.role) ? (
                   <WaiterTables />
                 ) : (
@@ -283,6 +364,7 @@ export default function StaffApp() {
                     </p>
                   </div>
                 )}
+                </div>
               </section>
             </div>
           )}
@@ -437,6 +519,7 @@ function WaiterTables() {
   const [confirmedItems, setConfirmedItems] = useState<CartItem[]>([]);
   const [pendingCart, setPendingCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("all");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -493,12 +576,23 @@ function WaiterTables() {
     const term = search.trim().toLowerCase();
     return products
       .filter((product) => !term || product.name?.toLowerCase().includes(term))
+      .filter((product) => activeCategory === "all" || product.categories?.id === activeCategory)
       .filter((product) => {
         const variant = product.product_variants?.find((item: any) => item.is_default) || product.product_variants?.[0];
         return Boolean(variant);
       })
-      .slice(0, 40);
-  }, [products, search]);
+      .slice(0, 60);
+  }, [activeCategory, products, search]);
+
+  const productCategories = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((product) => {
+      if (product.categories?.id && product.categories?.name) {
+        map.set(product.categories.id, product.categories.name);
+      }
+    });
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
+  }, [products]);
 
   const runAction = async (action: string, payload: Record<string, unknown> = {}) => {
     if (!selectedTable) return null;
@@ -597,14 +691,16 @@ function WaiterTables() {
   const occupiedTotal = sessions.reduce((sum, item) => sum + Number(item.total || 0), 0);
 
   return (
-    <section className="min-h-[70vh] overflow-hidden rounded-3xl border border-slate-800 bg-slate-900">
+    <section className="min-h-[calc(100dvh-72px)] overflow-hidden rounded-[1.5rem] border border-slate-800 bg-slate-900/80 lg:min-h-[calc(100dvh-32px)]">
       {!selectedTable ? (
         <>
-          <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-2">
-              <Utensils size={18} className="text-emerald-300" />
+          <div className="flex flex-col gap-3 border-b border-slate-800 bg-slate-950/50 px-4 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-300">
+                <Utensils size={20} />
+              </span>
               <div>
-                <p className="font-black">Salon</p>
+                <p className="text-xl font-black">Salon</p>
                 <p className="text-xs text-slate-500">
                   {openCount} abiertas / {payingCount} cuentas / {money(occupiedTotal)} en salon
                 </p>
@@ -614,7 +710,7 @@ function WaiterTables() {
               <StatusLegend color="bg-slate-700" label="Libre" />
               <StatusLegend color="bg-rose-500" label="Abierta" />
               <StatusLegend color="bg-sky-500" label="Cuenta" />
-              <button onClick={loadTables} className="rounded-xl border border-slate-700 p-2 text-slate-300">
+              <button onClick={loadTables} className="rounded-2xl border border-slate-700 bg-slate-900 p-3 text-slate-300 active:scale-95">
                 <RefreshCcw size={16} />
               </button>
             </div>
@@ -625,8 +721,8 @@ function WaiterTables() {
           {loading ? (
             <div className="p-6 text-sm text-slate-500">Cargando mesas...</div>
           ) : (
-            <div className="relative min-h-[70vh] overflow-auto p-4">
-              <div className="relative min-h-[640px] min-w-[720px]">
+            <div className="relative min-h-[70vh] overflow-auto p-3 sm:p-4">
+              <div className="relative min-h-[640px] min-w-[720px] rounded-[1.5rem] border border-slate-800 bg-slate-950/55">
                 {floorObjects.map((obj) => (
                   <div
                     key={obj.id}
@@ -652,7 +748,7 @@ function WaiterTables() {
                     <button
                       key={table.id}
                       onClick={() => openTable(table)}
-                      className={`absolute flex flex-col items-center justify-center border-2 shadow-lg transition ${table.shape === "round" ? "rounded-full" : "rounded-2xl"} ${statusClasses[tableStatus]}`}
+                      className={`absolute flex flex-col items-center justify-center border-2 shadow-lg transition active:scale-95 ${table.shape === "round" ? "rounded-full" : "rounded-2xl"} ${statusClasses[tableStatus]}`}
                       style={{
                         left: Number(table.pos_x),
                         top: Number(table.pos_y),
@@ -661,7 +757,7 @@ function WaiterTables() {
                         transform: `rotate(${Number(table.rotation || 0)}deg)`,
                       }}
                     >
-                      <span className="text-lg font-black text-white">{table.number}</span>
+                      <span className="text-xl font-black text-white">{table.number}</span>
                       <span className="text-[10px] font-bold text-slate-400">
                         {tableStatus === "free" ? `${table.capacity} pers` : tableStatus === "paying" ? "Cuenta" : money(Number(session?.total || 0))}
                       </span>
@@ -674,13 +770,13 @@ function WaiterTables() {
         </>
       ) : (
         <div className="flex min-h-[70vh] flex-col">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
-            <button onClick={() => setSelectedTable(null)} className="flex items-center gap-2 rounded-xl border border-slate-800 px-3 py-2 text-sm font-black text-slate-300">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/60 px-3 py-3 sm:px-4">
+            <button onClick={() => setSelectedTable(null)} className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900 px-3 py-3 text-sm font-black text-slate-300 active:scale-95">
               <ArrowLeft size={17} />
               Mesas
             </button>
             <div className="min-w-0 text-right">
-              <p className="truncate text-lg font-black">Mesa {selectedTable.number}</p>
+              <p className="truncate text-xl font-black">Mesa {selectedTable.number}</p>
               <p className="text-xs text-slate-500">
                 {status === "free" ? "Libre" : status === "paying" ? "Cuenta cerrada" : "Abierta"} - {money(subtotal)}
               </p>
@@ -691,14 +787,14 @@ function WaiterTables() {
 
           {status === "free" ? (
             <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center space-y-5 p-4">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="rounded-[1.5rem] border border-slate-800 bg-slate-950 p-5">
                 <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">Comensales</p>
                 <div className="flex items-center justify-center gap-4">
-                  <button onClick={() => setCustomerCount(Math.max(1, customerCount - 1))} className="rounded-xl bg-slate-900 p-4">
+                  <button onClick={() => setCustomerCount(Math.max(1, customerCount - 1))} className="rounded-2xl bg-slate-900 p-5 active:scale-95">
                     <Minus size={18} />
                   </button>
-                  <span className="w-14 text-center text-4xl font-black">{customerCount}</span>
-                  <button onClick={() => setCustomerCount(Math.min(20, customerCount + 1))} className="rounded-xl bg-slate-900 p-4">
+                  <span className="w-16 text-center text-5xl font-black">{customerCount}</span>
+                  <button onClick={() => setCustomerCount(Math.min(20, customerCount + 1))} className="rounded-2xl bg-slate-900 p-5 active:scale-95">
                     <Plus size={18} />
                   </button>
                 </div>
@@ -715,34 +811,76 @@ function WaiterTables() {
             <div className="grid flex-1 gap-0 lg:grid-cols-[1fr_420px]">
               <div className="min-w-0 border-b border-slate-800 lg:border-b-0 lg:border-r">
                 {status === "open" && (
-                  <div className="border-b border-slate-800 p-3">
+                  <div className="sticky top-0 z-20 space-y-3 border-b border-slate-800 bg-slate-900/95 p-3 backdrop-blur">
                     <div className="relative">
-                      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                      <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                       <input
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
-                        className="w-full rounded-xl border border-slate-800 bg-slate-950 py-3 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"
-                        placeholder="Buscar producto..."
+                        className="w-full rounded-2xl border border-slate-800 bg-slate-950 py-4 pl-11 pr-3 text-base font-bold outline-none placeholder:text-slate-600 focus:border-emerald-500"
+                        placeholder="Buscar producto para agregar"
                       />
+                    </div>
+                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                      <button
+                        onClick={() => setActiveCategory("all")}
+                        className={`shrink-0 rounded-full border px-4 py-2 text-xs font-black uppercase ${
+                          activeCategory === "all"
+                            ? "border-emerald-400 bg-emerald-400 text-slate-950"
+                            : "border-slate-800 bg-slate-950 text-slate-400"
+                        }`}
+                      >
+                        Todos
+                      </button>
+                      {productCategories.map((category) => (
+                        <button
+                          key={category.id}
+                          onClick={() => setActiveCategory(category.id)}
+                          className={`shrink-0 rounded-full border px-4 py-2 text-xs font-black uppercase ${
+                            activeCategory === category.id
+                              ? "border-emerald-400 bg-emerald-400 text-slate-950"
+                              : "border-slate-800 bg-slate-950 text-slate-400"
+                          }`}
+                        >
+                          {category.name}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
 
                 {status === "open" ? (
-                  <div className="grid max-h-[54vh] grid-cols-2 gap-2 overflow-y-auto p-3 sm:grid-cols-3 xl:grid-cols-4">
+                  <div className="grid max-h-[58dvh] grid-cols-2 gap-2 overflow-y-auto p-3 sm:grid-cols-3 lg:max-h-[calc(100dvh-190px)] xl:grid-cols-4">
                     {filteredProducts.map((product) => {
                       const variant = product.product_variants?.find((item: any) => item.is_default) || product.product_variants?.[0];
                       return (
                         <button
                           key={product.id}
                           onClick={() => addToPending(product)}
-                          className="min-h-24 rounded-xl border border-slate-800 bg-slate-950 p-3 text-left text-sm transition hover:border-emerald-500/70"
+                          className="group flex min-h-32 flex-col justify-between rounded-[1.25rem] border border-slate-800 bg-slate-950 p-3 text-left transition active:scale-[0.98] hover:border-emerald-500/70"
                         >
-                          <p className="line-clamp-2 font-bold">{product.name}</p>
-                          <p className="mt-2 text-xs text-slate-500">{money(Number(variant?.price || product.price || 0))}</p>
+                          <div>
+                            <p className="line-clamp-3 text-sm font-black leading-tight text-slate-100">{product.name}</p>
+                            {product.categories?.name && (
+                              <p className="mt-2 line-clamp-1 text-[10px] font-black uppercase tracking-wide text-slate-600">
+                                {product.categories.name}
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-2">
+                            <p className="text-base font-black text-emerald-300">{money(Number(variant?.price || product.price || 0))}</p>
+                            <span className="rounded-full bg-emerald-400 p-2 text-slate-950">
+                              <Plus size={15} />
+                            </span>
+                          </div>
                         </button>
                       );
                     })}
+                    {filteredProducts.length === 0 && (
+                      <div className="col-span-full rounded-2xl border border-slate-800 bg-slate-950 p-6 text-center text-sm text-slate-500">
+                        No encontre productos con esa busqueda.
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="p-4 text-sm text-slate-500">
@@ -753,8 +891,15 @@ function WaiterTables() {
 
               <aside className="flex min-h-[420px] flex-col bg-slate-950">
                 <div className="border-b border-slate-800 p-4">
-                  <p className="text-sm font-black uppercase tracking-wide text-slate-500">Pedido</p>
-                  <p className="mt-1 text-3xl font-black text-emerald-300">{money(subtotal)}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black uppercase tracking-wide text-slate-500">Pedido</p>
+                      <p className="mt-1 text-3xl font-black text-emerald-300">{money(subtotal)}</p>
+                    </div>
+                    <span className="rounded-2xl border border-slate-800 bg-slate-900 p-3 text-slate-400">
+                      <ShoppingBag size={20} />
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex-1 space-y-2 overflow-y-auto p-4">
@@ -765,7 +910,7 @@ function WaiterTables() {
                     </div>
                   )}
                   {confirmedItems.map((item, index) => (
-                    <div key={`c-${item.variant_id}-${index}`} className="flex items-center gap-2 rounded-xl bg-slate-900 p-3 text-sm">
+                    <div key={`c-${item.variant_id}-${index}`} className="flex items-center gap-2 rounded-2xl bg-slate-900 p-3 text-sm">
                       <Check size={14} className="text-emerald-400" />
                       <span className="min-w-0 flex-1 truncate text-slate-300">{item.name}</span>
                       <span className="text-slate-500">{item.qty}x</span>
@@ -773,21 +918,28 @@ function WaiterTables() {
                     </div>
                   ))}
                   {pendingCart.map((item) => (
-                    <div key={item.variant_id} className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
-                      <span className="min-w-0 flex-1 truncate text-slate-100">{item.name}</span>
-                      <button onClick={() => updatePendingQty(item.variant_id, -1)} className="rounded-lg bg-slate-950 p-2">
-                        <Minus size={12} />
-                      </button>
-                      <span className="w-5 text-center font-black">{item.qty}</span>
-                      <button onClick={() => updatePendingQty(item.variant_id, 1)} className="rounded-lg bg-slate-950 p-2">
-                        <Plus size={12} />
-                      </button>
-                      <span className="w-20 text-right text-slate-300">{money(item.price * item.qty)}</span>
+                    <div key={item.variant_id} className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 flex-1 font-bold text-slate-100">{item.name}</span>
+                        <span className="text-right font-black text-slate-200">{money(item.price * item.qty)}</span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-black uppercase text-emerald-300">Nuevo</span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => updatePendingQty(item.variant_id, -1)} className="rounded-xl bg-slate-950 p-3 active:scale-95">
+                            <Minus size={13} />
+                          </button>
+                          <span className="w-8 text-center text-lg font-black">{item.qty}</span>
+                          <button onClick={() => updatePendingQty(item.variant_id, 1)} className="rounded-xl bg-slate-950 p-3 active:scale-95">
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="space-y-3 border-t border-slate-800 p-4">
+                <div className="sticky bottom-0 space-y-3 border-t border-slate-800 bg-slate-950 p-4">
                   <div className="flex justify-between text-sm font-black">
                     <span>Total</span>
                     <span>{money(subtotal)}</span>
@@ -798,14 +950,14 @@ function WaiterTables() {
                       <button
                         onClick={acceptItems}
                         disabled={!pendingCart.length || saving}
-                        className="rounded-xl bg-emerald-600 px-3 py-4 text-sm font-black disabled:opacity-40"
+                        className="rounded-2xl bg-emerald-500 px-3 py-4 text-sm font-black text-slate-950 disabled:opacity-40"
                       >
                         Aceptar
                       </button>
                       <button
                         onClick={sendToKds}
                         disabled={(!pendingCart.length && !confirmedItems.length) || saving}
-                        className="rounded-xl bg-sky-600 px-3 py-4 text-sm font-black disabled:opacity-40"
+                        className="rounded-2xl bg-sky-500 px-3 py-4 text-sm font-black text-slate-950 disabled:opacity-40"
                       >
                         Comandar
                       </button>
@@ -816,7 +968,7 @@ function WaiterTables() {
                     <button
                       onClick={closeTable}
                       disabled={saving}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-4 text-sm font-black text-slate-950 disabled:opacity-40"
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-3 py-4 text-sm font-black text-slate-950 disabled:opacity-40"
                     >
                       <FileText size={16} />
                       Imprimir ticket y enviar a caja

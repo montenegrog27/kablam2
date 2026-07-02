@@ -186,7 +186,7 @@ export async function GET(req: NextRequest) {
       supabase.from("floor_objects").select("*").eq("branch_id", staffSession.branchId),
       supabase
         .from("products")
-        .select("*, product_variants(*)")
+        .select("*, categories(id, name), product_variants(*)")
         .eq("branch_id", staffSession.branchId)
         .eq("is_active", true)
         .order("name"),
