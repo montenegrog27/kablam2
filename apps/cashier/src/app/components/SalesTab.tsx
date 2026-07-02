@@ -27,6 +27,7 @@ export default function SalesTab({ session }: any) {
       .select("*, order_payments(amount, payment_methods(name))")
       .eq("branch_id", branchId)
       .gte("created_at", since)
+      .neq("type", "dine-in")
       .not("status", "in", "(delivered,cancelled)")
       .order("created_at", { ascending: false });
 

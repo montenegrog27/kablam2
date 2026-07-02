@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentType, useEffect, useMemo, useState } from "react";
+import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -521,28 +521,80 @@ function WaiterTables() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [error, setError] = useState("");
+  const knownReadyOrdersRef = useRef<Set<string>>(new Set());
+  const firstReadyCheckRef = useRef(true);
 
   useEffect(() => {
     loadTables();
   }, []);
 
-  const loadTables = async () => {
-    setLoading(true);
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadTables({ silent: true });
+    }, 10000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const loadTables = async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true);
     const response = await fetch("/api/tables");
     const data = await response.json();
-    setLoading(false);
+    if (!silent) setLoading(false);
     if (!response.ok) {
       setError(data.error || "No se pudieron cargar las mesas.");
       return;
     }
+    notifyReadyTableOrders(data.sessions || []);
     setTables(data.tables || []);
     setSessions(data.sessions || []);
     setProducts(data.products || []);
     setFloorObjects(data.floorObjects || []);
   };
 
+  const notifyReadyTableOrders = (nextSessions: any[]) => {
+    const readySessions = nextSessions.filter((session) => session.order?.status === "ready" && session.order_id);
+    const currentReadyIds = new Set(readySessions.map((session) => String(session.order_id)));
+
+    if (firstReadyCheckRef.current) {
+      knownReadyOrdersRef.current = currentReadyIds;
+      firstReadyCheckRef.current = false;
+      return;
+    }
+
+    const newReadySessions = readySessions.filter((session) => !knownReadyOrdersRef.current.has(String(session.order_id)));
+    knownReadyOrdersRef.current = currentReadyIds;
+    if (newReadySessions.length === 0) return;
+
+    const tableById = new Map(tables.map((table) => [table.id, table]));
+    const firstReady = newReadySessions[0];
+    const table = tableById.get(firstReady.table_id);
+    const title = `Mesa ${table?.number || ""} lista`.trim();
+    const body = newReadySessions.length > 1
+      ? `${newReadySessions.length} pedidos de mesa estan listos.`
+      : "El pedido esta listo para llevar a la mesa.";
+
+    try {
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, { body, tag: `table-ready-${firstReady.order_id}` });
+      } else if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission().then((permission) => {
+          if (permission === "granted") new Notification(title, { body, tag: `table-ready-${firstReady.order_id}` });
+        });
+      }
+    } catch {}
+
+    setError(`${title}: ${body}`);
+  };
+
   const getSession = (tableId: string) => sessions.find((session) => session.table_id === tableId);
   const getStatus = (tableId: string) => getSession(tableId)?.status || "free";
+  const getVisualStatus = (tableId: string) => {
+    const session = getSession(tableId);
+    if (!session) return "free";
+    if (session.status === "paying") return "paying";
+    if (session.order?.status === "ready") return "ready";
+    return "open";
+  };
 
   const openTable = async (table: Table) => {
     setSelectedTable(table);
@@ -684,6 +736,7 @@ function WaiterTables() {
   const statusClasses: Record<string, string> = {
     free: "border-slate-700 bg-slate-800",
     open: "border-rose-500 bg-rose-500/15",
+    ready: "border-emerald-400 bg-emerald-500/20",
     paying: "border-sky-500 bg-sky-500/15",
   };
   const openCount = sessions.filter((item) => item.status === "open").length;
@@ -710,7 +763,7 @@ function WaiterTables() {
               <StatusLegend color="bg-slate-700" label="Libre" />
               <StatusLegend color="bg-rose-500" label="Abierta" />
               <StatusLegend color="bg-sky-500" label="Cuenta" />
-              <button onClick={loadTables} className="rounded-2xl border border-slate-700 bg-slate-900 p-3 text-slate-300 active:scale-95">
+              <button onClick={() => loadTables()} className="rounded-2xl border border-slate-700 bg-slate-900 p-3 text-slate-300 active:scale-95">
                 <RefreshCcw size={16} />
               </button>
             </div>
@@ -742,7 +795,7 @@ function WaiterTables() {
                 ))}
 
                 {tables.map((table) => {
-                  const tableStatus = getStatus(table.id);
+                  const tableStatus = getVisualStatus(table.id);
                   const session = getSession(table.id);
                   return (
                     <button
@@ -759,7 +812,7 @@ function WaiterTables() {
                     >
                       <span className="text-xl font-black text-white">{table.number}</span>
                       <span className="text-[10px] font-bold text-slate-400">
-                        {tableStatus === "free" ? `${table.capacity} pers` : tableStatus === "paying" ? "Cuenta" : money(Number(session?.total || 0))}
+                        {tableStatus === "free" ? `${table.capacity} pers` : tableStatus === "paying" ? "Cuenta" : tableStatus === "ready" ? "Listo" : money(Number(session?.total || 0))}
                       </span>
                     </button>
                   );

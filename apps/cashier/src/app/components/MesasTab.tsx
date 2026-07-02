@@ -1,8 +1,8 @@
 ﻿"use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabaseBrowser as supabase } from "@kablam/supabase/client";
 import { useCurrentBranch } from "../(cashier)/context/BranchContext";
-import { X, Plus, Minus, Check, Search, Users, CreditCard, DollarSign, Printer, ArrowLeft } from "lucide-react";
+import { X, Plus, Minus, Check, Search, DollarSign, Printer, ArrowLeft, ChefHat, BellRing } from "lucide-react";
 
 export default function MesasTab() {
   const { branchId, tenantId } = useCurrentBranch();
@@ -24,16 +24,42 @@ export default function MesasTab() {
 
   useEffect(() => { if (branchId) load(); }, [branchId]);
 
+  useEffect(() => {
+    if (!branchId) return;
+    const channel = supabase
+      .channel(`cashier-tables-${branchId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+        if ((payload.new as any)?.branch_id === branchId || (payload.old as any)?.branch_id === branchId) void load();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "table_sessions" }, () => {
+        void load();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [branchId]);
+
   const load = async () => {
     if (!branchId || !tenantId) return;
-    const [{ data: t }, { data: s }, { data: pm }, { data: fo }] = await Promise.all([
+    const [{ data: t }, { data: pm }, { data: fo }] = await Promise.all([
       supabase.from("tables").select("*").eq("branch_id", branchId).eq("is_active", true).order("number"),
-      supabase.from("table_sessions").select("*").in("status", ["open", "paying"]),
       supabase.from("payment_methods").select("*").eq("is_active", true).or(`tenant_id.eq.${tenantId},tenant_id.is.null`),
       supabase.from("floor_objects").select("*").eq("branch_id", branchId),
     ]);
-    setTables(t || []);
-    setSessions(s || []);
+    const tableRows = t || [];
+    const tableIds = tableRows.map((table: any) => table.id);
+    const { data: sessionRows } = tableIds.length
+      ? await supabase.from("table_sessions").select("*").in("table_id", tableIds).in("status", ["open", "paying"])
+      : { data: [] };
+    const orderIds = [...new Set((sessionRows || []).map((session: any) => session.order_id).filter(Boolean))];
+    const { data: orderRows } = orderIds.length
+      ? await supabase.from("orders").select("id, status, type, total, subtotal, customer_name, created_at").in("id", orderIds)
+      : { data: [] };
+    const orderById = new Map((orderRows || []).map((order: any) => [order.id, order]));
+    setTables(tableRows);
+    setSessions((sessionRows || []).map((session: any) => ({ ...session, order: orderById.get(session.order_id) || null })));
     setPaymentMethods(pm || []);
     setFloorObjects(fo || []);
     const { data: prods } = await supabase.from("products").select("*, product_variants(*)").eq("branch_id", branchId);
@@ -48,6 +74,14 @@ export default function MesasTab() {
 
   const getSession = (tableId: string) => sessions.find((s) => s.table_id === tableId);
   const getStatus = (tableId: string) => { const s = getSession(tableId); if (!s) return "free"; return s.status; };
+  const getKitchenStatus = (tableId: string) => getSession(tableId)?.order?.status || null;
+  const getVisualStatus = (tableId: string) => {
+    const session = getSession(tableId);
+    if (!session) return "free";
+    if (session.status === "paying") return "paying";
+    if (session.order?.status === "ready") return "ready";
+    return "open";
+  };
 
   const openTable = async (table: any) => {
     const session = getSession(table.id);
@@ -253,8 +287,14 @@ export default function MesasTab() {
   const statusColors: Record<string, string> = {
     free: "bg-gray-700 border-gray-600 hover:border-gray-500",
     open: "bg-red-600/20 border-red-500 hover:border-red-400",
+    ready: "bg-emerald-600/25 border-emerald-400 hover:border-emerald-300",
     paying: "bg-blue-600/20 border-blue-500",
   };
+
+  const kitchenTableSessions = useMemo(
+    () => sessions.filter((session) => ["preparing", "ready"].includes(session.order?.status)),
+    [sessions],
+  );
 
   const filteredProducts = products.filter((p) =>
     !searchTerm || p.name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -262,6 +302,54 @@ export default function MesasTab() {
 
   return (
     <div className="h-full flex bg-gray-950">
+      <aside className="hidden w-80 shrink-0 border-r border-gray-800 bg-gray-950 xl:flex xl:flex-col">
+        <div className="border-b border-gray-800 p-4">
+          <div className="flex items-center gap-2 text-white">
+            <ChefHat size={18} className="text-emerald-300" />
+            <h3 className="font-black">Pedidos de mesas</h3>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">En preparacion y listos para llevar a mesa.</p>
+        </div>
+        <div className="flex-1 space-y-2 overflow-y-auto p-3">
+          {kitchenTableSessions.length === 0 && (
+            <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4 text-sm text-gray-500">
+              No hay pedidos de mesa en cocina.
+            </div>
+          )}
+          {kitchenTableSessions.map((session) => {
+            const table = tables.find((item) => item.id === session.table_id);
+            const ready = session.order?.status === "ready";
+            return (
+              <button
+                key={session.id}
+                onClick={() => table && openTable(table)}
+                className={`w-full rounded-2xl border p-4 text-left transition ${
+                  ready
+                    ? "border-emerald-500/50 bg-emerald-500/10"
+                    : "border-red-500/40 bg-red-500/10"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-lg font-black text-white">Mesa {table?.number || "-"}</p>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${ready ? "bg-emerald-400 text-gray-950" : "bg-red-500 text-white"}`}>
+                    {ready ? "Listo" : "Preparando"}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-bold text-gray-300">
+                  ${Math.round(Number(session.total || session.order?.total || 0)).toLocaleString("es-AR")}
+                </p>
+                {ready && (
+                  <p className="mt-2 flex items-center gap-1 text-xs font-bold text-emerald-300">
+                    <BellRing size={13} />
+                    Avisar y llevar a mesa
+                  </p>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
       {/* Floor plan */}
       <div className="flex-1 relative overflow-auto p-6">
         <div className="relative w-full" style={{ minHeight: "70vh" }}>
@@ -281,8 +369,9 @@ export default function MesasTab() {
             </div>
           ))}
           {tables.map((table) => {
-            const status = getStatus(table.id);
+            const status = getVisualStatus(table.id);
             const session = getSession(table.id);
+            const kitchenStatus = getKitchenStatus(table.id);
             return (
               <button key={table.id} onClick={() => openTable(table)}
                 className={`absolute flex flex-col items-center justify-center border-2 transition-all cursor-pointer ${
@@ -293,8 +382,10 @@ export default function MesasTab() {
                 <span className="text-[10px] text-gray-400">
                   {status === "free" ? `${table.capacity} pers` :
                    status === "paying" ? "Cobrando" :
+                   status === "ready" ? "Listo" :
                    `$${Math.round(session?.total || 0).toLocaleString("es-AR")}`}
                 </span>
+                {kitchenStatus === "preparing" && <span className="mt-0.5 text-[9px] font-black uppercase text-red-200">Cocina</span>}
               </button>
             );
           })}

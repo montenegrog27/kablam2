@@ -173,7 +173,7 @@ export async function GET(req: NextRequest) {
   const tables = await loadBranchTables(staffSession.branchId);
   const tableIds = tables.map((table: any) => table.id);
 
-  const [{ data: sessions }, { data: paymentMethods }, { data: floorObjects }, { data: products }] =
+  const [{ data: sessionRows }, { data: paymentMethods }, { data: floorObjects }, { data: products }] =
     await Promise.all([
       tableIds.length
         ? supabase.from("table_sessions").select("*").in("table_id", tableIds).in("status", ["open", "paying"])
@@ -191,11 +191,20 @@ export async function GET(req: NextRequest) {
         .eq("is_active", true)
         .order("name"),
     ]);
+  const orderIds = [...new Set((sessionRows || []).map((session: any) => session.order_id).filter(Boolean))];
+  const { data: orders } = orderIds.length
+    ? await supabase.from("orders").select("id, status, type, total, subtotal, customer_name, created_at").in("id", orderIds)
+    : { data: [] };
+  const orderById = new Map((orders || []).map((order: any) => [order.id, order]));
+  const sessions = (sessionRows || []).map((session: any) => ({
+    ...session,
+    order: orderById.get(session.order_id) || null,
+  }));
 
   return NextResponse.json({
     session: staffSession,
     tables,
-    sessions: sessions || [],
+    sessions,
     paymentMethods: paymentMethods || [],
     floorObjects: floorObjects || [],
     products: products || [],
